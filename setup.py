@@ -5,7 +5,7 @@ from setuptools import find_packages
 
 setup(
     # basic project properties can be set arbitrarily
-    name="datalad_helloworld",
+    name="datalad_revolution",
     author="The DataLad Team and Contributors",
     author_email="team@datalad.org",
     version='0.1',
@@ -16,7 +16,7 @@ setup(
         # in general datalad will be a requirement, unless the datalad extension
         # aspect is an optional component of a larger project
         # disable for now as we currently need a Git snapshot (requirements.txt)
-        #'datalad',
+        'datalad',
     ],
     entry_points = {
         # 'datalad.extensions' is THE entrypoint inspected by the datalad API builders
@@ -24,7 +24,7 @@ setup(
             # the label in front of '=' is the command suite label
             # the entrypoint can point to any symbol of any name, as long it is
             # valid datalad interface specification (see demo in this extensions
-            'helloworld=datalad_helloworld:command_suite',
+            'revolution=datalad_revolution:command_suite',
         ]
     },
 )
