@@ -19,7 +19,7 @@ from datalad_revolution.dataset import (
 # decoration auto-generates standard help
 @build_doc
 # all commands must be derived from Interface
-class RevolutionCommand(Interface):
+class RevCmd(Interface):
     # first docstring line is used a short description in the cmdline help
     # the rest is put in the verbose help and manpage
     """Short description of the command
