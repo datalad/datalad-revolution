@@ -1,6 +1,6 @@
 # DataLad extension template
 
-[![Travis tests status](https://secure.travis-ci.org/datalad/datalad-revolution.png?branch=master)](https://travis-ci.org/datalad/datalad-revolution) [![codecov.io](https://codecov.io/github/datalad/datalad-revolution/coverage.svg?branch=master)](https://codecov.io/github/datalad/datalad-revolution?branch=master)
+[![Travis tests status](https://secure.travis-ci.org/datalad/datalad-revolution.png?branch=master)](https://travis-ci.org/datalad/datalad-revolution) [![Build status](https://ci.appveyor.com/api/projects/status/8jtp2fp3mwr5huyi?svg=true)](https://ci.appveyor.com/project/mih/datalad-revolution) [![codecov.io](https://codecov.io/github/datalad/datalad-revolution/coverage.svg?branch=master)](https://codecov.io/github/datalad/datalad-revolution?branch=master)
 
 This repository contains an extension template that can serve as a starting point
 for implementing a [DataLad](http://datalad.org) extension. An extension can
