@@ -9,7 +9,10 @@
 
 import os
 import os.path as op
-import posixpath
+from pathlib import (
+    Path,
+    PurePosixPath,
+)
 
 from datalad.tests.utils import (
     with_tempfile,
@@ -127,6 +130,10 @@ def test_get_content_info(path):
     assert_equal(repo.get_content_info(), {})
 
     ds = _get_convoluted_situation(path)
+    repopath = ds.repo.pathobj
+
+    assert_equal(ds.pathobj, repopath)
+    assert_equal(ds.pathobj, Path(path))
 
     # with no reference, the worktree is the reference, hence no deleted
     # files are reported
@@ -147,21 +154,20 @@ def test_get_content_info(path):
     # - git annex find --include '*'
     for f, r in ds.repo.get_content_annexinfo(
             init=ds.repo.get_content_annexinfo(
-                ref='HEAD',
-                stat_wt=True)).items():
-        if f.endswith('untracked'):
+                ref='HEAD')).items():
+        if f.match('*_untracked'):
             assert(r['gitshasum'] is None)
-        if f.endswith('deleted'):
-            assert(r['stat_wt'] is None)
-        if 'subds_' in f:
-                assert(r['type'] == 'dataset' if r['gitshasum'] else 'directory')
-        if 'file_' in f:
+        if f.match('*_deleted'):
+            assert(not f.exists() and not f.is_symlink() is None)
+        if f.match('subds_*'):
+            assert(r['type'] == 'dataset' if r['gitshasum'] else 'directory')
+        if f.match('file_*'):
             # which one exactly depends on many things
             assert_in(r['type'], ('file', 'symlink'))
-        if 'file_ingit' in f:
+        if f.match('file_ingit*'):
             assert(r['type'] == 'file')
-        elif 'datalad' not in f and 'git' not in f and \
-                r['gitshasum'] and 'subds' not in f:
+        elif '.datalad' not in f.parts and not f.match('.git*') and \
+                r['gitshasum'] and not f.match('subds*'):
             # this should be known to annex, one way or another
             # regardless of whether things add deleted or staged
             # or anything inbetween
@@ -176,27 +182,28 @@ def test_get_content_info(path):
     res = ds.repo.get_content_info(
         [op.join(ds.path, 'subdir', 'file_clean')])
     assert_equal(len(res), 1)
-    assert_in(posixpath.join('subdir', 'file_clean'), res)
+    assert_in(repopath.joinpath('subdir', 'file_clean'), res)
 
     # query full untracked report
     res = ds.repo.get_content_info()
-    assert_in(posixpath.join('dir_untracked', 'file_untracked'), res)
-    assert_not_in('dir_untracked', res)
+    assert_in(repopath.joinpath('dir_untracked', 'file_untracked'), res)
+    assert_not_in(repopath.joinpath('dir_untracked'), res)
     # query for compact untracked report
     res = ds.repo.get_content_info(untracked='normal')
-    assert_not_in(posixpath.join('dir_untracked', 'file_untracked'), res)
-    assert_in('dir_untracked', res)
+    assert_not_in(repopath.joinpath('dir_untracked', 'file_untracked'), res)
+    assert_in(repopath.joinpath('dir_untracked'), res)
     # query no untracked report
     res = ds.repo.get_content_info(untracked='no')
-    assert_not_in(posixpath.join('dir_untracked', 'file_untracked'), res)
-    assert_not_in('dir_untracked', res)
+    assert_not_in(repopath.joinpath('dir_untracked', 'file_untracked'), res)
+    assert_not_in(repopath.joinpath('dir_untracked'), res)
 
     # git status integrity
     status = ds.repo.status()
     for t in ('subds', 'file'):
         for s in ('untracked', 'added', 'deleted', 'clean',
-                  'ingit_clean', 'dropped_clean', 'modified', 'ingit_modified'):
-            for l in ('', posixpath.join('subdir', '')):
+                  'ingit_clean', 'dropped_clean', 'modified',
+                  'ingit_modified'):
+            for l in ('', PurePosixPath('subdir', '')):
                 if t == 'subds' and 'ingit' in s or 'dropped' in s:
                     # invalid combination
                     continue
@@ -206,8 +213,8 @@ def test_get_content_info(path):
                 if t == 'subds' and s == 'modified':
                     # GitRepo.status() doesn't do that ATM, needs recursion
                     continue
-                p = '{}{}_{}'.format(l, t, s)
-                assert p.endswith(status[p]['state']), p
+                p = repopath.joinpath(l, '{}_{}'.format(t, s))
+                assert p.match('*_{}'.format(status[p]['state'])), p
                 if t == 'subds':
                     assert_in(status[p]['type'], ('dataset', 'directory'), p)
                 else:
@@ -218,8 +225,8 @@ def test_get_content_info(path):
     for t in ('file',):
         for s in ('untracked', 'added', 'deleted', 'clean',
                   'ingit_clean', 'dropped_clean', 'modified', 'ingit_modified'):
-            for l in ('', posixpath.join('subdir', '')):
-                p = '{}{}_{}'.format(l, t, s)
+            for l in ('', PurePosixPath('subdir', '')):
+                p = repopath.joinpath(l, '{}_{}'.format(t, s))
                 if s in ('untracked', 'ingit_clean', 'ingit_modified'):
                     # annex knows nothing about these things
                     assert_not_in('key', annexstatus[p])

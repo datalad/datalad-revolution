@@ -2,6 +2,7 @@ __docformat__ = 'restructuredtext'
 
 from six import string_types
 import logging
+from pathlib import Path
 
 from datalad.distribution.dataset import Dataset
 from datalad.support.constraints import Constraint
@@ -19,6 +20,13 @@ lgr = logging.getLogger('datalad.revolution.dataset')
 
 
 class RevolutionDataset(Dataset):
+    @property
+    def pathobj(self):
+        """pathobj for the dataset"""
+        # XXX this relies on the assumption that self._path as managed
+        # by the base class is always a native path
+        return Path(self._path)
+
     @property
     def repo(self):
         """Get an instance of the version control system/repo for this dataset,

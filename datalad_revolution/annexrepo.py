@@ -2,8 +2,9 @@ __docformat__ = 'restructuredtext'
 
 from collections import OrderedDict
 import logging
-import os.path as op
 from six import iteritems
+
+from pathlib import PurePosixPath
 
 from datalad.support.annexrepo import AnnexRepo
 
@@ -25,7 +26,7 @@ obsolete_methods = (
 
 class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
     def _mark_content_availability(self, info):
-        objectstore = op.join(
+        objectstore = self.pathobj.joinpath(
             self.path, RevolutionGitRepo.get_git_dir(self), 'annex', 'objects')
         for f, r in iteritems(info):
             if 'key' not in r:
@@ -37,9 +38,9 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             # what scheme is used in a given annex
             r['has_content'] = False
             for testpath in (
-                    op.join(objectstore, r['hashdirmixed'], r['key']),
-                    op.join(objectstore, r['hashdirlower'], r['key'])):
-                if op.exists(testpath):
+                    objectstore.joinpath(r['hashdirmixed'], r['key']),
+                    objectstore.joinpath(r['hashdirlower'], r['key'])):
+                if testpath.exists():
                     r.pop('hashdirlower', None)
                     r.pop('hashdirmixed', None)
                     r['objloc'] = testpath
@@ -47,7 +48,8 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                     break
 
     def get_content_annexinfo(
-            self, paths=None, init='git', ref=None, eval_availability=False, **kwargs):
+            self, paths=None, init='git', ref=None, eval_availability=False,
+            **kwargs):
         """
         Calling without any options given will always give the fastest
         performance.
@@ -89,11 +91,11 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
           `bytesize`
             Size of an annexed file in bytes.
           `has_content`
-            Bool whether a content object for this key exists in the local annex (with
-            `eval_availability`)
+            Bool whether a content object for this key exists in the local
+            annex (with `eval_availability`)
           `objloc`
-            Absolute path of the content object in the local annex, if one is available
-            (with `eval_availability`)
+            pathlib.Path of the content object in the local annex, if one
+            is available (with `eval_availability`)
         """
         if init is None:
             info = OrderedDict()
@@ -110,7 +112,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             # TODO maybe inform by `path`?
             opts = ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
-            path = j['file']
+            path = self.pathobj.joinpath(PurePosixPath(j['file']))
             if init is not None and path not in info:
                 # ignore anything that Git hasn't reported on
                 # TODO figure out when it is more efficient to query
@@ -139,7 +141,6 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             info[f].update(r)
 
         return info
-
 
 
 # remove deprecated methods from API

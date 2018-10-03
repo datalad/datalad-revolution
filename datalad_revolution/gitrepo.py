@@ -1,12 +1,15 @@
 __docformat__ = 'restructuredtext'
 
+
 from collections import OrderedDict
 import logging
-import os
-import os.path as op
 import re
 from six import iteritems
-import stat
+
+from pathlib import (
+    Path,
+    PurePosixPath,
+)
 
 from datalad.support.gitrepo import GitRepo
 
@@ -21,8 +24,15 @@ obsolete_methods = (
 
 
 class RevolutionGitRepo(GitRepo):
-    def get_content_info(self, paths=None, ref=None, stat_wt=False,
-                         untracked='all'):
+    def __init__(self, *args, **kwargs):
+        super(RevolutionGitRepo, self).__init__(*args, **kwargs)
+        # the sole purpose of this init is to add a pathlib
+        # native path object to the instance
+        # XXX this relies on the assumption that self.path as managed
+        # by the base class is always a native path
+        self.pathobj = Path(self.path)
+
+    def get_content_info(self, paths=None, ref=None, untracked='all'):
         """Get identifier and type information from repository content.
 
         This is simplified front-end for `git ls-files/tree`.
@@ -36,9 +46,6 @@ class RevolutionGitRepo(GitRepo):
           If given, content information is retrieved for this Git reference
           (via ls-tree), otherwise content information is produced for the
           present work tree (via ls-files).
-        stat_wt : bool
-          If given, reports the result of `os.lstat()` as `stat_wt` property
-          for the work tree content.
         untracked : {'no', 'normal', 'all'}
           If and how untracked content is reported when no `ref` was given:
           'no': no untracked files are reported; 'normal': untracked files
@@ -105,41 +112,28 @@ class RevolutionGitRepo(GitRepo):
             inf = {}
             props = props_re.match(line)
             if not props:
-                # not known to Git
-                path = line.strip(op.sep)
-                if untracked == 'normal' and path.endswith('/'):
-                    # Git reports untracked dirs with a trailing slash
-                    # in this mode (even on windows)
-                    # kill this annotation and record a type property
-                    # instead
-                    inf['type'] = 'directory'
-                    path = path[:-1]
+                # not known to Git, but Git always reports POSIX
+                path = PurePosixPath(line)
                 inf['gitshasum'] = None
             else:
-                path = props.group(4).strip(op.sep)
+                # again Git reports always in POSIX
+                path = PurePosixPath(props.group(4))
                 inf['gitshasum'] = props.group(2 if not ref else 3)
                 inf['type'] = mode_type_map.get(
                     props.group(1), props.group(1))
-            abspath_ = op.join(self.path, path)
-            if stat_wt:
-                if not op.lexists(abspath_):
-                    inf['stat_wt'] = None
-                else:
-                    s = os.lstat(abspath_)
-                    inf['stat_wt'] = s
-                    if 'type' not in inf:
-                        s = s.st_mode
-                        if stat.S_ISDIR(s):
-                            inf['type'] = 'directory'
-                        elif stat.S_ISREG(s):
-                            inf['type'] = 'file'
-                        elif stat.S_ISLNK(s):
-                            inf['type'] = 'symlink'
 
+            # join item path with repo path to get a universally useful
+            # path representation with auto-conversion and tons of other
+            # stuff
+            path = self.pathobj.joinpath(path)
+            if 'type' not in inf:
+                # be nice and assign types for untracked content
+                inf['type'] = 'directory' if path.is_dir() \
+                    else 'symlink' if path.is_symlink() else 'file'
             info[path] = inf
         return info
 
-    def status(self, paths=None, untracked='all'):
+    def status(self, paths=None, untracked='all', ignore_submodules='no'):
         """Simplified `git status` equivalent.
 
         Performs a comparison of a get_content_info(stat_wt=True) with a
@@ -156,6 +150,7 @@ class RevolutionGitRepo(GitRepo):
           'no': no untracked files are reported; 'normal': untracked files
           and entire untracked directories are reported as such; 'all': report
           individual files even in fully untracked directories.
+        ignore_submodules : {'no', 'other', 'all'}
 
         Returns
         -------
@@ -175,42 +170,51 @@ class RevolutionGitRepo(GitRepo):
         # 1. everything we know about the worktree, including os.stat
         # for each file
         wt = self.get_content_info(
-            paths=paths, ref=None, stat_wt=True, untracked=untracked)
+            paths=paths, ref=None, untracked=untracked)
         # 2. the last committed state
-        head = self.get_content_info(paths=paths, ref='HEAD', stat_wt=False)
+        head = self.get_content_info(paths=paths, ref='HEAD')
         # 3. we want Git to tell us what it considers modified and avoid
         # reimplementing logic ourselves
         modified = set(
-            p for p in self._git_custom_command(
+            self.pathobj.joinpath(PurePosixPath(p))
+            for p in self._git_custom_command(
                 paths, ['git', 'ls-files', '-z', '-m'])[0].split('\0')
             if p)
 
         for f, wt_r in iteritems(wt):
+            props = None
             if f not in head:
                 # this is new, or rather not known to the previous state
-                status[f] = dict(
+                props = dict(
                     state='added' if wt_r['gitshasum'] else 'untracked',
                     type=wt_r['type'],
                 )
-            elif wt_r['gitshasum'] == head[f]['gitshasum'] and f not in modified:
+            elif wt_r['gitshasum'] == head[f]['gitshasum'] and \
+                    f not in modified:
                 # no change in git record, and no change on disk
-                status[f] = dict(
-                    state='clean' if wt_r['stat_wt'] else 'deleted',
+                props = dict(
+                    state='clean' if f.exists() or f.is_symlink() else 'deleted',
                     type=wt_r['type'],
                 )
             else:
                 # change in git record, or on disk
-                status[f] = dict(
+                props = dict(
                     # TODO is 'modified' enough, should be report typechange?
                     # often this will be a pointless detail, though...
                     # TODO we could have a new file that is already staged
                     # but had subsequent modifications done to it that are
                     # unstaged. Such file would presently show up as 'added'
                     # ATM I think this is OK, but worth stating...
-                    state='modified' if wt_r['stat_wt'] else 'deleted',
-                    # TODO record before and after state for diff-like use cases
+                    state='modified' if f.exists() or f.is_symlink() else 'deleted',
+                    # TODO record before and after state for diff-like use
+                    # cases
                     type=wt_r['type'],
                 )
+            status[f] = props
+            if ignore_submodules != 'all' and \
+                    props.get('type', None) == 'dataset':
+                pass
+                # we have to recurse into the dataset and get its status
 
         return status
 
