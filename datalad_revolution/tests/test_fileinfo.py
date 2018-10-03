@@ -78,6 +78,20 @@ def _get_convoluted_situation(path):
         op.join('subdir', 'subds_unavailable_clean')],
         check=False)
     assert_repo_status(ds.path)
+    # make a dirty subdataset
+    ds.create('subds_modified')
+    ds.create(op.join('subds_modified', 'someds'))
+    ds.create(op.join('subds_modified', 'someds', 'dirtyds'))
+    # make a subdataset with additional commits
+    ds.create(op.join('subdir', 'subds_modified'))
+    pdspath = op.join(ds.path, 'subdir', 'subds_modified', 'progressedds')
+    ds.create(pdspath)
+    create_tree(
+        pdspath,
+        {'file_clean': 'file_ingit_clean'}
+    )
+    Dataset(pdspath).add('.')
+    assert_repo_status(pdspath)
     # staged subds, and files
     create(op.join(ds.path, 'subds_added'))
     ds.repo.add_submodule('subds_added')
@@ -95,7 +109,14 @@ def _get_convoluted_situation(path):
             'file_added': 'file_added',
             'dir_untracked': {
                 'file_untracked': 'file_untracked',
-            }
+            },
+            'subds_modified': {
+                'someds': {
+                    "dirtyds": {
+                        'file_untracked': 'file_untracked',
+                    },
+                },
+            },
         }
     )
     ds.repo.add(['file_added', op.join('subdir', 'file_added')])
@@ -207,9 +228,6 @@ def test_get_content_info(path):
                 if t == 'subds' and s == 'deleted':
                     # same as subds_unavailable -> clean
                     continue
-                if t == 'subds' and s == 'modified':
-                    # GitRepo.status() doesn't do that ATM, needs recursion
-                    continue
                 p = repopath.joinpath(l, '{}_{}'.format(t, s))
                 assert p.match('*_{}'.format(status[p]['state'])), p
                 if t == 'subds':
@@ -221,7 +239,8 @@ def test_get_content_info(path):
     annexstatus = ds.repo.annexstatus()
     for t in ('file',):
         for s in ('untracked', 'added', 'deleted', 'clean',
-                  'ingit_clean', 'dropped_clean', 'modified', 'ingit_modified'):
+                  'ingit_clean', 'dropped_clean', 'modified',
+                  'ingit_modified'):
             for l in ('', ut.PurePosixPath('subdir', '')):
                 p = repopath.joinpath(l, '{}_{}'.format(t, s))
                 if s in ('untracked', 'ingit_clean', 'ingit_modified'):

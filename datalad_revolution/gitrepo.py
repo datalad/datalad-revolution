@@ -185,11 +185,13 @@ class RevolutionGitRepo(GitRepo):
                 )
             elif wt_r['gitshasum'] == head[f]['gitshasum'] and \
                     f not in modified:
-                # no change in git record, and no change on disk
-                props = dict(
-                    state='clean' if f.exists() or f.is_symlink() else 'deleted',
-                    type=wt_r['type'],
-                )
+                if ignore_submodules != 'all' or wt_r['type'] != 'dataset':
+                    # no change in git record, and no change on disk
+                    props = dict(
+                        state='clean' if f.exists() or
+                              f.is_symlink() else 'deleted',
+                        type=wt_r['type'],
+                    )
             else:
                 # change in git record, or on disk
                 props = dict(
@@ -199,17 +201,49 @@ class RevolutionGitRepo(GitRepo):
                     # but had subsequent modifications done to it that are
                     # unstaged. Such file would presently show up as 'added'
                     # ATM I think this is OK, but worth stating...
-                    state='modified' if f.exists() or f.is_symlink() else 'deleted',
+                    state='modified' if f.exists() or
+                    f.is_symlink() else 'deleted',
                     # TODO record before and after state for diff-like use
                     # cases
                     type=wt_r['type'],
                 )
+            if props['state'] in ('clean', 'added'):
+                props['gitshasum'] = wt_r['gitshasum']
             status[f] = props
-            if ignore_submodules != 'all' and \
-                    props.get('type', None) == 'dataset':
-                pass
-                # we have to recurse into the dataset and get its status
 
+        if ignore_submodules == 'all':
+            return status
+
+        # loop over all subdatasets and look for additional modifications
+        for f, st in iteritems(status):
+            if not (st['type'] == 'dataset' and st['state'] == 'clean' and
+                    GitRepo.is_valid_repo(str(f))):
+                # no business here
+                continue
+            # we have to recurse into the dataset and get its status
+            subrepo = RevolutionGitRepo(str(f))
+            # subdataset records must be labeled clean up to this point
+            if st['gitshasum'] != subrepo.get_hexsha():
+                # current commit in subdataset deviates from what is
+                # recorded in the dataset, cheap test
+                st['state'] = 'modified'
+            else:
+                # the recorded commit did not change, so we need to make
+                # a more expensive traversal
+                rstatus = subrepo.status(
+                    paths=None,
+                    untracked=untracked,
+                    # TODO could be RF'ed to stop after the first find
+                    # of a modified subdataset
+                    # ATM implementation performs an exhaustive search
+                    ignore_submodules='other')
+                if any(v['state'] != 'clean'
+                       for k, v in iteritems(rstatus)):
+                    st['state'] = 'modified'
+            if ignore_submodules == 'other' and st['state'] == 'modified':
+                # we know for sure that at least one subdataset is modified
+                # go home quick
+                break
         return status
 
 
