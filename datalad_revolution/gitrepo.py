@@ -107,6 +107,13 @@ class RevolutionGitRepo(GitRepo):
             if not props:
                 # not known to Git
                 path = line.strip(op.sep)
+                if untracked == 'normal' and path.endswith('/'):
+                    # Git reports untracked dirs with a trailing slash
+                    # in this mode (even on windows)
+                    # kill this annotation and record a type property
+                    # instead
+                    inf['type'] = 'directory'
+                    path = path[:-1]
                 inf['gitshasum'] = None
             else:
                 path = props.group(4).strip(op.sep)
