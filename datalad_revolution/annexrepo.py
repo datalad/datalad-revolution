@@ -4,7 +4,10 @@ from collections import OrderedDict
 import logging
 from six import iteritems
 
-from pathlib import PurePosixPath
+from pathlib import (
+    Path,
+    PurePosixPath,
+)
 
 from datalad.support.annexrepo import AnnexRepo
 
@@ -38,8 +41,11 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             # what scheme is used in a given annex
             r['has_content'] = False
             for testpath in (
-                    objectstore.joinpath(r['hashdirmixed'], r['key']),
-                    objectstore.joinpath(r['hashdirlower'], r['key'])):
+                    # ATM git-annex reports hashdir in native path
+                    # conventions and the actual file path `f` in
+                    # POSIX, weired...
+                    objectstore.joinpath(Path(r['hashdirmixed']), r['key']),
+                    objectstore.joinpath(Path(r['hashdirlower']), r['key'])):
                 if testpath.exists():
                     r.pop('hashdirlower', None)
                     r.pop('hashdirmixed', None)

@@ -232,6 +232,12 @@ def test_get_content_info(path):
                     assert_not_in('key', annexstatus[p])
                     continue
                 assert_in('key', annexstatus[p])
+                # dear future,
+                # if the next one fails, git-annex might have changed the
+                # nature of the path that are being reported by
+                # `annex find --json`
+                # when this was written `hashir*` was a native path, but
+                # `file` was a POSIX path
                 assert_equal(annexstatus[p]['has_content'], 'dropped' not in s)
 
 
