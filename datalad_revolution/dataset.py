@@ -2,7 +2,7 @@ __docformat__ = 'restructuredtext'
 
 from six import string_types
 import logging
-from pathlib import Path
+import datalad_revolution.utils as ut
 
 from datalad.distribution.dataset import Dataset
 from datalad.support.constraints import Constraint
@@ -14,7 +14,6 @@ from datalad.support.gitrepo import (
 
 from datalad_revolution.gitrepo import RevolutionGitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo
-from datalad_revolution.utils import nothere
 
 lgr = logging.getLogger('datalad.revolution.dataset')
 
@@ -25,7 +24,7 @@ class RevolutionDataset(Dataset):
         """pathobj for the dataset"""
         # XXX this relies on the assumption that self._path as managed
         # by the base class is always a native path
-        return Path(self._path)
+        return ut.Path(self._path)
 
     @property
     def repo(self):
@@ -73,7 +72,7 @@ class RevolutionDataset(Dataset):
 
 
 # remove deprecated method from API
-setattr(RevolutionDataset, 'get_subdatasets', nothere)
+setattr(RevolutionDataset, 'get_subdatasets', ut.nothere)
 
 
 # Note: Cannot be defined within constraints.py, since then dataset.py needs to

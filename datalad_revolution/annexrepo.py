@@ -4,10 +4,7 @@ from collections import OrderedDict
 import logging
 from six import iteritems
 
-from pathlib import (
-    Path,
-    PurePosixPath,
-)
+import datalad_revolution.utils as ut
 
 from datalad.support.annexrepo import AnnexRepo
 
@@ -15,7 +12,6 @@ from datalad_revolution.gitrepo import (
     RevolutionGitRepo,
     obsolete_methods as gitrepo_obsolete_methods,
 )
-from datalad_revolution.utils import nothere
 
 lgr = logging.getLogger('datalad.revolution.annexrepo')
 
@@ -44,8 +40,8 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                     # ATM git-annex reports hashdir in native path
                     # conventions and the actual file path `f` in
                     # POSIX, weired...
-                    objectstore.joinpath(Path(r['hashdirmixed']), r['key']),
-                    objectstore.joinpath(Path(r['hashdirlower']), r['key'])):
+                    objectstore.joinpath(ut.Path(r['hashdirmixed']), r['key']),
+                    objectstore.joinpath(ut.Path(r['hashdirlower']), r['key'])):
                 if testpath.exists():
                     r.pop('hashdirlower', None)
                     r.pop('hashdirmixed', None)
@@ -118,7 +114,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             # TODO maybe inform by `path`?
             opts = ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
-            path = self.pathobj.joinpath(PurePosixPath(j['file']))
+            path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
             if init is not None and path not in info:
                 # ignore anything that Git hasn't reported on
                 # TODO figure out when it is more efficient to query
@@ -152,4 +148,4 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
 # remove deprecated methods from API
 for m in obsolete_methods + gitrepo_obsolete_methods:
     if hasattr(RevolutionAnnexRepo, m):
-        setattr(RevolutionAnnexRepo, m, nothere)
+        setattr(RevolutionAnnexRepo, m, ut.nothere)

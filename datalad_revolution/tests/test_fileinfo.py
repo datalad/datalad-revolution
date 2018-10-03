@@ -9,10 +9,7 @@
 
 import os
 import os.path as op
-from pathlib import (
-    Path,
-    PurePosixPath,
-)
+import datalad_revolution.utils as ut
 
 from datalad.tests.utils import (
     with_tempfile,
@@ -133,7 +130,7 @@ def test_get_content_info(path):
     repopath = ds.repo.pathobj
 
     assert_equal(ds.pathobj, repopath)
-    assert_equal(ds.pathobj, Path(path))
+    assert_equal(ds.pathobj, ut.Path(path))
 
     # with no reference, the worktree is the reference, hence no deleted
     # files are reported
@@ -203,7 +200,7 @@ def test_get_content_info(path):
         for s in ('untracked', 'added', 'deleted', 'clean',
                   'ingit_clean', 'dropped_clean', 'modified',
                   'ingit_modified'):
-            for l in ('', PurePosixPath('subdir', '')):
+            for l in ('', ut.PurePosixPath('subdir', '')):
                 if t == 'subds' and 'ingit' in s or 'dropped' in s:
                     # invalid combination
                     continue
@@ -225,7 +222,7 @@ def test_get_content_info(path):
     for t in ('file',):
         for s in ('untracked', 'added', 'deleted', 'clean',
                   'ingit_clean', 'dropped_clean', 'modified', 'ingit_modified'):
-            for l in ('', PurePosixPath('subdir', '')):
+            for l in ('', ut.PurePosixPath('subdir', '')):
                 p = repopath.joinpath(l, '{}_{}'.format(t, s))
                 if s in ('untracked', 'ingit_clean', 'ingit_modified'):
                     # annex knows nothing about these things

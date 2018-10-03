@@ -6,14 +6,8 @@ import logging
 import re
 from six import iteritems
 
-from pathlib import (
-    Path,
-    PurePosixPath,
-)
-
+import datalad_revolution.utils as ut
 from datalad.support.gitrepo import GitRepo
-
-from datalad_revolution.utils import nothere
 
 lgr = logging.getLogger('datalad.revolution.gitrepo')
 
@@ -30,7 +24,7 @@ class RevolutionGitRepo(GitRepo):
         # native path object to the instance
         # XXX this relies on the assumption that self.path as managed
         # by the base class is always a native path
-        self.pathobj = Path(self.path)
+        self.pathobj = ut.Path(self.path)
 
     def get_content_info(self, paths=None, ref=None, untracked='all'):
         """Get identifier and type information from repository content.
@@ -113,11 +107,11 @@ class RevolutionGitRepo(GitRepo):
             props = props_re.match(line)
             if not props:
                 # not known to Git, but Git always reports POSIX
-                path = PurePosixPath(line)
+                path = ut.PurePosixPath(line)
                 inf['gitshasum'] = None
             else:
                 # again Git reports always in POSIX
-                path = PurePosixPath(props.group(4))
+                path = ut.PurePosixPath(props.group(4))
                 inf['gitshasum'] = props.group(2 if not ref else 3)
                 inf['type'] = mode_type_map.get(
                     props.group(1), props.group(1))
@@ -176,7 +170,7 @@ class RevolutionGitRepo(GitRepo):
         # 3. we want Git to tell us what it considers modified and avoid
         # reimplementing logic ourselves
         modified = set(
-            self.pathobj.joinpath(PurePosixPath(p))
+            self.pathobj.joinpath(ut.PurePosixPath(p))
             for p in self._git_custom_command(
                 paths, ['git', 'ls-files', '-z', '-m'])[0].split('\0')
             if p)
@@ -222,4 +216,4 @@ class RevolutionGitRepo(GitRepo):
 # remove deprecated methods from API
 for m in obsolete_methods:
     if hasattr(RevolutionGitRepo, m):
-        setattr(RevolutionGitRepo, m, nothere)
+        setattr(RevolutionGitRepo, m, ut.nothere)
