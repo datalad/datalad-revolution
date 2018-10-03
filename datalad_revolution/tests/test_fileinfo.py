@@ -18,7 +18,6 @@ from datalad.tests.utils import (
     assert_dict_equal,
     assert_in,
     assert_not_in,
-    ok_clean_git,
 )
 
 from datalad.api import (
@@ -27,6 +26,7 @@ from datalad.api import (
 
 from datalad_revolution.dataset import RevolutionDataset
 from datalad_revolution.gitrepo import RevolutionGitRepo
+from datalad_revolution.tests.utils import assert_repo_status
 
 
 def _get_convoluted_situation(path):
@@ -76,7 +76,7 @@ def _get_convoluted_situation(path):
         'subds_unavailable_clean',
         op.join('subdir', 'subds_unavailable_clean')],
         check=False)
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
     # staged subds, and files
     create(op.join(ds.path, 'subds_added'))
     ds.repo.add_submodule('subds_added')
@@ -231,7 +231,7 @@ def test_get_content_info(path):
 def test_compare_content_info(path):
     # TODO remove when `create` is RF to return the new Dataset
     ds = RevolutionDataset(RevolutionDataset(path).create().path)
-    ok_clean_git(path)
+    assert_repo_status(path)
 
     # for a clean repo HEAD and worktree query should yield identical results
     wt = ds.repo.get_content_info(ref=None)
