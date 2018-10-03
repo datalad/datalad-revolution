@@ -12,7 +12,7 @@ from datalad.support.gitrepo import GitRepo
 
 from datalad_revolution.utils import nothere
 
-lgr = logging.getLogger('datalad_revolution.gitrepo')
+lgr = logging.getLogger('datalad.revolution.gitrepo')
 
 obsolete_methods = (
     'dirty',

@@ -25,13 +25,14 @@ from datalad.api import (
 )
 
 from datalad_revolution.dataset import RevolutionDataset
-from datalad_revolution.gitrepo import RevolutionGitRepo
+from datalad_revolution.dataset import RevolutionDataset as Dataset
+from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.tests.utils import assert_repo_status
 
 
 def _get_convoluted_situation(path):
     # TODO remove when `create` is RF to return the new Dataset
-    ds = RevolutionDataset(RevolutionDataset(path).create(force=True).path)
+    ds = RevolutionDataset(Dataset(path).create(force=True).path)
     # base content, all into the annex
     create_tree(
         ds.path,
@@ -122,7 +123,7 @@ def _get_convoluted_situation(path):
 
 @with_tempfile
 def test_get_content_info(path):
-    repo = RevolutionGitRepo(path)
+    repo = GitRepo(path)
     assert_equal(repo.get_content_info(), {})
 
     ds = _get_convoluted_situation(path)
@@ -230,7 +231,7 @@ def test_get_content_info(path):
 @with_tempfile
 def test_compare_content_info(path):
     # TODO remove when `create` is RF to return the new Dataset
-    ds = RevolutionDataset(RevolutionDataset(path).create().path)
+    ds = RevolutionDataset(Dataset(path).create().path)
     assert_repo_status(path)
 
     # for a clean repo HEAD and worktree query should yield identical results

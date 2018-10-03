@@ -13,7 +13,7 @@ from datalad_revolution.gitrepo import (
 )
 from datalad_revolution.utils import nothere
 
-lgr = logging.getLogger('datalad_revolution.annexrepo')
+lgr = logging.getLogger('datalad.revolution.annexrepo')
 
 obsolete_methods = (
     # next two are only needed by 'ok_clean_git'

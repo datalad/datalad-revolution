@@ -16,6 +16,7 @@ from datalad_revolution.dataset import (
     RevolutionDataset,
 )
 
+
 # decoration auto-generates standard help
 @build_doc
 # all commands must be derived from Interface

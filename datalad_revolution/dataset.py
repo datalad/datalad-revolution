@@ -15,7 +15,7 @@ from datalad_revolution.gitrepo import RevolutionGitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo
 from datalad_revolution.utils import nothere
 
-lgr = logging.getLogger('datalad_revolution.dataset')
+lgr = logging.getLogger('datalad.revolution.dataset')
 
 
 class RevolutionDataset(Dataset):
