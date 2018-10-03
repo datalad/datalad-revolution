@@ -36,12 +36,18 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             # TODO optimize order based on some check that reveals
             # what scheme is used in a given annex
             r['has_content'] = False
+            key = r['key']
             for testpath in (
                     # ATM git-annex reports hashdir in native path
                     # conventions and the actual file path `f` in
                     # POSIX, weired...
-                    objectstore.joinpath(ut.Path(r['hashdirmixed']), r['key']),
-                    objectstore.joinpath(ut.Path(r['hashdirlower']), r['key'])):
+                    # we need to test for the actual key file, not
+                    # just the containing dir, as on windows the latter
+                    # may not always get cleaned up on `drop`
+                    objectstore.joinpath(
+                        ut.Path(r['hashdirmixed']), key, key),
+                    objectstore.joinpath(
+                        ut.Path(r['hashdirlower']), key, key)):
                 if testpath.exists():
                     r.pop('hashdirlower', None)
                     r.pop('hashdirmixed', None)
