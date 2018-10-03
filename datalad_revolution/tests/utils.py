@@ -74,7 +74,9 @@ def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
     status = r.status(untracked=untracked_mode)
     # for any file state that indicates some kind of change (all but 'clean)
     for state in ('added', 'untracked', 'deleted', 'modified'):
-        oktobefound = kwargs.get(state, [])
-        state_files = [k for k, v in iteritems(status)
-                       if v.get('state', None) == state]
-        eq_(sorted(state_files), sorted(oktobefound))
+        oktobefound = sorted(kwargs.get(state, []))
+        state_files = sorted(k for k, v in iteritems(status)
+                             if v.get('state', None) == state)
+        eq_(state_files, oktobefound,
+            'unexpected content of state "%s": %r != %r'
+            % (state, state_files, oktobefound))
