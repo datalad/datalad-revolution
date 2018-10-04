@@ -107,6 +107,7 @@ def get_convoluted_situation(path):
             'file_clean': 'file_clean',
             'file_dropped_clean': 'file_dropped_clean',
             'file_deleted': 'file_deleted',
+            'file_staged_deleted': 'file_staged_deleted',
             'file_modified': 'file_clean',
         }
     )
@@ -187,6 +188,8 @@ def get_convoluted_situation(path):
     # deleted files
     os.remove(op.join(ds.path, 'file_deleted'))
     os.remove(op.join(ds.path, 'subdir', 'file_deleted'))
+    # staged deletion
+    ds.repo.remove('file_staged_deleted')
     # modified files
     ds.repo.unlock(['file_modified', op.join('subdir', 'file_modified')])
     create_tree(
