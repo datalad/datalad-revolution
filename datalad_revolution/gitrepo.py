@@ -211,6 +211,19 @@ class RevolutionGitRepo(GitRepo):
                 props['gitshasum'] = wt_r['gitshasum']
             status[f] = props
 
+        for f, head_r in iteritems(head):
+            if f not in wt:
+                # we new this, but now it is gone and Git is not complaining
+                # about it being missing -> properly deleted and deletion
+                # stages
+                status[f] = dict(
+                    state='deleted',
+                    type=head_r['type'],
+                    # report the shasum to distinguish from a plainly vanished
+                    # file
+                    gitshasum=head_r['gitshasum'],
+                )
+
         if ignore_submodules == 'all':
             return status
 
