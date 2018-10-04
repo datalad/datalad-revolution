@@ -7,6 +7,7 @@ environment:
       PYTHON_ARCH: "32"
       MINICONDA: C:\Miniconda35
       DATALAD_REPO_VERSION: 6
+      DATALAD_LOG_LEVEL: debug
 
 init:
   - "ECHO %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH% %MINICONDA%"
