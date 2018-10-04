@@ -72,7 +72,11 @@ class RevolutionGitRepo(GitRepo):
         # this will not work in direct mode, but everything else should be
         # just fine
         if not ref:
-            cmd = ['git', 'ls-files', '--stage', '-z', '-d', '-m']
+            # --exclude-standard will make sure to honor and standard way
+            # git can be instructed to ignore content, and will prevent
+            # crap from contaminating untracked file reports
+            cmd = ['git', 'ls-files',
+                   '--stage', '-z', '-d', '-m', '--exclude-standard']
             # untracked report mode, using labels from `git diff` option style
             if untracked == 'all':
                 cmd.append('-o')
