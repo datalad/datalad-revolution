@@ -1,11 +1,20 @@
+import os
+import os.path as op
 from six import iteritems
+
+from datalad.api import (
+    create,
+)
 
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
+from datalad_revolution.dataset import RevolutionDataset
+from datalad_revolution.dataset import RevolutionDataset as Dataset
 
 from datalad.tests.utils import (
-    eq_,
     assert_is,
+    create_tree,
+    eq_,
 )
 
 
@@ -80,3 +89,115 @@ def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
         eq_(state_files, oktobefound,
             'unexpected content of state "%s": %r != %r'
             % (state, state_files, oktobefound))
+
+
+def get_convoluted_situation(path):
+    # TODO remove when `create` is RF to return the new Dataset
+    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+    # base content, all into the annex
+    create_tree(
+        ds.path,
+        {
+            'subdir': {
+                'file_clean': 'file_clean',
+                'file_dropped_clean': 'file_dropped_clean',
+                'file_deleted': 'file_deleted',
+                'file_modified': 'file_clean',
+            },
+            'file_clean': 'file_clean',
+            'file_dropped_clean': 'file_dropped_clean',
+            'file_deleted': 'file_deleted',
+            'file_modified': 'file_clean',
+        }
+    )
+    ds.add('.')
+    # some files straight in git
+    create_tree(
+        ds.path,
+        {
+            'subdir': {
+                'file_ingit_clean': 'file_ingit_clean',
+                'file_ingit_modified': 'file_ingit_clean',
+            },
+            'file_ingit_clean': 'file_ingit_clean',
+            'file_ingit_modified': 'file_ingit_clean',
+        }
+    )
+    ds.add('.', to_git=True)
+    ds.drop([
+        'file_dropped_clean',
+        op.join('subdir', 'file_dropped_clean')],
+        check=False)
+    # clean and proper subdatasets
+    ds.create('subds_clean')
+    ds.create(op.join('subdir', 'subds_clean'))
+    ds.create('subds_unavailable_clean')
+    ds.create(op.join('subdir', 'subds_unavailable_clean'))
+    # uninstall some subdatasets (still clean)
+    ds.uninstall([
+        'subds_unavailable_clean',
+        op.join('subdir', 'subds_unavailable_clean')],
+        check=False)
+    assert_repo_status(ds.path)
+    # make a dirty subdataset
+    ds.create('subds_modified')
+    ds.create(op.join('subds_modified', 'someds'))
+    ds.create(op.join('subds_modified', 'someds', 'dirtyds'))
+    # make a subdataset with additional commits
+    ds.create(op.join('subdir', 'subds_modified'))
+    pdspath = op.join(ds.path, 'subdir', 'subds_modified', 'progressedds')
+    ds.create(pdspath)
+    create_tree(
+        pdspath,
+        {'file_clean': 'file_ingit_clean'}
+    )
+    Dataset(pdspath).add('.')
+    assert_repo_status(pdspath)
+    # staged subds, and files
+    create(op.join(ds.path, 'subds_added'))
+    ds.repo.add_submodule('subds_added')
+    create(op.join(ds.path, 'subdir', 'subds_added'))
+    ds.repo.add_submodule(op.join('subdir', 'subds_added'))
+    # some more untracked files
+    create_tree(
+        ds.path,
+        {
+            'subdir': {
+                'file_untracked': 'file_untracked',
+                'file_added': 'file_added',
+            },
+            'file_untracked': 'file_untracked',
+            'file_added': 'file_added',
+            'dir_untracked': {
+                'file_untracked': 'file_untracked',
+            },
+            'subds_modified': {
+                'someds': {
+                    "dirtyds": {
+                        'file_untracked': 'file_untracked',
+                    },
+                },
+            },
+        }
+    )
+    ds.repo.add(['file_added', op.join('subdir', 'file_added')])
+    # untracked subdatasets
+    create(op.join(ds.path, 'subds_untracked'))
+    create(op.join(ds.path, 'subdir', 'subds_untracked'))
+    # deleted files
+    os.remove(op.join(ds.path, 'file_deleted'))
+    os.remove(op.join(ds.path, 'subdir', 'file_deleted'))
+    # modified files
+    ds.repo.unlock(['file_modified', op.join('subdir', 'file_modified')])
+    create_tree(
+        ds.path,
+        {
+            'subdir': {
+                'file_modified': 'file_modified',
+                'file_ingit_modified': 'file_ingit_modified',
+            },
+            'file_modified': 'file_modified',
+            'file_ingit_modified': 'file_ingit_modified',
+        }
+    )
+    return ds
