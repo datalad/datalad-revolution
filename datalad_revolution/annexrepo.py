@@ -109,7 +109,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             info = OrderedDict()
         elif init == 'git':
             info = super(AnnexRepo, self).get_content_info(
-                paths=paths, **kwargs)
+                paths=paths, ref=ref, **kwargs)
         else:
             info = init
         if ref:
@@ -121,12 +121,6 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             opts = ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
             path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
-            if init is not None and path not in info:
-                # ignore anything that Git hasn't reported on
-                # TODO figure out when it is more efficient to query
-                # a particular set of paths, instead of all of them
-                # and just throwing away the results
-                continue
             rec = info.get(path, {})
             rec.update({k: j[k] for k in j if k != 'file'})
             info[path] = rec
@@ -146,7 +140,9 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 eval_availability=False))
         self._mark_content_availability(info)
         for f, r in iteritems(self.status(paths=paths)):
-            info[f].update(r)
+            inf = info.get(f, {})
+            inf.update(r)
+            info[f] = inf
 
         return info
 

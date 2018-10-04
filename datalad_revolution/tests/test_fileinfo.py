@@ -38,14 +38,6 @@ def test_get_content_info(path):
     assert_equal(ds.pathobj, repopath)
     assert_equal(ds.pathobj, ut.Path(path))
 
-    # with no reference, the worktree is the reference, hence no deleted
-    # files are reported
-    for f in ds.repo.get_content_annexinfo(init={}, ref=None):
-        assert_not_in('deleted', f)
-    # with a Git reference, nothing staged can be reported
-    for f in ds.repo.get_content_annexinfo(init={}, ref='HEAD'):
-        assert_not_in('added', f)
-
     # verify general rules on fused info records that are incrementally
     # assembled: for git content info, ammended with annex info on 'HEAD'
     # (to get the last commited stage and with it possibly vanished
@@ -55,22 +47,20 @@ def test_get_content_info(path):
     # - git ls-files
     # - git annex findref HEAD
     # - git annex find --include '*'
-    for f, r in ds.repo.get_content_annexinfo(
-            init=ds.repo.get_content_annexinfo(
-                ref='HEAD')).items():
+    for f, r in ds.repo.annexstatus().items():
         if f.match('*_untracked'):
-            assert(r['gitshasum'] is None)
+            assert(r.get('gitshasum', None) is None)
         if f.match('*_deleted'):
             assert(not f.exists() and not f.is_symlink() is None)
         if f.match('subds_*'):
-            assert(r['type'] == 'dataset' if r['gitshasum'] else 'directory')
+            assert(r['type'] == 'dataset' if r.get('gitshasum', None) else 'directory')
         if f.match('file_*'):
             # which one exactly depends on many things
             assert_in(r['type'], ('file', 'symlink'))
         if f.match('file_ingit*'):
             assert(r['type'] == 'file')
         elif '.datalad' not in f.parts and not f.match('.git*') and \
-                r['gitshasum'] and not f.match('subds*'):
+                r.get('gitshasum', None) and not f.match('subds*'):
             # this should be known to annex, one way or another
             # regardless of whether things add deleted or staged
             # or anything inbetween
