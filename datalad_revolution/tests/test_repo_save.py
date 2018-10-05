@@ -9,15 +9,12 @@
 
 from six import iteritems
 
-import datalad_revolution.utils as ut
-
 from datalad.tests.utils import (
-    with_tempfile,
-    eq_,
-    assert_dict_equal,
     assert_in,
     assert_not_in,
-    assert_raises,
+    create_tree,
+    with_tempfile,
+    eq_,
 )
 
 from datalad_revolution.dataset import RevolutionDataset as Dataset
@@ -71,3 +68,24 @@ def test_gitrepo_save_all(path):
 @with_tempfile
 def test_annexrepo_save_all(path):
     _test_save_all(path, AnnexRepo)
+
+
+@with_tempfile
+def test_save_to_git(path):
+    ds = RevolutionDataset(Dataset(path).create().path)
+    create_tree(
+        ds.path,
+        {
+            'file_ingit': 'file_ingit',
+            'file_inannex': 'file_inannex',
+        }
+    )
+    ds.repo.save(paths=['file_ingit'], git=True)
+    ds.repo.save(paths=['file_inannex'])
+    assert_repo_status(ds.repo)
+    for f, p in iteritems(ds.repo.annexstatus()):
+        eq_(p['state'], 'clean')
+        if f.match('*ingit'):
+            assert_not_in('key', p, f)
+        elif f.match('*inannex'):
+            assert_in('key', p, f)

@@ -301,8 +301,6 @@ class RevolutionGitRepo(GitRepo):
             msg=message,
             _datalad_msg=_datalad_msg,
             options=None,
-            # TODO expose
-            date=None,
             # do not raise on empty commit, but should not happen
             careless=True,
         )
@@ -310,7 +308,7 @@ class RevolutionGitRepo(GitRepo):
     # TODO possibly add **kwargs to swallow arguments that AnnexRepo.save()
     # might need
     def save(self, message=None, paths=None, ignore_submodules='no',
-             _status=None):
+             _status=None, **kwargs):
         """Save dataset content.
 
         Parameters
@@ -336,17 +334,22 @@ class RevolutionGitRepo(GitRepo):
           For example, to save only modified content, but no untracked
           content, set `paths` to None and provide a `_status` that has
           no entries for untracked content.
+        **kwargs
+          Additional arguments that are passed to underlying Repo methods.
+          Supported:
+          - git : bool (passed to Repo.add()
         """
         return list(
             self.save_(
                 message=message,
                 paths=paths,
                 ignore_submodules=ignore_submodules,
+                **kwargs,
             )
         )
 
     def save_(self, message=None, paths=None, ignore_submodules='no',
-              _status=None):
+              _status=None, **kwargs):
         status = self._save_pre(paths, ignore_submodules, _status)
         if not status:
             # all clean, nothing todo
@@ -357,36 +360,37 @@ class RevolutionGitRepo(GitRepo):
         # - remove (deleted if not already staged)
         # - commit (with all paths that have been touched, to bypass
         #   potential pre-staged bits)
-        for r in self.add(
-                # TODO remove wrapping list when @normalize_paths can
-                # handle generators tentative approach in
-                # https://github.com/datalad/datalad/pull/2872
-                # TODO remove pathobj stringification when add() can
-                # handle it
-                [str(f.relative_to(self.pathobj))
-                 for f, props in iteritems(status)
-                 if props.get('state', None) in ('modified', 'untracked')],
+        to_add = [
+            # TODO remove pathobj stringification when add() can
+            # handle it
+            str(f.relative_to(self.pathobj))
+            for f, props in iteritems(status)
+            if props.get('state', None) in ('modified', 'untracked')]
+        for r in self.add_(
+                to_add,
                 git_options=None,
                 # this would possibly counteract our own logic
-                update=False):
+                update=False,
+                **{k: kwargs[k] for k in kwargs if k in ('git',)}):
             yield r
-        for r in self.remove(
-                # TODO remove wrapping list when @normalize_paths can
-                # handle generators tentative approach in
-                # https://github.com/datalad/datalad/pull/2872
-                # TODO remove pathobj stringification when delete() can
-                # handle it
-                [str(f.relative_to(self.pathobj))
-                 for f, props in iteritems(status)
-                 if props.get('state', None) == 'deleted' and
-                 # staged deletions have a gitshasum reported for them
-                 # those should not be processed as git rm will error
-                 # due to them being properly gone already
-                 not props.get('gitshasum', None)],
-                # we would always see individual files
-                recursive=False):
-            # normalize result?
-            yield r
+
+        to_remove = [
+            # TODO remove pathobj stringification when delete() can
+            # handle it
+            str(f.relative_to(self.pathobj))
+            for f, props in iteritems(status)
+            if props.get('state', None) == 'deleted' and
+            # staged deletions have a gitshasum reported for them
+            # those should not be processed as git rm will error
+            # due to them being properly gone already
+            not props.get('gitshasum', None)]
+        if to_remove:
+            for r in self.remove(
+                    to_remove,
+                    # we would always see individual files
+                    recursive=False):
+                # normalize result?
+                yield r
 
         self._save_post(message, status)
         # TODO yield result for commit, prev helper checked hexsha pre

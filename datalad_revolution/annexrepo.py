@@ -146,18 +146,6 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
 
         return info
 
-    #def save_(self, message=None, paths=None, ignore_submodules='no',
-    #          _status=None):
-    #    if self.config.get('annex.version', None) == '6':
-    #        # live can be simple, sometimes
-    #        for r in super(AnnexRepo, self).save_(
-    #                message=message,
-    #                paths=paths,
-    #                ignore_submodules=ignore_submodules,
-    #                _status=_status):
-    #            yield r
-    #        return
-
 
 # remove deprecated methods from API
 for m in obsolete_methods + gitrepo_obsolete_methods:
