@@ -307,6 +307,8 @@ class RevolutionGitRepo(GitRepo):
             careless=True,
         )
 
+    # TODO possibly add **kwargs to swallow arguments that AnnexRepo.save()
+    # might need
     def save(self, message=None, paths=None, ignore_submodules='no',
              _status=None):
         """Save dataset content.

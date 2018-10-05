@@ -23,6 +23,7 @@ from datalad.tests.utils import (
 from datalad_revolution.dataset import RevolutionDataset as Dataset
 from datalad_revolution.dataset import RevolutionDataset
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
+from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad_revolution.tests.utils import (
     assert_repo_status,
     get_convoluted_situation,
@@ -41,11 +42,11 @@ def test_save_basics(path):
         [])
 
 
-@with_tempfile
-def test_save_all(path):
+def _test_save_all(path, repocls):
     ds = get_convoluted_situation(path, GitRepo)
     orig_status = ds.repo.status(untracked='all', ignore_submodules='no')
-    print(ds.repo.save())
+    # TODO test the results when the are crafted
+    ds.repo.save()
     saved_status = ds.repo.status(untracked='all', ignore_submodules='no')
     # we still have an entry for everything that did not get deleted
     # intentionally
@@ -59,3 +60,14 @@ def test_save_all(path):
     for f, p in iteritems(saved_status):
         if p.get('state', None) != 'clean':
             assert f.match('subds_modified'), f
+    return ds
+
+
+@with_tempfile
+def test_gitrepo_save_all(path):
+    _test_save_all(path, GitRepo)
+
+
+@with_tempfile
+def test_annexrepo_save_all(path):
+    _test_save_all(path, AnnexRepo)
