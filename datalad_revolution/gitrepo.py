@@ -344,7 +344,7 @@ class RevolutionGitRepo(GitRepo):
                 message=message,
                 paths=paths,
                 ignore_submodules=ignore_submodules,
-                **kwargs,
+                **kwargs
             )
         )
 
