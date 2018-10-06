@@ -115,3 +115,31 @@ class RevSave(Interface):
         if message_file:
             with open(message_file) as mfh:
                 message = mfh.read()
+
+        # there are three basic scenarios:
+        # 1. save modifications to any already tracked content
+        # 2. save any content (including removal of deleted content)
+        #    to bring things to a clean state
+        # 3. like (2), but only operate on a given subset of content
+        #    identified by paths
+        # - all three have to work in conjunction with --recursive
+        # - the difference between (1) and (2) should be no more
+        #   that a switch from --untracked=no to --untracked=all
+        #   in Repo.save()
+
+        # we do not support
+        # - simultaneous operations on multiple datasets from disjoint
+        #   dataset hierarchies, hence a single reference dataset must be
+        #   identtifiable from the either
+        #   - curdir or
+        #   - the `dataset` argument.
+        #   This avoids complex annotation loops and hierarchy tracking.
+        # - any modification upwards from the root dataset
+
+        # disambiguation of path arguments:
+        # - when a subdataset root is given as a path to save, it is
+        #   interpreted as instructions to save the present subdataset
+        #   commit as the state referenced in the parent
+        # - when the same path is given with --recursive, the subdataset's
+        #   content itself will be saved first before recording the new
+        #   state in the parent
