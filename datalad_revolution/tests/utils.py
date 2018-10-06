@@ -91,44 +91,53 @@ def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
             % (state, state_files, oktobefound))
 
 
-def get_convoluted_situation(path):
-    # TODO remove when `create` is RF to return the new Dataset
-    ds = RevolutionDataset(Dataset(path).create(force=True).path)
-    # base content, all into the annex
+def get_convoluted_situation(path, repocls=AnnexRepo):
+    repo = repocls(path, create=True)
+    ds = Dataset(repo.path)
+    # base content
     create_tree(
         ds.path,
         {
             'subdir': {
                 'file_clean': 'file_clean',
-                'file_dropped_clean': 'file_dropped_clean',
                 'file_deleted': 'file_deleted',
                 'file_modified': 'file_clean',
             },
             'file_clean': 'file_clean',
-            'file_dropped_clean': 'file_dropped_clean',
             'file_deleted': 'file_deleted',
             'file_staged_deleted': 'file_staged_deleted',
             'file_modified': 'file_clean',
         }
     )
+    if isinstance(ds.repo, AnnexRepo):
+        create_tree(
+            ds.path,
+            {
+                'subdir': {
+                    'file_dropped_clean': 'file_dropped_clean',
+                },
+                'file_dropped_clean': 'file_dropped_clean',
+            }
+        )
     ds.add('.')
-    # some files straight in git
-    create_tree(
-        ds.path,
-        {
-            'subdir': {
+    if isinstance(ds.repo, AnnexRepo):
+        # some files straight in git
+        create_tree(
+            ds.path,
+            {
+                'subdir': {
+                    'file_ingit_clean': 'file_ingit_clean',
+                    'file_ingit_modified': 'file_ingit_clean',
+                },
                 'file_ingit_clean': 'file_ingit_clean',
                 'file_ingit_modified': 'file_ingit_clean',
-            },
-            'file_ingit_clean': 'file_ingit_clean',
-            'file_ingit_modified': 'file_ingit_clean',
-        }
-    )
-    ds.add('.', to_git=True)
-    ds.drop([
-        'file_dropped_clean',
-        op.join('subdir', 'file_dropped_clean')],
-        check=False)
+            }
+        )
+        ds.add('.', to_git=True)
+        ds.drop([
+            'file_dropped_clean',
+            op.join('subdir', 'file_dropped_clean')],
+            check=False)
     # clean and proper subdatasets
     ds.create('subds_clean')
     ds.create(op.join('subdir', 'subds_clean'))
@@ -191,16 +200,24 @@ def get_convoluted_situation(path):
     # staged deletion
     ds.repo.remove('file_staged_deleted')
     # modified files
-    ds.repo.unlock(['file_modified', op.join('subdir', 'file_modified')])
+    if isinstance(ds.repo, AnnexRepo):
+        ds.repo.unlock(['file_modified', op.join('subdir', 'file_modified')])
+        create_tree(
+            ds.path,
+            {
+                'subdir': {
+                    'file_ingit_modified': 'file_ingit_modified',
+                },
+                'file_ingit_modified': 'file_ingit_modified',
+            }
+        )
     create_tree(
         ds.path,
         {
             'subdir': {
                 'file_modified': 'file_modified',
-                'file_ingit_modified': 'file_ingit_modified',
             },
             'file_modified': 'file_modified',
-            'file_ingit_modified': 'file_ingit_modified',
         }
     )
     return ds

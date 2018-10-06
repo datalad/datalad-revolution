@@ -263,6 +263,139 @@ class RevolutionGitRepo(GitRepo):
                 break
         return status
 
+    def _save_pre(self, paths, ignore_submodules, _status):
+        # helper to get an actionable status report
+        if paths is not None and not paths and not _status:
+            return
+        if _status is None:
+            status = self.status(
+                paths=paths,
+                # makes for a more compact argument list to `git add`
+                untracked='normal',
+                ignore_submodules=ignore_submodules,
+            )
+        else:
+            status = _status
+        status = OrderedDict(
+            (k, v) for k, v in iteritems(status)
+            if v.get('state', None) != 'clean'
+        )
+        return status
+
+    def _save_post(self, message, status):
+        # helper to commit changes reported in status
+        _datalad_msg = False
+        if not message:
+            message = 'Recorded changes'
+            _datalad_msg = True
+
+        # we get no info from commit() :(
+        # TODO remove wrapping list when @normalize_paths can
+        # handle generators tentative approach in
+        # https://github.com/datalad/datalad/pull/2872
+        # TODO remove pathobj stringification when add() can
+        # handle it
+        self.commit(
+            files=[str(f.relative_to(self.pathobj))
+                   for f, props in iteritems(status)],
+            msg=message,
+            _datalad_msg=_datalad_msg,
+            options=None,
+            # do not raise on empty commit, but should not happen
+            careless=True,
+        )
+
+    # TODO possibly add **kwargs to swallow arguments that AnnexRepo.save()
+    # might need
+    def save(self, message=None, paths=None, ignore_submodules='no',
+             _status=None, **kwargs):
+        """Save dataset content.
+
+        Parameters
+        ----------
+        message : str or None
+          A message to accompany the changeset in the log. If None,
+          a default message is used.
+        paths : list or None
+          Any content with path matching any of the paths given in this
+          list will be saved. Matching will be performed against the
+          dataset status (GitRepo.status()), or a custom status provided
+          via `_status`. If no paths are provided, ALL non-clean paths
+          present in the repo status or `_status` will be saved.
+        ignore_submodules : {'no', 'all'}
+          If `_status` is not given, will be passed as an argument to
+          Repo.status(). With 'all' no submodule state will be saved in
+          the dataset. Note that submodule content will never be saved
+          in their respective datasets, as this function's scope is
+          limited to a single dataset.
+        _status : dict or None
+          If None, Repo.status() will be queried for the given `ds`. If
+          a dict is given, its content will be used as a constrain.
+          For example, to save only modified content, but no untracked
+          content, set `paths` to None and provide a `_status` that has
+          no entries for untracked content.
+        **kwargs
+          Additional arguments that are passed to underlying Repo methods.
+          Supported:
+          - git : bool (passed to Repo.add()
+        """
+        return list(
+            self.save_(
+                message=message,
+                paths=paths,
+                ignore_submodules=ignore_submodules,
+                **kwargs
+            )
+        )
+
+    def save_(self, message=None, paths=None, ignore_submodules='no',
+              _status=None, **kwargs):
+        status = self._save_pre(paths, ignore_submodules, _status)
+        if not status:
+            # all clean, nothing todo
+            return
+
+        # three things are to be done:
+        # - add (modified/untracked)
+        # - remove (deleted if not already staged)
+        # - commit (with all paths that have been touched, to bypass
+        #   potential pre-staged bits)
+        to_add = [
+            # TODO remove pathobj stringification when add() can
+            # handle it
+            str(f.relative_to(self.pathobj))
+            for f, props in iteritems(status)
+            if props.get('state', None) in ('modified', 'untracked')]
+        for r in self.add_(
+                to_add,
+                git_options=None,
+                # this would possibly counteract our own logic
+                update=False,
+                **{k: kwargs[k] for k in kwargs if k in ('git',)}):
+            yield r
+
+        to_remove = [
+            # TODO remove pathobj stringification when delete() can
+            # handle it
+            str(f.relative_to(self.pathobj))
+            for f, props in iteritems(status)
+            if props.get('state', None) == 'deleted' and
+            # staged deletions have a gitshasum reported for them
+            # those should not be processed as git rm will error
+            # due to them being properly gone already
+            not props.get('gitshasum', None)]
+        if to_remove:
+            for r in self.remove(
+                    to_remove,
+                    # we would always see individual files
+                    recursive=False):
+                # normalize result?
+                yield r
+
+        self._save_post(message, status)
+        # TODO yield result for commit, prev helper checked hexsha pre
+        # and post...
+
 
 # remove deprecated methods from API
 for m in obsolete_methods:

@@ -22,6 +22,17 @@ command_suite = (
             # optional name of the command in the Python API
             'rev_cmd'
         ),
+        # specification of a command, any number of commands can be defined
+        (
+            # importable module that contains the command implementation
+            'datalad_revolution.revsave',
+            # name of the command class implementation in above module
+            'RevSave',
+            # optional name of the command in the cmdline API
+            'rev-save',
+            # optional name of the command in the Python API
+            'rev_save'
+        ),
     ]
 )
 
