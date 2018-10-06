@@ -78,6 +78,7 @@ class RevolutionDataset(_Dataset):
 # remove deprecated method from API
 setattr(RevolutionDataset, 'get_subdatasets', ut.nothere)
 
+
 @optional_args
 def datasetmethod(f, name=None, dataset_argname='dataset'):
     """Decorator to bind functions to Dataset class.
@@ -132,14 +133,13 @@ def datasetmethod(f, name=None, dataset_argname='dataset'):
     return f
 
 
-
 # Note: Cannot be defined within constraints.py, since then dataset.py needs to
 # be imported from constraints.py, which needs to be imported from dataset.py
 # for another constraint
 class EnsureDataset(Constraint):
 
     def __call__(self, value):
-        if isinstance(value, Dataset):
+        if isinstance(value, _Dataset):
             return value
         elif isinstance(value, string_types):
             return RevolutionDataset(path=value)
