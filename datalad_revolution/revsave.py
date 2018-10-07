@@ -153,16 +153,19 @@ class RevSave(Interface):
         # TODO track if anything happened and issue 'notneeded' if not
 
         if not recursive:
-            for res in ds.repo.save(
-                    message=message,
-                    paths=path,
-                    # TODO make decision whether we want this parameter
-                    # it would complicate things quite a bit, maybe only
-                    # allow for it in the context of explicitly provided
-                    # paths
-                    #git=to_git
-                    untracked=untracked_mode):
-                # TODO normalize results
-                yield res
-            # TODO add tag, if desired
-            return
+            worker = ds.repo.save_(
+                message=message,
+                paths=path,
+                # TODO make decision whether we want this parameter
+                # it would complicate things quite a bit, maybe only
+                # allow for it in the context of explicitly provided
+                # paths
+                #git=to_git
+                untracked=untracked_mode)
+        else:
+            raise NotImplementedError
+
+        for res in worker:
+            # TODO normalize results
+            yield res
+        # TODO add tag, if desired
