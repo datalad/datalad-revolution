@@ -263,17 +263,17 @@ class RevolutionGitRepo(GitRepo):
                 break
         return status
 
-    def _save_pre(self, paths, ignore_submodules, _status):
+    def _save_pre(self, paths, _status, **kwargs):
         # helper to get an actionable status report
         if paths is not None and not paths and not _status:
             return
         if _status is None:
+            if 'untracked' not in kwargs:
+                kwargs['untracked'] = 'normal'
             status = self.status(
                 paths=paths,
-                # makes for a more compact argument list to `git add`
-                untracked='normal',
-                ignore_submodules=ignore_submodules,
-            )
+                **{k: kwargs[k] for k in kwargs
+                   if k in ('untracked', 'ignore_submodules')})
         else:
             status = _status
         status = OrderedDict(
@@ -305,10 +305,7 @@ class RevolutionGitRepo(GitRepo):
             careless=True,
         )
 
-    # TODO possibly add **kwargs to swallow arguments that AnnexRepo.save()
-    # might need
-    def save(self, message=None, paths=None, ignore_submodules='no',
-             _status=None, **kwargs):
+    def save(self, message=None, paths=None, _status=None, **kwargs):
         """Save dataset content.
 
         Parameters
@@ -338,19 +335,20 @@ class RevolutionGitRepo(GitRepo):
           Additional arguments that are passed to underlying Repo methods.
           Supported:
           - git : bool (passed to Repo.add()
+          - ignore_submodules : {'no', 'other', 'all'}
+            passed to Repo.status()
+          - untracked : {'no', 'normal', 'all'} - passed to Repo.satus()
         """
         return list(
             self.save_(
                 message=message,
                 paths=paths,
-                ignore_submodules=ignore_submodules,
                 **kwargs
             )
         )
 
-    def save_(self, message=None, paths=None, ignore_submodules='no',
-              _status=None, **kwargs):
-        status = self._save_pre(paths, ignore_submodules, _status)
+    def save_(self, message=None, paths=None, _status=None, **kwargs):
+        status = self._save_pre(paths, _status, **kwargs)
         if not status:
             # all clean, nothing todo
             return
