@@ -34,6 +34,7 @@ from datalad.support.constraints import (
 from datalad_revolution.dataset import (
     EnsureDataset,
     datasetmethod,
+    require_dataset,
 )
 
 lgr = logging.getLogger('datalad.revolution.save')
@@ -91,6 +92,11 @@ class RevSave(Interface):
             constraints=EnsureStr() | EnsureNone()),
         recursive=recursion_flag,
         recursion_limit=recursion_limit,
+        updated=Parameter(
+            args=('-u', '--updated',),
+            action='store_true',
+            doc="""if given, only saves previously tracked paths."""),
+
     )
 
     @staticmethod
@@ -99,6 +105,7 @@ class RevSave(Interface):
     def __call__(message=None, path=None, dataset=None,
                  version_tag=None,
                  recursive=False, recursion_limit=None,
+                 updated=False,
                  message_file=None
                  ):
         refds_path = Interface.get_refds_path(dataset)
@@ -116,6 +123,10 @@ class RevSave(Interface):
             with open(message_file) as mfh:
                 message = mfh.read()
 
+        # we want 'normal' to achieve the most compact argument list
+        # for git calls
+        untracked_mode = 'no' if updated else 'normal'
+
         # there are three basic scenarios:
         # 1. save modifications to any already tracked content
         # 2. save any content (including removal of deleted content)
@@ -130,7 +141,7 @@ class RevSave(Interface):
         # we do not support
         # - simultaneous operations on multiple datasets from disjoint
         #   dataset hierarchies, hence a single reference dataset must be
-        #   identtifiable from the either
+        #   identifiable from the either
         #   - curdir or
         #   - the `dataset` argument.
         #   This avoids complex annotation loops and hierarchy tracking.
@@ -143,3 +154,22 @@ class RevSave(Interface):
         # - when the same path is given with --recursive, the subdataset's
         #   content itself will be saved first before recording the new
         #   state in the parent
+
+        ds = require_dataset(dataset, check_installed=True, purpose='saving')
+
+        # TODO track if anything happened and issue 'notneeded' if not
+
+        if not recursive:
+            for res in ds.repo.save(
+                    message=message,
+                    paths=path,
+                    # TODO make decision whether we want this parameter
+                    # it would complicate things quite a bit, maybe only
+                    # allow for it in the context of explicitly provided
+                    # paths
+                    #git=to_git
+                    untracked=untracked_mode):
+                # TODO normalize results
+                yield res
+            # TODO add tag, if desired
+            return
