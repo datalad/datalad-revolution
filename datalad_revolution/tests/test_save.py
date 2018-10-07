@@ -10,6 +10,9 @@
 import os
 import os.path as op
 
+from datalad.utils import (
+    on_windows,
+)
 from datalad.tests.utils import (
     assert_status,
     assert_raises,
@@ -200,6 +203,7 @@ def test_symlinked_relpath(path):
     assert_repo_status(dspath)
 
 
+@known_failure_windows  # there are no symlinks in a POSIX sense
 @with_tempfile(mkdir=True)
 def test_bf1886(path):
     parent = RevolutionDataset(Dataset(path).create().path)
@@ -259,7 +263,12 @@ def test_gh2043p1(path):
     ds.add('1')
     assert_repo_status(ds.path, untracked=['2', '3'])
     ds.unlock('1')
-    assert_repo_status(ds.path, modified=['1'], untracked=['2', '3'])
+    assert_repo_status(
+        ds.path,
+        # on windows we are in an unlocked branch by default, hence
+        # we would see no change
+        modified=[] if on_windows else ['1'],
+        untracked=['2', '3'])
     # save(.) should recommit unlocked file, and not touch anything else
     # this tests the second issue in #2043
     with chpwd(path):
