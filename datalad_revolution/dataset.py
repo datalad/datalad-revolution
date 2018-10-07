@@ -1,13 +1,15 @@
 __docformat__ = 'restructuredtext'
 
-from six import string_types
 from six import PY2
 import wrapt
 import logging
 import datalad_revolution.utils as ut
 
-from datalad.distribution.dataset import Dataset as _Dataset
-from datalad.support.constraints import Constraint
+from datalad.distribution.dataset import (
+    Dataset as _Dataset,
+    require_dataset as _require_dataset,
+    EnsureDataset as _EnsureDataset,
+)
 from datalad.dochelpers import exc_str
 from datalad.support.gitrepo import (
     InvalidGitRepositoryError,
@@ -133,24 +135,16 @@ def datasetmethod(f, name=None, dataset_argname='dataset'):
     return f
 
 
-# Note: Cannot be defined within constraints.py, since then dataset.py needs to
-# be imported from constraints.py, which needs to be imported from dataset.py
-# for another constraint
-class EnsureDataset(Constraint):
-
+# minimal wrapper to ensure a revolution dataset is coming out
+class EnsureDataset(_EnsureDataset):
     def __call__(self, value):
-        if isinstance(value, _Dataset):
-            return value
-        elif isinstance(value, string_types):
-            return RevolutionDataset(path=value)
-        else:
-            raise ValueError("Can't create Dataset from %s." % type(value))
-
-    def short_description(self):
-        return "Dataset"
-
-    def long_description(self):
-        return """Value must be a Dataset or a valid identifier of a Dataset
-        (e.g. a path)"""
+        return RevolutionDataset(
+            super(EnsureDataset, self).__call__(value).path)
 
 
+# minimal wrapper to ensure a revolution dataset is coming out
+def require_dataset(dataset, check_installed=True, purpose=None):
+    return RevolutionDataset(_require_dataset(
+        dataset,
+        check_installed,
+        purpose).path)
