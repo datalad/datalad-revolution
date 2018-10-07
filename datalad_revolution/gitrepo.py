@@ -289,21 +289,21 @@ class RevolutionGitRepo(GitRepo):
             message = 'Recorded changes'
             _datalad_msg = True
 
-        # we get no info from commit() :(
-        # TODO remove wrapping list when @normalize_paths can
-        # handle generators tentative approach in
-        # https://github.com/datalad/datalad/pull/2872
         # TODO remove pathobj stringification when add() can
         # handle it
-        self.commit(
-            files=[str(f.relative_to(self.pathobj))
-                   for f, props in iteritems(status)],
-            msg=message,
-            _datalad_msg=_datalad_msg,
-            options=None,
-            # do not raise on empty commit, but should not happen
-            careless=True,
-        )
+        to_commit = [str(f.relative_to(self.pathobj))
+                     for f, props in iteritems(status)]
+        if to_commit:
+            self.commit(
+                files=to_commit,
+                msg=message,
+                _datalad_msg=_datalad_msg,
+                options=None,
+                # do not raise on empty commit
+                # it could be that the `add` in this save-cycle has already
+                # brought back a 'modified' file into a clean state
+                careless=True,
+            )
 
     def save(self, message=None, paths=None, _status=None, **kwargs):
         """Save dataset content.
@@ -364,13 +364,14 @@ class RevolutionGitRepo(GitRepo):
             str(f.relative_to(self.pathobj))
             for f, props in iteritems(status)
             if props.get('state', None) in ('modified', 'untracked')]
-        for r in self.add_(
-                to_add,
-                git_options=None,
-                # this would possibly counteract our own logic
-                update=False,
-                **{k: kwargs[k] for k in kwargs if k in ('git',)}):
-            yield r
+        if to_add:
+            for r in self.add_(
+                    to_add,
+                    git_options=None,
+                    # this would possibly counteract our own logic
+                    update=False,
+                    **{k: kwargs[k] for k in kwargs if k in ('git',)}):
+                yield r
 
         to_remove = [
             # TODO remove pathobj stringification when delete() can
