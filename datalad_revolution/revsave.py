@@ -102,7 +102,7 @@ class RevSave(Interface):
     @staticmethod
     @datasetmethod(name='rev_save')
     @eval_results
-    def __call__(message=None, path=None, dataset=None,
+    def __call__(path=None, message=None, dataset=None,
                  version_tag=None,
                  recursive=False, recursion_limit=None,
                  updated=False,
