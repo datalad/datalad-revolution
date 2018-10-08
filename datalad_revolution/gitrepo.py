@@ -97,7 +97,7 @@ class RevolutionGitRepo(GitRepo):
         props_re = re.compile(r'([0-9]+) (.*) (.*)\t(.*)$')
 
         stdout, stderr = self._git_custom_command(
-            paths if paths else [],
+            [str(f) for f in paths] if paths else [],
             cmd,
             log_stderr=True,
             log_stdout=True,
