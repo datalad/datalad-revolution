@@ -7,7 +7,11 @@ import re
 from six import iteritems
 
 import datalad_revolution.utils as ut
-from datalad.support.gitrepo import GitRepo
+from datalad.support.gitrepo import (
+    GitRepo,
+    InvalidGitRepositoryError,
+)
+from datalad.support.exceptions import CommandError
 
 lgr = logging.getLogger('datalad.revolution.gitrepo')
 
@@ -275,7 +279,9 @@ class RevolutionGitRepo(GitRepo):
                 **{k: kwargs[k] for k in kwargs
                    if k in ('untracked', 'ignore_submodules')})
         else:
-            status = _status
+            # we want to be able to add items down the line
+            # make sure to detach from prev. owner
+            status = _status.copy()
         status = OrderedDict(
             (k, v) for k, v in iteritems(status)
             if v.get('state', None) != 'clean'
@@ -358,6 +364,36 @@ class RevolutionGitRepo(GitRepo):
         # - remove (deleted if not already staged)
         # - commit (with all paths that have been touched, to bypass
         #   potential pre-staged bits)
+
+        # looks for contained repositories
+        to_add_submodules = [sm for sm, sm_props in iteritems(
+            self.get_content_info(
+                # get content info for any untracked directory
+                [f for f, props in iteritems(status)
+                 if props.get('state', None) == 'untracked' and
+                 props.get('type', None) == 'directory'],
+                ref=None,
+                # request exhaustive list, so that everything that is
+                # still reported as a directory must be its own repository
+                untracked='all'))
+            if sm_props.get('type', None) == 'directory']
+        added_submodule = False
+        for cand_sm in to_add_submodules:
+            try:
+                self.add_submodule(
+                    cand_sm.relative_to(self.pathobj), url=None, name=None)
+            except (CommandError, InvalidGitRepositoryError) as e:
+                yield dict(
+                    path=cand_sm,
+                    status='error',
+                    message=e.stderr,
+                    logger=lgr)
+                continue
+            added_submodule = True
+        if added_submodule:
+            # need to include .gitmodules in what needs saving
+            status[self.pathobj.joinpath('.gitmodules')] = dict(
+                type='file', state='modified')
         to_add = [
             # TODO remove pathobj stringification when add() can
             # handle it
