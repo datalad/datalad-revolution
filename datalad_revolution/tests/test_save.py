@@ -32,7 +32,6 @@ from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad.api import (
     rev_save as save,
     create,
-    add,
 )
 
 from datalad_revolution.tests.utils import (
@@ -51,21 +50,21 @@ def test_save(path):
     ds.repo.add("new_file.tst", git=True)
     ok_(ds.repo.dirty)
 
-    ds.rev_save("add a new file")
+    ds.rev_save(message="add a new file")
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     with open(op.join(path, "new_file.tst"), "w") as f:
         f.write("modify")
 
     ok_(ds.repo.dirty)
-    ds.rev_save("modified new_file.tst")
+    ds.rev_save(message="modified new_file.tst")
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     # save works without ds and files given in the PWD
     with open(op.join(path, "new_file.tst"), "w") as f:
         f.write("rapunzel")
     with chpwd(path):
-        save("love rapunzel")
+        save(message="love rapunzel")
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     # and also without `-a` when things are staged
@@ -73,7 +72,7 @@ def test_save(path):
         f.write("exotic")
     ds.repo.add("new_file.tst", git=True)
     with chpwd(path):
-        save("love marsians")
+        save(message="love marsians")
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     files = ['one.txt', 'two.txt']
@@ -81,19 +80,19 @@ def test_save(path):
         with open(op.join(path, fn), "w") as f:
             f.write(fn)
 
-    ds.add([op.join(path, f) for f in files])
-    # superfluous call to save (add saved it already), should not fail
+    ds.rev_save([op.join(path, f) for f in files])
+    # superfluous call to save (alll saved it already), should not fail
     # but report that nothing was saved
-    assert_status('notneeded', ds.rev_save("set of new files"))
+    assert_status('notneeded', ds.rev_save(message="set of new files"))
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     # create subdataset
-    subds = ds.create('subds')
+    subds = RevolutionDataset(ds.create('subds').path)
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
     # modify subds
     with open(op.join(subds.path, "some_file.tst"), "w") as f:
         f.write("something")
-    subds.add('.')
+    subds.rev_save()
     assert_repo_status(subds.path, annex=isinstance(subds.repo, AnnexRepo))
     # ensure modified subds is committed
     ds.rev_save()
@@ -116,7 +115,7 @@ def test_save_message_file(path):
 
     create_tree(path, {"foo": "x",
                        "msg": "add foo"})
-    ds.add("foo", save=False)
+    ds.repo.add("foo")
     ds.rev_save(message_file=op.join(ds.path, "msg"))
     eq_(ds.repo.repo.git.show("--format=%s", "--no-patch"),
         "add foo")
@@ -127,7 +126,7 @@ def test_renamed_file():
     def check_renamed_file(recursive, no_annex, path):
         ds = RevolutionDataset(Dataset(path).create(no_annex=no_annex).path)
         create_tree(path, {'old': ''})
-        ds.add('old')
+        ds.repo.add('old')
         ds.repo._git_custom_command(['old', 'new'], ['git', 'mv'])
         ds.rev_save(recursive=recursive)
         assert_repo_status(path)
@@ -146,7 +145,7 @@ def test_subdataset_save(path):
         "untracked": 'ignore',
         'sub': {
             "new": "wanted"}})
-    sub.add('new')
+    sub.rev_save('new')
     # defined state: one untracked, modified (but clean in itself) subdataset
     assert_repo_status(sub.path)
     assert_repo_status(parent.path, untracked=['untracked'], modified=['sub'])
@@ -166,7 +165,7 @@ def test_subdataset_save(path):
     create_tree(parent.path, {
         'sub': {
             "new2": "wanted2"}})
-    sub.add('new2')
+    sub.rev_save('new2')
     assert_repo_status(parent.path, untracked=['untracked'], modified=['sub'])
 
 
@@ -189,16 +188,16 @@ def test_symlinked_relpath(path):
     # in the root of ds
     with chpwd(dspath):
         ds.repo.add("mike1", git=True)
-        ds.rev_save("committing", path="./mike1")
+        ds.rev_save(message="committing", path="./mike1")
 
     # Let's also do in subdirectory
     with chpwd(op.join(dspath, 'd')):
         ds.repo.add("mike2", git=True)
-        ds.rev_save("committing", path="./mike2")
+        ds.rev_save(message="committing", path="./mike2")
 
         later = op.join(op.pardir, "later")
         ds.repo.add(later, git=True)
-        ds.rev_save("committing", path=later)
+        ds.rev_save(message="committing", path=later)
 
     assert_repo_status(dspath)
 
@@ -211,19 +210,19 @@ def test_bf1886(path):
     assert_repo_status(parent.path)
     # create a symlink pointing down to the subdataset, and add it
     os.symlink('sub', op.join(parent.path, 'down'))
-    parent.add('down')
+    parent.rev_save('down')
     assert_repo_status(parent.path)
     # now symlink pointing up
     os.makedirs(op.join(parent.path, 'subdir', 'subsubdir'))
     os.symlink(op.join(op.pardir, 'sub'), op.join(parent.path, 'subdir', 'up'))
-    parent.add(op.join('subdir', 'up'))
+    parent.rev_save(op.join('subdir', 'up'))
     # 'all' to avoid the empty dir being listed
     assert_repo_status(parent.path, untracked_mode='all')
     # now symlink pointing 2xup, as in #1886
     os.symlink(
         op.join(op.pardir, op.pardir, 'sub'),
         op.join(parent.path, 'subdir', 'subsubdir', 'upup'))
-    parent.add(op.join('subdir', 'subsubdir', 'upup'))
+    parent.rev_save(op.join('subdir', 'subsubdir', 'upup'))
     assert_repo_status(parent.path)
     # simulatenously add a subds and a symlink pointing to it
     # create subds, but don't register it
@@ -231,7 +230,7 @@ def test_bf1886(path):
     os.symlink(
         op.join(op.pardir, op.pardir, 'sub2'),
         op.join(parent.path, 'subdir', 'subsubdir', 'upup2'))
-    parent.add(['sub2', op.join('subdir', 'subsubdir', 'upup2')])
+    parent.rev_save(['sub2', op.join('subdir', 'subsubdir', 'upup2')])
     assert_repo_status(parent.path)
     # full replication of #1886: the above but be in subdir of symlink
     # with no reference dataset
@@ -241,15 +240,9 @@ def test_bf1886(path):
         op.join(parent.path, 'subdir', 'subsubdir', 'upup3'))
     # need to use absolute paths
     with chpwd(op.join(parent.path, 'subdir', 'subsubdir')):
-        add([op.join(parent.path, 'sub3'),
-             op.join(parent.path, 'subdir', 'subsubdir', 'upup3')])
-    # here is where we need to disagree with the repo in #1886
-    # we would not expect that `add` registers sub3 as a subdataset
-    # of parent, because no reference dataset was given and the
-    # command cannot decide (with the current semantics) whether
-    # it should "add anything in sub3 to sub3" or "add sub3 to whatever
-    # sub3 is in"
-    assert_repo_status(parent.path, untracked=['sub3/'])
+        save([op.join(parent.path, 'sub3'),
+              op.join(parent.path, 'subdir', 'subsubdir', 'upup3')])
+    assert_repo_status(parent.path)
 
 
 @with_tree({
@@ -260,7 +253,7 @@ def test_gh2043p1(path):
     # this tests documents the interim agreement on what should happen
     # in the case documented in gh-2043
     ds = RevolutionDataset(Dataset(path).create(force=True).path)
-    ds.add('1')
+    ds.rev_save('1')
     assert_repo_status(ds.path, untracked=['2', '3'])
     ds.unlock('1')
     assert_repo_status(
@@ -291,7 +284,7 @@ def test_gh2043p1(path):
     'untracked': 'untracked'})
 def test_bf2043p2(path):
     ds = RevolutionDataset(Dataset(path).create(force=True).path)
-    ds.add('staged', save=False)
+    ds.repo.add('staged')
     assert_repo_status(ds.path, added=['staged'], untracked=['untracked'])
     # save -u does not commit untracked content
     # this tests the second issue in #2043
