@@ -182,5 +182,10 @@ class RevSave(Interface):
             raise NotImplementedError
 
         for res in worker:
+            # TODO remove stringification when datalad-core can handle
+            # path objects, or when PY3.6 is the lowest supported version
+            for k in ('path', 'refds'):
+                if k in res:
+                    res[k] = str(res[k])
             yield res
         # TODO add tag, if desired
