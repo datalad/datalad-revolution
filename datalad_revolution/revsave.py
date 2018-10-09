@@ -30,6 +30,9 @@ from datalad.support.constraints import (
     EnsureStr,
     EnsureNone,
 )
+from datalad.utils import (
+    assure_list,
+)
 
 from datalad_revolution.dataset import (
     EnsureDataset,
@@ -112,6 +115,8 @@ class RevSave(Interface):
             raise ValueError(
                 "Both a message and message file were specified for save()")
 
+        path = assure_list(path)
+
         if message_file:
             with open(message_file) as mfh:
                 message = mfh.read()
@@ -155,7 +160,8 @@ class RevSave(Interface):
         if not recursive:
             worker = ds.repo.save_(
                 message=message,
-                paths=path,
+                # do not pass empty list
+                paths=path if path else None,
                 # TODO make decision whether we want this parameter
                 # it would complicate things quite a bit, maybe only
                 # allow for it in the context of explicitly provided

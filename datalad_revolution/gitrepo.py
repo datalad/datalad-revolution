@@ -147,6 +147,9 @@ class RevolutionGitRepo(GitRepo):
 
         Parameters
         ----------
+        paths : list or None
+          If given, limits the query to the specified paths. To query all
+          paths specify `None`, not an empty list.
         untracked : {'no', 'normal', 'all'}
           If and how untracked content is reported when no `ref` was given:
           'no': no untracked files are reported; 'normal': untracked files
@@ -165,6 +168,8 @@ class RevolutionGitRepo(GitRepo):
           `state`
             Can be 'added', 'untracked', 'clean', 'deleted', 'modified'.
         """
+        lgr.debug('Query status of %r for %s paths',
+                  self, len(paths) if paths else 'all')
         # TODO report more info from get_content_info() calls in return
         # value, those are cheap and possibly useful to a consumer
         status = OrderedDict()
@@ -357,6 +362,7 @@ class RevolutionGitRepo(GitRepo):
         status = self._save_pre(paths, _status, **kwargs)
         if not status:
             # all clean, nothing todo
+            lgr.debug('Nothing to save in %r, exiting early', self)
             return
 
         # three things are to be done:
@@ -381,7 +387,8 @@ class RevolutionGitRepo(GitRepo):
         for cand_sm in to_add_submodules:
             try:
                 self.add_submodule(
-                    cand_sm.relative_to(self.pathobj), url=None, name=None)
+                    str(cand_sm.relative_to(self.pathobj)),
+                    url=None, name=None)
             except (CommandError, InvalidGitRepositoryError) as e:
                 yield dict(
                     path=cand_sm,
