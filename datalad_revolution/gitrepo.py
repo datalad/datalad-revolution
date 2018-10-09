@@ -301,7 +301,7 @@ class RevolutionGitRepo(GitRepo):
             message = 'Recorded changes'
             _datalad_msg = True
 
-        # TODO remove pathobj stringification when add() can
+        # TODO remove pathobj stringification when commit() can
         # handle it
         to_commit = [str(f.relative_to(self.pathobj))
                      for f, props in iteritems(status)]
@@ -411,6 +411,8 @@ class RevolutionGitRepo(GitRepo):
             for f, props in iteritems(status)
             if props.get('state', None) in ('modified', 'untracked')]
         if to_add:
+            lgr.debug('%i paths to add to %r %s',
+                len(to_add), self, to_add if len(to_add) < 10 else '')
             for r in self.add_(
                     to_add,
                     git_options=None,
