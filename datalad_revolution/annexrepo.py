@@ -117,8 +117,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             opts = [ref]
         else:
             cmd = 'find'
-            # TODO maybe inform by `path`?
-            opts = ['--include', '*']
+            opts = paths if paths else ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
             path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
             rec = info.get(path, {})
@@ -133,6 +132,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
 
     def annexstatus(self, paths=None, untracked='all'):
         info = self.get_content_annexinfo(
+            paths=paths,
             eval_availability=False,
             init=self.get_content_annexinfo(
                 paths=paths,
