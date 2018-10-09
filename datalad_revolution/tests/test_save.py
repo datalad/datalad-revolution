@@ -17,6 +17,7 @@ from datalad.utils import (
 )
 from datalad.tests.utils import (
     assert_status,
+    assert_in,
     assert_not_in,
     assert_raises,
     create_tree,
@@ -37,6 +38,7 @@ from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad.api import (
     rev_save as save,
     create,
+    install,
 )
 
 from datalad_revolution.tests.utils import (
@@ -329,6 +331,37 @@ def test_add_files(path):
                 assert p.get('key', None) is None, f
             else:
                 assert p.get('key', None) is not None, f
+
+
+@with_tree(**tree_arg)
+@with_tempfile(mkdir=True)
+def test_add_subdataset(path, other):
+    subds = RevolutionDataset(create(op.join(path, 'dir'), force=True).path)
+    ds = RevolutionDataset(create(path, force=True).path)
+    ok_(subds.repo.dirty)
+    ok_(ds.repo.dirty)
+    assert_not_in('dir', ds.subdatasets(result_xfm='relpaths'))
+    # "add everything in subds to subds"
+    save(dataset=subds.path)
+    assert_repo_status(subds.path)
+    assert_not_in('dir', ds.subdatasets(result_xfm='relpaths'))
+    # but with a base directory we add the dataset subds as a subdataset
+    # to ds
+    ds.rev_save(subds.path)
+    assert_in('dir', ds.subdatasets(result_xfm='relpaths'))
+    #  create another one
+    other = create(other)
+    # install into superdataset, but don't add
+    other_clone = install(source=other.path, path=op.join(ds.path, 'other'))
+    ok_(other_clone.is_installed)
+    assert_not_in('other', ds.subdatasets(result_xfm='relpaths'))
+    # now add, it should pick up the source URL
+    ds.rev_save('other')
+    # and that is why, we can reobtain it from origin
+    ds.uninstall('other')
+    ok_(other_clone.is_installed)
+    ds.get('other')
+    ok_(other_clone.is_installed)
 
 
 @with_tempfile(mkdir=True)
