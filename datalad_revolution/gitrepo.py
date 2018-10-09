@@ -12,6 +12,7 @@ from datalad.support.gitrepo import (
     InvalidGitRepositoryError,
 )
 from datalad.support.exceptions import CommandError
+from datalad.interface.results import get_status_dict
 
 lgr = logging.getLogger('datalad.revolution.gitrepo')
 
@@ -390,8 +391,10 @@ class RevolutionGitRepo(GitRepo):
                     str(cand_sm.relative_to(self.pathobj)),
                     url=None, name=None)
             except (CommandError, InvalidGitRepositoryError) as e:
-                yield dict(
-                    path=cand_sm,
+                yield get_status_dict(
+                    action='add_submodule',
+                    ds=self,
+                    path=self.pathobj / ut.PurePosixPath(cand_sm),
                     status='error',
                     message=e.stderr,
                     logger=lgr)
@@ -414,7 +417,15 @@ class RevolutionGitRepo(GitRepo):
                     # this would possibly counteract our own logic
                     update=False,
                     **{k: kwargs[k] for k in kwargs if k in ('git',)}):
-                yield r
+                yield get_status_dict(
+                    action=r.get('command', 'add'),
+                    refds=self.pathobj,
+                    type='file',
+                    path=(self.pathobj / ut.PurePosixPath(r['file']))
+                    if 'file' in r else None,
+                    status='ok' if r.get('success', None) else 'error',
+                    key=r.get('key', None),
+                    logger=lgr)
 
         to_remove = [
             # TODO remove pathobj stringification when delete() can
@@ -431,7 +442,7 @@ class RevolutionGitRepo(GitRepo):
                     to_remove,
                     # we would always see individual files
                     recursive=False):
-                # normalize result?
+                # TODO normalize result
                 yield r
 
         self._save_post(message, status)
