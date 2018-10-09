@@ -9,9 +9,11 @@
 
 import os
 import os.path as op
+from six import iteritems
 
 from datalad.utils import (
     on_windows,
+    assure_list,
 )
 from datalad.tests.utils import (
     assert_status,
@@ -24,7 +26,9 @@ from datalad.tests.utils import (
     ok_,
     chpwd,
     known_failure_windows,
+    OBSCURE_FILENAME,
 )
+from datalad.distribution.tests.test_add import tree_arg
 
 from datalad_revolution.dataset import RevolutionDataset as Dataset
 from datalad_revolution.dataset import RevolutionDataset
@@ -291,3 +295,36 @@ def test_bf2043p2(path):
     with chpwd(path):
         save(updated=True)
     assert_repo_status(ds.path, untracked=['untracked'])
+
+
+@with_tree(**tree_arg)
+def test_add_files(path):
+    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+
+    test_list_1 = ['test_annex.txt']
+    test_list_2 = ['test.txt']
+    test_list_3 = ['test1.dat', 'test2.dat']
+    test_list_4 = [op.join('dir', 'testindir'),
+                   op.join('dir', OBSCURE_FILENAME)]
+
+    for arg in [(test_list_1[0], False),
+                (test_list_2[0], True),
+                (test_list_3, False),
+                (test_list_4, False)]:
+        # special case 4: give the dir:
+        if arg[0] == test_list_4:
+            result = ds.rev_save('dir', to_git=arg[1])
+            status = ds.repo.annexstatus(['dir'])
+        else:
+            result = ds.rev_save(
+                arg[0], to_git=arg[1],
+                result_xfm='relpaths',
+                return_type='item-or-list')
+            # order depends on how annex processes it, so let's sort
+            eq_(sorted(result), sorted(arg[0]))
+            status = ds.repo.get_content_annexinfo(assure_list(arg[0]))
+        for f, p in iteritems(status):
+            if arg[1]:
+                assert p.get('key', None) is None, f
+            else:
+                assert p.get('key', None) is not None, f
