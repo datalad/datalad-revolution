@@ -1,5 +1,7 @@
 __docformat__ = 'restructuredtext'
 
+import os
+import os.path as op
 from six import PY2
 import wrapt
 import logging
@@ -148,3 +150,41 @@ def require_dataset(dataset, check_installed=True, purpose=None):
         dataset,
         check_installed,
         purpose).path)
+
+
+def resolve_path(path, ds=None):
+    """Resolve a path specification (against a Dataset location)
+
+    Any explicit path (absolute or relative) is returned as an absolute path.
+    In case of an explicit relative path (e.g. "./some", or ".\\some" on
+    windows), the current working directory is used as reference. Any
+    non-explicit relative path is resolved against as dataset location, i.e.
+    considered relative to the location of the dataset. If no dataset is
+    provided, the current working directory is used.
+
+    Parameters
+    path : str or PathLike
+      Platform-specific path specific path specification.
+    ds : Dataset or None
+      Dataset instance to resolve non-explicit relative paths against.
+
+    Returns
+    -------
+    `pathlib.Path` object
+    """
+    if ds is None:
+        # CWD is the reference
+        return ut.Path(path)
+
+    # we have a dataset
+    if not op.isabs(path) and \
+            not (path.startswith(os.curdir + os.sep) or
+                 path.startswith(os.pardir + os.sep)):
+        # we have a dataset and no abspath nor an explicit relative path ->
+        # resolve it against the dataset
+        return ds.pathobj / path
+
+    # note that this will not "normpath()" the result, check the
+    # pathlib docs for why this is the only sane choice in the
+    # face of the possibility of symlinks in the path
+    return ut.Path(path)
