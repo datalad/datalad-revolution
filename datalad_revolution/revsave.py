@@ -135,7 +135,13 @@ class RevSave(Interface):
 
         # we want 'normal' to achieve the most compact argument list
         # for git calls
-        untracked_mode = 'no' if updated else 'normal'
+        # untracked_mode = 'no' if updated else 'normal'
+        # TODO however, Repo.add() would refuse to add any dotfiles
+        # in a directory that is itself untracked, hence the only
+        # choice is to go with potentially crazy long lists
+        # until https://github.com/datalad/datalad/issues/1454
+        # has a resolution
+        untracked_mode = 'no' if updated else 'all'
 
         # there are three basic scenarios:
         # 1. save modifications to any already tracked content

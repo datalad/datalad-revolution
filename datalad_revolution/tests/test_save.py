@@ -17,6 +17,7 @@ from datalad.utils import (
 )
 from datalad.tests.utils import (
     assert_status,
+    assert_not_in,
     assert_raises,
     create_tree,
     with_tempfile,
@@ -328,3 +329,25 @@ def test_add_files(path):
                 assert p.get('key', None) is None, f
             else:
                 assert p.get('key', None) is not None, f
+
+
+@with_tempfile(mkdir=True)
+def test_gh1597_simpler(path):
+    ds = RevolutionDataset(Dataset(path).create().path)
+    # same goes for .gitattributes
+    with open(op.join(ds.path, '.gitignore'), 'a') as f:
+        f.write('*.swp\n')
+    ds.rev_save('.gitignore')
+    assert_repo_status(ds.path)
+    # put .gitattributes in some subdir and add all, should also go into Git
+    attrfile = op.join ('subdir', '.gitattributes')
+    ds.repo.set_gitattributes(
+        [('*', dict(mycustomthing='this'))],
+        attrfile)
+    assert_repo_status(ds.path, untracked=[attrfile], untracked_mode='all')
+    ds.rev_save()
+    assert_repo_status(ds.path)
+    # no annex key, not in annex
+    assert_not_in(
+        'key',
+        ds.repo.get_content_annexinfo([attrfile]).popitem()[1])
