@@ -345,7 +345,7 @@ class RevCreate(Interface):
             return
 
         # stuff that we create and want to have tracked with git (not annex)
-        add_to_git = []
+        add_to_git = {}
 
         if no_annex:
             lgr.info("Creating a new git repo at %s", tbds.path)
@@ -378,7 +378,9 @@ class RevCreate(Interface):
                 if not attrs.get('.', {}).get('annex.largefiles', None) == '(not(mimetype=text/*))':
                     tbrepo.set_gitattributes([
                         ('*', {'annex.largefiles': '(not(mimetype=text/*))'})])
-                    add_to_git.append('.gitattributes')
+                    add_to_git[tbrepo.pathobj / '.gitattributes'] = {
+                        'type': 'file',
+                        'state': 'untracked'}
 
         if native_metadata_type is not None:
             if not isinstance(native_metadata_type, list):
@@ -404,7 +406,9 @@ class RevCreate(Interface):
             tbds.id if tbds.id is not None else uuid_id,
             where='dataset')
 
-        add_to_git.append('.datalad')
+        add_to_git[tbds.pathobj / '.datalad'] = {
+            'type': 'directory',
+            'state': 'untracked'}
 
         # make sure that v6 annex repos never commit content under .datalad
         attrs_cfg = (
@@ -424,20 +428,27 @@ class RevCreate(Interface):
             tbds.repo.set_gitattributes(
                 set_attrs,
                 attrfile=op.join('.datalad', '.gitattributes'))
-            add_to_git.append('.datalad')
 
         # prevent git annex from ever annexing .git* stuff (gh-1597)
         attrs = tbds.repo.get_gitattributes('.git')
         if not attrs.get('.git', {}).get('annex.largefiles', None) == 'nothing':
             tbds.repo.set_gitattributes([
                 ('**/.git*', {'annex.largefiles': 'nothing'})])
-            add_to_git.append('.gitattributes')
+            add_to_git[tbds.pathobj / '.gitattributes'] = {
+                'type': 'file',
+                'state': 'untracked'}
 
         # save everything, we need to do this now and cannot merge with the
         # call below, because we may need to add this subdataset to a parent
         # but cannot until we have a first commit
-        tbds.add(add_to_git, to_git=True, save=save,
-                 message='[DATALAD] new dataset')
+        tbds.repo.save(
+            message='[DATALAD] new dataset',
+            git=True,
+            # we have to supply our own custom status, as the repo does
+            # not have a single commit yet and the is no HEAD reference
+            # TODO make `GitRepo.status()` robust to this state.
+            _status=add_to_git,
+        )
 
         # the next only makes sense if we saved the created dataset,
         # otherwise we have no committed state to be registered
@@ -446,13 +457,9 @@ class RevCreate(Interface):
            and tbds.repo.get_hexsha():
             # we created a dataset in another dataset
             # -> make submodule
-            for r in dataset.add(
-                    tbds.path,
-                    save=save,
-                    return_type='generator',
-                    result_filter=None,
-                    result_xfm=None,
-                    on_failure='ignore'):
+            for r in dataset.repo.save_(
+                    paths=[tbds.path],
+            ):
                 yield r
 
         path.update({'status': 'ok'})

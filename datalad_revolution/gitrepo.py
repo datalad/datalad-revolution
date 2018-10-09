@@ -355,6 +355,7 @@ class RevolutionGitRepo(GitRepo):
             self.save_(
                 message=message,
                 paths=paths,
+                _status=_status,
                 **kwargs
             )
         )
