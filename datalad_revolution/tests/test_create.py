@@ -82,8 +82,10 @@ def test_create_raises(path, outside_path):
     assert_in_results(
         ds.rev_create('sub', **raw),
         status='error',
-        message=('collision with known subdataset %s/ in dataset %s',
-                 'sub', ds.path)
+        message=('collision with %s in dataset %s',
+                 '{} (dataset)'.format(
+                     str(ds.pathobj / 'sub')),
+                 ds.path)
     )
 
     # now deinstall the sub and fail trying to create a new one at the
@@ -95,8 +97,10 @@ def test_create_raises(path, outside_path):
         assert_in_results(
             ds.rev_create(s, **raw),
             status='error',
-            message=('collision with known subdataset %s/ in dataset %s',
-                     'sub', ds.path)
+            message=('collision with %s in dataset %s',
+                     '{} (dataset)'.format(
+                         str(ds.pathobj / 'sub')),
+                     ds.path)
         )
 
 

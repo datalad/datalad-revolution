@@ -13,6 +13,7 @@
 import logging
 import random
 import uuid
+from six import iteritems
 
 from os import listdir
 import os.path as op
@@ -302,18 +303,23 @@ class RevCreate(Interface):
         # just discard, we have a new story to tell
         path.pop('message', None)
         if 'parentds' in path:
-            subs = Subdatasets.__call__(
-                dataset=path['parentds'],
-                # any known
-                fulfilled=None,
-                recursive=False,
-                contains=path['path'],
-                result_xfm='relpaths')
-            if len(subs):
+            conflict = {
+                k: v for k, v in iteritems(
+                    # we cannot get away with a simple
+                    # GitRepo.get_content_info(), as we need to detect
+                    # uninstalled/added subdatasets too
+                    GitRepo(path['parentds']).status(
+                        paths=[path['path']],
+                        untracked='no'))
+                if v.get('type', None) == 'dataset'}
+            if conflict:
                 path.update({
                     'status': 'error',
-                    'message': ('collision with known subdataset %s/ in dataset %s',
-                                subs[0], path['parentds'])})
+                    'message': (
+                        'collision with %s in dataset %s',
+                        ', '.join('{} ({})'.format(str(c), p.get('type', ''))
+                                  for c, p in iteritems(conflict)),
+                        path['parentds'])})
                 yield path
                 return
 
