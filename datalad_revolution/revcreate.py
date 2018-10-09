@@ -405,7 +405,9 @@ class RevCreate(Interface):
             if not isinstance(native_metadata_type, list):
                 native_metadata_type = [native_metadata_type]
             for nt in native_metadata_type:
-                tbds.config.add('datalad.metadata.nativetype', nt)
+                tbds.config.add(
+                    'datalad.metadata.nativetype', nt,
+                    reload=False)
 
         # record an ID for this repo for the afterlife
         # to be able to track siblings and children
@@ -472,10 +474,12 @@ class RevCreate(Interface):
         # the next only makes sense if we saved the created dataset,
         # otherwise we have no committed state to be registered
         # in the parent
-        if isinstance(dataset, Dataset) and dataset.path != tbds.path \
-           and tbds.repo.get_hexsha():
+        if isinstance(dataset, Dataset) and dataset.path != tbds.path:
             # we created a dataset in another dataset
             # -> make submodule
+            # TODO this will not be able to handle saving
+            # a subdataset that is itself in a subdataset
+            # of `dataset`, yet...
             for r in dataset.repo.save_(
                     paths=[tbds.path],
             ):
