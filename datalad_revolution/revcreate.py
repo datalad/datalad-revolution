@@ -273,7 +273,10 @@ class RevCreate(Interface):
             action='create',
             # we need to know whether we have to check for potential
             # subdataset collision
-            force_parentds_discovery=True,
+            force_parentds_discovery=False,
+            force_subds_discovery=False,
+            force_no_revision_change_discovery=True,
+            force_untracked_discovery=False,
             # it is absolutely OK to have something that does not exist
             unavailable_path_status='',
             unavailable_path_msg=None,
