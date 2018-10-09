@@ -99,7 +99,18 @@ class RevSave(Interface):
             args=('-u', '--updated',),
             action='store_true',
             doc="""if given, only saves previously tracked paths."""),
-
+        to_git=Parameter(
+            args=("--to-git",),
+            action='store_true',
+            doc="""flag whether to add data directly to Git, instead of
+            tracking data identity only.  Usually this is not desired,
+            as it inflates dataset sizes and impacts flexibility of data
+            transport. If not specified - it will be up to git-annex to
+            decide, possibly on .gitattributes options. Use this flag
+            with a simultaneous selection of paths to save. In general,
+            it is better to pre-configure a dataset to track particular paths,
+            file types, or file sizes with either Git or git-annex.
+            See https://git-annex.branchable.com/tips/largefiles/"""),
     )
 
     @staticmethod
@@ -109,7 +120,8 @@ class RevSave(Interface):
                  version_tag=None,
                  recursive=False, recursion_limit=None,
                  updated=False,
-                 message_file=None
+                 message_file=None,
+                 to_git=None,
                  ):
         if message and message_file:
             raise ValueError(
@@ -162,16 +174,13 @@ class RevSave(Interface):
                 message=message,
                 # do not pass empty list
                 paths=path if path else None,
-                # TODO make decision whether we want this parameter
-                # it would complicate things quite a bit, maybe only
-                # allow for it in the context of explicitly provided
-                # paths
-                #git=to_git
+                # prevent whining of GitRepo
+                git=True if not hasattr(ds.repo, 'annexstatus')
+                else to_git,
                 untracked=untracked_mode)
         else:
             raise NotImplementedError
 
         for res in worker:
-            # TODO normalize results
             yield res
         # TODO add tag, if desired
