@@ -364,6 +364,37 @@ def test_add_subdataset(path, other):
     ok_(other_clone.is_installed)
 
 
+@with_tree(tree={
+    'file.txt': 'some text',
+    'empty': '',
+    'file2.txt': 'some text to go to annex',
+    '.gitattributes': '* annex.largefiles=(not(mimetype=text/*))'}
+)
+def test_add_mimetypes(path):
+    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+    ds.repo.add('.gitattributes')
+    ds.repo.commit('added attributes to git explicitly')
+    # now test that those files will go into git/annex correspondingly
+    __not_tested__ = ds.rev_save(['file.txt', 'empty'])
+    assert_repo_status(path, untracked=['file2.txt'])
+    # But we should be able to force adding file to annex when desired
+    ds.rev_save('file2.txt', to_git=False)
+    # check annex file status
+    annexinfo = ds.repo.get_content_annexinfo()
+    for path, in_annex in (
+           # Empty one considered to be  application/octet-stream
+           # i.e. non-text
+           ('empty', True),
+           ('file.txt', False),
+           ('file2.txt', True)):
+        p = ds.pathobj / path
+        assert_in(p, annexinfo)
+        if in_annex:
+            assert_in('key', annexinfo[p], p)
+        else:
+            assert_not_in('key', annexinfo[p], p)
+
+
 @with_tempfile(mkdir=True)
 def test_gh1597_simpler(path):
     ds = RevolutionDataset(Dataset(path).create().path)
