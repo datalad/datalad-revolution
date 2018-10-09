@@ -10,6 +10,7 @@
 
 """
 
+import os
 import logging
 import random
 import uuid
@@ -302,13 +303,22 @@ class RevCreate(Interface):
         path.update({'logger': lgr, 'type': 'dataset'})
         # just discard, we have a new story to tell
         path.pop('message', None)
-        if 'parentds' in path:
+
+        # try to locate a parent dataset
+        # we want to know this (irrespective of whether we plan on adding
+        # this new dataset to a parent) in order to avoid conflicts with
+        # a potentially absent/uninstalled subdataset of the parent
+        # in this location
+        # it will cost some filesystem traversal though...
+        parentds_path = get_dataset_root(
+            op.normpath(op.join(path['path'], os.pardir)))
+        if parentds_path:
             conflict = {
                 k: v for k, v in iteritems(
                     # we cannot get away with a simple
                     # GitRepo.get_content_info(), as we need to detect
                     # uninstalled/added subdatasets too
-                    GitRepo(path['parentds']).status(
+                    GitRepo(parentds_path).status(
                         paths=[path['path']],
                         untracked='no'))
                 if v.get('type', None) == 'dataset'}
@@ -319,7 +329,7 @@ class RevCreate(Interface):
                         'collision with %s in dataset %s',
                         ', '.join('{} ({})'.format(str(c), p.get('type', ''))
                                   for c, p in iteritems(conflict)),
-                        path['parentds'])})
+                        parentds_path)})
                 yield path
                 return
 
