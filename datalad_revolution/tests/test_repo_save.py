@@ -18,7 +18,6 @@ from datalad.tests.utils import (
 )
 
 from datalad_revolution.dataset import RevolutionDataset as Dataset
-from datalad_revolution.dataset import RevolutionDataset
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad_revolution.tests.utils import (
@@ -29,7 +28,7 @@ from datalad_revolution.tests.utils import (
 
 @with_tempfile
 def test_save_basics(path):
-    ds = RevolutionDataset(Dataset(path).create().path)
+    ds = Dataset(path).rev_create()
     # nothing happens
     eq_(list(ds.repo.save(paths=[], _status={})),
         [])
@@ -72,7 +71,7 @@ def test_annexrepo_save_all(path):
 
 @with_tempfile
 def test_save_to_git(path):
-    ds = RevolutionDataset(Dataset(path).create().path)
+    ds = Dataset(path).rev_create()
     create_tree(
         ds.path,
         {

@@ -33,11 +33,10 @@ from datalad.tests.utils import (
 from datalad.distribution.tests.test_add import tree_arg
 
 from datalad_revolution.dataset import RevolutionDataset as Dataset
-from datalad_revolution.dataset import RevolutionDataset
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad.api import (
     rev_save as save,
-    create,
+    rev_create as create,
     install,
 )
 
@@ -49,7 +48,7 @@ from datalad_revolution.tests.utils import (
 @with_testrepos('.*git.*', flavors=['clone'])
 def test_save(path):
 
-    ds = RevolutionDataset(path)
+    ds = Dataset(path)
 
     with open(op.join(path, "new_file.tst"), "w") as f:
         f.write("something")
@@ -94,7 +93,7 @@ def test_save(path):
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     # create subdataset
-    subds = RevolutionDataset(ds.create('subds').path)
+    subds = ds.rev_create('subds')
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
     # modify subds
     with open(op.join(subds.path, "some_file.tst"), "w") as f:
@@ -106,7 +105,7 @@ def test_save(path):
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
 
     # now introduce a change downstairs
-    subds.create('someotherds')
+    subds.rev_create('someotherds')
     assert_repo_status(subds.path, annex=isinstance(subds.repo, AnnexRepo))
     ok_(ds.repo.dirty)
     # and save via subdataset path
@@ -116,7 +115,7 @@ def test_save(path):
 
 @with_tempfile()
 def test_save_message_file(path):
-    ds = RevolutionDataset(Dataset(path).create().path)
+    ds = Dataset(path).rev_create()
     with assert_raises(ValueError):
         ds.rev_save("blah", message="me", message_file="and me")
 
@@ -131,7 +130,7 @@ def test_save_message_file(path):
 def test_renamed_file():
     @with_tempfile()
     def check_renamed_file(recursive, no_annex, path):
-        ds = RevolutionDataset(Dataset(path).create(no_annex=no_annex).path)
+        ds = Dataset(path).rev_create(no_annex=no_annex)
         create_tree(path, {'old': ''})
         ds.repo.add('old')
         ds.repo._git_custom_command(['old', 'new'], ['git', 'mv'])
@@ -145,8 +144,8 @@ def test_renamed_file():
 
 @with_tempfile(mkdir=True)
 def test_subdataset_save(path):
-    parent = RevolutionDataset(Dataset(path).create().path)
-    sub = RevolutionDataset(parent.create('sub').path)
+    parent = Dataset(path).rev_create()
+    sub = parent.rev_create('sub')
     assert_repo_status(parent.path)
     create_tree(parent.path, {
         "untracked": 'ignore',
@@ -183,7 +182,7 @@ def test_symlinked_relpath(path):
     os.makedirs(op.join(path, "origin"))
     dspath = op.join(path, "linked")
     os.symlink('origin', dspath)
-    ds = RevolutionDataset(Dataset(dspath).create().path)
+    ds = Dataset(dspath).rev_create()
     create_tree(dspath, {
         "mike1": 'mike1',  # will be added from topdir
         "later": "later",  # later from within subdir
@@ -212,8 +211,8 @@ def test_symlinked_relpath(path):
 @known_failure_windows  # there are no symlinks in a POSIX sense
 @with_tempfile(mkdir=True)
 def test_bf1886(path):
-    parent = RevolutionDataset(Dataset(path).create().path)
-    parent.create('sub')
+    parent = Dataset(path).rev_create()
+    parent.rev_create('sub')
     assert_repo_status(parent.path)
     # create a symlink pointing down to the subdataset, and add it
     os.symlink('sub', op.join(parent.path, 'down'))
@@ -259,7 +258,7 @@ def test_bf1886(path):
 def test_gh2043p1(path):
     # this tests documents the interim agreement on what should happen
     # in the case documented in gh-2043
-    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+    ds = Dataset(path).rev_create(force=True)
     ds.rev_save('1')
     assert_repo_status(ds.path, untracked=['2', '3'])
     ds.unlock('1')
@@ -290,7 +289,7 @@ def test_gh2043p1(path):
     'staged': 'staged',
     'untracked': 'untracked'})
 def test_bf2043p2(path):
-    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+    ds = Dataset(path).rev_create(force=True)
     ds.repo.add('staged')
     assert_repo_status(ds.path, added=['staged'], untracked=['untracked'])
     # save -u does not commit untracked content
@@ -302,7 +301,7 @@ def test_bf2043p2(path):
 
 @with_tree(**tree_arg)
 def test_add_files(path):
-    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+    ds = Dataset(path).rev_create(force=True)
 
     test_list_1 = ['test_annex.txt']
     test_list_2 = ['test.txt']
@@ -336,8 +335,8 @@ def test_add_files(path):
 @with_tree(**tree_arg)
 @with_tempfile(mkdir=True)
 def test_add_subdataset(path, other):
-    subds = RevolutionDataset(create(op.join(path, 'dir'), force=True).path)
-    ds = RevolutionDataset(create(path, force=True).path)
+    subds = create(op.join(path, 'dir'), force=True)
+    ds = create(path, force=True)
     ok_(subds.repo.dirty)
     ok_(ds.repo.dirty)
     assert_not_in('dir', ds.subdatasets(result_xfm='relpaths'))
@@ -371,7 +370,7 @@ def test_add_subdataset(path, other):
     '.gitattributes': '* annex.largefiles=(not(mimetype=text/*))'}
 )
 def test_add_mimetypes(path):
-    ds = RevolutionDataset(Dataset(path).create(force=True).path)
+    ds = Dataset(path).rev_create(force=True)
     ds.repo.add('.gitattributes')
     ds.repo.commit('added attributes to git explicitly')
     # now test that those files will go into git/annex correspondingly
@@ -397,7 +396,7 @@ def test_add_mimetypes(path):
 
 @with_tempfile(mkdir=True)
 def test_gh1597_simpler(path):
-    ds = RevolutionDataset(Dataset(path).create().path)
+    ds = Dataset(path).rev_create()
     # same goes for .gitattributes
     with open(op.join(ds.path, '.gitignore'), 'a') as f:
         f.write('*.swp\n')

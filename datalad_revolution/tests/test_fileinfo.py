@@ -18,7 +18,6 @@ from datalad.tests.utils import (
     assert_not_in,
 )
 
-from datalad_revolution.dataset import RevolutionDataset
 from datalad_revolution.dataset import RevolutionDataset as Dataset
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.tests.utils import (
@@ -135,7 +134,7 @@ def test_get_content_info(path):
 @with_tempfile
 def test_compare_content_info(path):
     # TODO remove when `create` is RF to return the new Dataset
-    ds = RevolutionDataset(Dataset(path).create().path)
+    ds = Dataset(path).rev_create()
     assert_repo_status(path)
 
     # for a clean repo HEAD and worktree query should yield identical results
