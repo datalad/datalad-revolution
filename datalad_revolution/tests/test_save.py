@@ -358,9 +358,9 @@ def test_add_subdataset(path, other):
     ds.rev_save('other')
     # and that is why, we can reobtain it from origin
     ds.uninstall('other')
-    ok_(other_clone.is_installed)
+    ok_(not other_clone.is_installed())
     ds.get('other')
-    ok_(other_clone.is_installed)
+    ok_(other_clone.is_installed())
 
 
 @with_tree(tree={
