@@ -33,6 +33,12 @@ command_suite = (
             # optional name of the command in the Python API
             'rev_save'
         ),
+        (
+            'datalad_revolution.revcreate',
+            'RevCreate',
+            'rev-create',
+            'rev_create'
+        ),
     ]
 )
 

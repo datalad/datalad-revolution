@@ -7,7 +7,12 @@ import re
 from six import iteritems
 
 import datalad_revolution.utils as ut
-from datalad.support.gitrepo import GitRepo
+from datalad.support.gitrepo import (
+    GitRepo,
+    InvalidGitRepositoryError,
+)
+from datalad.support.exceptions import CommandError
+from datalad.interface.results import get_status_dict
 
 lgr = logging.getLogger('datalad.revolution.gitrepo')
 
@@ -93,7 +98,7 @@ class RevolutionGitRepo(GitRepo):
         props_re = re.compile(r'([0-9]+) (.*) (.*)\t(.*)$')
 
         stdout, stderr = self._git_custom_command(
-            paths if paths else [],
+            [str(f) for f in paths] if paths else [],
             cmd,
             log_stderr=True,
             log_stdout=True,
@@ -143,6 +148,9 @@ class RevolutionGitRepo(GitRepo):
 
         Parameters
         ----------
+        paths : list or None
+          If given, limits the query to the specified paths. To query all
+          paths specify `None`, not an empty list.
         untracked : {'no', 'normal', 'all'}
           If and how untracked content is reported when no `ref` was given:
           'no': no untracked files are reported; 'normal': untracked files
@@ -161,6 +169,8 @@ class RevolutionGitRepo(GitRepo):
           `state`
             Can be 'added', 'untracked', 'clean', 'deleted', 'modified'.
         """
+        lgr.debug('Query status of %r for %s paths',
+                  self, len(paths) if paths else 'all')
         # TODO report more info from get_content_info() calls in return
         # value, those are cheap and possibly useful to a consumer
         status = OrderedDict()
@@ -263,19 +273,21 @@ class RevolutionGitRepo(GitRepo):
                 break
         return status
 
-    def _save_pre(self, paths, ignore_submodules, _status):
+    def _save_pre(self, paths, _status, **kwargs):
         # helper to get an actionable status report
         if paths is not None and not paths and not _status:
             return
         if _status is None:
+            if 'untracked' not in kwargs:
+                kwargs['untracked'] = 'normal'
             status = self.status(
                 paths=paths,
-                # makes for a more compact argument list to `git add`
-                untracked='normal',
-                ignore_submodules=ignore_submodules,
-            )
+                **{k: kwargs[k] for k in kwargs
+                   if k in ('untracked', 'ignore_submodules')})
         else:
-            status = _status
+            # we want to be able to add items down the line
+            # make sure to detach from prev. owner
+            status = _status.copy()
         status = OrderedDict(
             (k, v) for k, v in iteritems(status)
             if v.get('state', None) != 'clean'
@@ -289,26 +301,23 @@ class RevolutionGitRepo(GitRepo):
             message = 'Recorded changes'
             _datalad_msg = True
 
-        # we get no info from commit() :(
-        # TODO remove wrapping list when @normalize_paths can
-        # handle generators tentative approach in
-        # https://github.com/datalad/datalad/pull/2872
-        # TODO remove pathobj stringification when add() can
+        # TODO remove pathobj stringification when commit() can
         # handle it
-        self.commit(
-            files=[str(f.relative_to(self.pathobj))
-                   for f, props in iteritems(status)],
-            msg=message,
-            _datalad_msg=_datalad_msg,
-            options=None,
-            # do not raise on empty commit, but should not happen
-            careless=True,
-        )
+        to_commit = [str(f.relative_to(self.pathobj))
+                     for f, props in iteritems(status)]
+        if to_commit:
+            self.commit(
+                files=to_commit,
+                msg=message,
+                _datalad_msg=_datalad_msg,
+                options=None,
+                # do not raise on empty commit
+                # it could be that the `add` in this save-cycle has already
+                # brought back a 'modified' file into a clean state
+                careless=True,
+            )
 
-    # TODO possibly add **kwargs to swallow arguments that AnnexRepo.save()
-    # might need
-    def save(self, message=None, paths=None, ignore_submodules='no',
-             _status=None, **kwargs):
+    def save(self, message=None, paths=None, _status=None, **kwargs):
         """Save dataset content.
 
         Parameters
@@ -338,21 +347,24 @@ class RevolutionGitRepo(GitRepo):
           Additional arguments that are passed to underlying Repo methods.
           Supported:
           - git : bool (passed to Repo.add()
+          - ignore_submodules : {'no', 'other', 'all'}
+            passed to Repo.status()
+          - untracked : {'no', 'normal', 'all'} - passed to Repo.satus()
         """
         return list(
             self.save_(
                 message=message,
                 paths=paths,
-                ignore_submodules=ignore_submodules,
+                _status=_status,
                 **kwargs
             )
         )
 
-    def save_(self, message=None, paths=None, ignore_submodules='no',
-              _status=None, **kwargs):
-        status = self._save_pre(paths, ignore_submodules, _status)
+    def save_(self, message=None, paths=None, _status=None, **kwargs):
+        status = self._save_pre(paths, _status, **kwargs)
         if not status:
             # all clean, nothing todo
+            lgr.debug('Nothing to save in %r, exiting early', self)
             return
 
         # three things are to be done:
@@ -360,19 +372,63 @@ class RevolutionGitRepo(GitRepo):
         # - remove (deleted if not already staged)
         # - commit (with all paths that have been touched, to bypass
         #   potential pre-staged bits)
+
+        # looks for contained repositories
+        to_add_submodules = [sm for sm, sm_props in iteritems(
+            self.get_content_info(
+                # get content info for any untracked directory
+                [f for f, props in iteritems(status)
+                 if props.get('state', None) == 'untracked' and
+                 props.get('type', None) == 'directory'],
+                ref=None,
+                # request exhaustive list, so that everything that is
+                # still reported as a directory must be its own repository
+                untracked='all'))
+            if sm_props.get('type', None) == 'directory']
+        added_submodule = False
+        for cand_sm in to_add_submodules:
+            try:
+                self.add_submodule(
+                    str(cand_sm.relative_to(self.pathobj)),
+                    url=None, name=None)
+            except (CommandError, InvalidGitRepositoryError) as e:
+                yield get_status_dict(
+                    action='add_submodule',
+                    ds=self,
+                    path=self.pathobj / ut.PurePosixPath(cand_sm),
+                    status='error',
+                    message=e.stderr,
+                    logger=lgr)
+                continue
+            added_submodule = True
+        if added_submodule:
+            # need to include .gitmodules in what needs saving
+            status[self.pathobj.joinpath('.gitmodules')] = dict(
+                type='file', state='modified')
         to_add = [
             # TODO remove pathobj stringification when add() can
             # handle it
             str(f.relative_to(self.pathobj))
             for f, props in iteritems(status)
             if props.get('state', None) in ('modified', 'untracked')]
-        for r in self.add_(
-                to_add,
-                git_options=None,
-                # this would possibly counteract our own logic
-                update=False,
-                **{k: kwargs[k] for k in kwargs if k in ('git',)}):
-            yield r
+        if to_add:
+            lgr.debug('%i paths to add to %r %s',
+                len(to_add), self, to_add if len(to_add) < 10 else '')
+            for r in self.add_(
+                    to_add,
+                    git_options=None,
+                    # this would possibly counteract our own logic
+                    update=False,
+                    **{k: kwargs[k] for k in kwargs if k in ('git',)}):
+                yield get_status_dict(
+                    action=r.get('command', 'add'),
+                    refds=self.pathobj,
+                    type='file',
+                    path=(self.pathobj / ut.PurePosixPath(r['file']))
+                    if 'file' in r else None,
+                    status='ok' if r.get('success', None) else 'error',
+                    key=r.get('key', None),
+                    logger=lgr)
 
         to_remove = [
             # TODO remove pathobj stringification when delete() can
@@ -389,7 +445,7 @@ class RevolutionGitRepo(GitRepo):
                     to_remove,
                     # we would always see individual files
                     recursive=False):
-                # normalize result?
+                # TODO normalize result
                 yield r
 
         self._save_post(message, status)

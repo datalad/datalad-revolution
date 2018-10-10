@@ -1,13 +1,17 @@
 __docformat__ = 'restructuredtext'
 
-from six import string_types
+import os
+import os.path as op
 from six import PY2
 import wrapt
 import logging
 import datalad_revolution.utils as ut
 
-from datalad.distribution.dataset import Dataset as _Dataset
-from datalad.support.constraints import Constraint
+from datalad.distribution.dataset import (
+    Dataset as _Dataset,
+    require_dataset as _require_dataset,
+    EnsureDataset as _EnsureDataset,
+)
 from datalad.dochelpers import exc_str
 from datalad.support.gitrepo import (
     InvalidGitRepositoryError,
@@ -133,24 +137,54 @@ def datasetmethod(f, name=None, dataset_argname='dataset'):
     return f
 
 
-# Note: Cannot be defined within constraints.py, since then dataset.py needs to
-# be imported from constraints.py, which needs to be imported from dataset.py
-# for another constraint
-class EnsureDataset(Constraint):
-
+# minimal wrapper to ensure a revolution dataset is coming out
+class EnsureDataset(_EnsureDataset):
     def __call__(self, value):
-        if isinstance(value, _Dataset):
-            return value
-        elif isinstance(value, string_types):
-            return RevolutionDataset(path=value)
-        else:
-            raise ValueError("Can't create Dataset from %s." % type(value))
-
-    def short_description(self):
-        return "Dataset"
-
-    def long_description(self):
-        return """Value must be a Dataset or a valid identifier of a Dataset
-        (e.g. a path)"""
+        return RevolutionDataset(
+            super(EnsureDataset, self).__call__(value).path)
 
 
+# minimal wrapper to ensure a revolution dataset is coming out
+def require_dataset(dataset, check_installed=True, purpose=None):
+    return RevolutionDataset(_require_dataset(
+        dataset,
+        check_installed,
+        purpose).path)
+
+
+def resolve_path(path, ds=None):
+    """Resolve a path specification (against a Dataset location)
+
+    Any explicit path (absolute or relative) is returned as an absolute path.
+    In case of an explicit relative path (e.g. "./some", or ".\\some" on
+    windows), the current working directory is used as reference. Any
+    non-explicit relative path is resolved against as dataset location, i.e.
+    considered relative to the location of the dataset. If no dataset is
+    provided, the current working directory is used.
+
+    Parameters
+    path : str or PathLike
+      Platform-specific path specific path specification.
+    ds : Dataset or None
+      Dataset instance to resolve non-explicit relative paths against.
+
+    Returns
+    -------
+    `pathlib.Path` object
+    """
+    if ds is None:
+        # CWD is the reference
+        return ut.Path(path)
+
+    # we have a dataset
+    if not op.isabs(path) and \
+            not (path.startswith(os.curdir + os.sep) or
+                 path.startswith(os.pardir + os.sep)):
+        # we have a dataset and no abspath nor an explicit relative path ->
+        # resolve it against the dataset
+        return ds.pathobj / path
+
+    # note that this will not "normpath()" the result, check the
+    # pathlib docs for why this is the only sane choice in the
+    # face of the possibility of symlinks in the path
+    return ut.Path(path)

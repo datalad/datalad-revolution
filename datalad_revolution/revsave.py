@@ -30,10 +30,14 @@ from datalad.support.constraints import (
     EnsureStr,
     EnsureNone,
 )
+from datalad.utils import (
+    assure_list,
+)
 
 from datalad_revolution.dataset import (
     EnsureDataset,
     datasetmethod,
+    require_dataset,
 )
 
 lgr = logging.getLogger('datalad.revolution.save')
@@ -91,30 +95,53 @@ class RevSave(Interface):
             constraints=EnsureStr() | EnsureNone()),
         recursive=recursion_flag,
         recursion_limit=recursion_limit,
+        updated=Parameter(
+            args=('-u', '--updated',),
+            action='store_true',
+            doc="""if given, only saves previously tracked paths."""),
+        to_git=Parameter(
+            args=("--to-git",),
+            action='store_true',
+            doc="""flag whether to add data directly to Git, instead of
+            tracking data identity only.  Usually this is not desired,
+            as it inflates dataset sizes and impacts flexibility of data
+            transport. If not specified - it will be up to git-annex to
+            decide, possibly on .gitattributes options. Use this flag
+            with a simultaneous selection of paths to save. In general,
+            it is better to pre-configure a dataset to track particular paths,
+            file types, or file sizes with either Git or git-annex.
+            See https://git-annex.branchable.com/tips/largefiles/"""),
     )
 
     @staticmethod
     @datasetmethod(name='rev_save')
     @eval_results
-    def __call__(message=None, path=None, dataset=None,
+    def __call__(path=None, message=None, dataset=None,
                  version_tag=None,
                  recursive=False, recursion_limit=None,
-                 message_file=None
+                 updated=False,
+                 message_file=None,
+                 to_git=None,
                  ):
-        refds_path = Interface.get_refds_path(dataset)
-
         if message and message_file:
-            yield get_status_dict(
-                'save',
-                status='error',
-                path=refds_path,
-                message="Both a message and message file were specified",
-                logger=lgr)
-            return
+            raise ValueError(
+                "Both a message and message file were specified for save()")
+
+        path = assure_list(path)
 
         if message_file:
             with open(message_file) as mfh:
                 message = mfh.read()
+
+        # we want 'normal' to achieve the most compact argument list
+        # for git calls
+        # untracked_mode = 'no' if updated else 'normal'
+        # TODO however, Repo.add() would refuse to add any dotfiles
+        # in a directory that is itself untracked, hence the only
+        # choice is to go with potentially crazy long lists
+        # until https://github.com/datalad/datalad/issues/1454
+        # has a resolution
+        untracked_mode = 'no' if updated else 'all'
 
         # there are three basic scenarios:
         # 1. save modifications to any already tracked content
@@ -130,7 +157,7 @@ class RevSave(Interface):
         # we do not support
         # - simultaneous operations on multiple datasets from disjoint
         #   dataset hierarchies, hence a single reference dataset must be
-        #   identtifiable from the either
+        #   identifiable from the either
         #   - curdir or
         #   - the `dataset` argument.
         #   This avoids complex annotation loops and hierarchy tracking.
@@ -143,3 +170,28 @@ class RevSave(Interface):
         # - when the same path is given with --recursive, the subdataset's
         #   content itself will be saved first before recording the new
         #   state in the parent
+
+        ds = require_dataset(dataset, check_installed=True, purpose='saving')
+
+        # TODO track if anything happened and issue 'notneeded' if not
+
+        if not recursive:
+            worker = ds.repo.save_(
+                message=message,
+                # do not pass empty list
+                paths=path if path else None,
+                # prevent whining of GitRepo
+                git=True if not hasattr(ds.repo, 'annexstatus')
+                else to_git,
+                untracked=untracked_mode)
+        else:
+            raise NotImplementedError
+
+        for res in worker:
+            # TODO remove stringification when datalad-core can handle
+            # path objects, or when PY3.6 is the lowest supported version
+            for k in ('path', 'refds'):
+                if k in res:
+                    res[k] = str(res[k])
+            yield res
+        # TODO add tag, if desired

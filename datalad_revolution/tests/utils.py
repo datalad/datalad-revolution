@@ -8,7 +8,6 @@ from datalad.api import (
 
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
-from datalad_revolution.dataset import RevolutionDataset
 from datalad_revolution.dataset import RevolutionDataset as Dataset
 
 from datalad.tests.utils import (
@@ -16,6 +15,8 @@ from datalad.tests.utils import (
     create_tree,
     eq_,
 )
+
+import datalad_revolution.utils as ut
 
 
 def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
@@ -43,7 +44,7 @@ def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
       Files/directories that are OK to not be in 'clean' state. Each argument
       must be one of 'added', 'untracked', 'deleted', 'modified' and each
       value must be a list of filenames (relative to the root of the
-      repository.
+      repository, in POSIX convention).
     """
     r = None
     if isinstance(path, AnnexRepo):
@@ -83,7 +84,8 @@ def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
     status = r.status(untracked=untracked_mode)
     # for any file state that indicates some kind of change (all but 'clean)
     for state in ('added', 'untracked', 'deleted', 'modified'):
-        oktobefound = sorted(kwargs.get(state, []))
+        oktobefound = sorted(r.pathobj.joinpath(ut.PurePosixPath(p))
+                             for p in kwargs.get(state, []))
         state_files = sorted(k for k, v in iteritems(status)
                              if v.get('state', None) == state)
         eq_(state_files, oktobefound,
