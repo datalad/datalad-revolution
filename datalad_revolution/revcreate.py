@@ -427,7 +427,8 @@ class RevCreate(Interface):
             tbds.id if tbds.id is not None else uuid_id,
             where='dataset')
 
-        add_to_git[tbds.pathobj / '.datalad'] = {
+        # must use the repo.pathobj as this will have resolved symlinks
+        add_to_git[tbds.repo.pathobj / '.datalad'] = {
             'type': 'directory',
             'state': 'untracked'}
 
@@ -455,7 +456,8 @@ class RevCreate(Interface):
         if not attrs.get('.git', {}).get('annex.largefiles', None) == 'nothing':
             tbds.repo.set_gitattributes([
                 ('**/.git*', {'annex.largefiles': 'nothing'})])
-            add_to_git[tbds.pathobj / '.gitattributes'] = {
+            # must use the repo.pathobj as this will have resolved symlinks
+            add_to_git[tbds.repo.pathobj / '.gitattributes'] = {
                 'type': 'file',
                 'state': 'untracked'}
 
