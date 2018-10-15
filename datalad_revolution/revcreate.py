@@ -381,7 +381,8 @@ class RevCreate(Interface):
                 tbds.path,
                 url=None,
                 create=True,
-                backend=annex_backend,
+                # do not set backend here, to avoid a dedicated commit
+                backend=None,
                 version=annex_version,
                 description=description,
                 git_opts=git_opts,
@@ -389,6 +390,12 @@ class RevCreate(Interface):
                 annex_init_opts=annex_init_opts,
                 fake_dates=fake_dates
             )
+            # set the annex backend in .gitattributes as a staged change
+            tbrepo.set_default_backend(
+                annex_backend, persistent=True, commit=False)
+            add_to_git[tbds.repo.pathobj / '.gitattributes'] = {
+                'type': 'file',
+                'state': 'added'}
 
             if text_no_annex:
                 attrs = tbrepo.get_gitattributes('.')
