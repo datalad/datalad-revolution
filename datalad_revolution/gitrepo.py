@@ -153,10 +153,6 @@ class RevolutionGitRepo(GitRepo):
         Performs a comparison of a get_content_info(stat_wt=True) with a
         get_content_info(ref='HEAD').
 
-        Importantly, this function will not detect modified subdatasets.
-        This would require recursion into present subdatasets and query
-        their status. This is left to higher-level commands.
-
         Parameters
         ----------
         paths : list or None
@@ -182,40 +178,62 @@ class RevolutionGitRepo(GitRepo):
         """
         lgr.debug('Query status of %r for %s paths',
                   self, len(paths) if paths else 'all')
+        return self.diff(
+            fr='HEAD',
+            to=None,
+            paths=paths,
+            untracked=untracked,
+            ignore_submodules=ignore_submodules)
+
+    def diff(self, fr, to, paths=None, untracked='all',
+             ignore_submodules='no'):
+        return {k: v for k, v in iteritems(self._diff(
+            fr=fr, to=to, paths=paths,
+            untracked=untracked,
+            ignore_submodules=ignore_submodules))
+            if v.get('state', None) != 'clean'}
+
+    def _diff(self, fr, to, paths=None, untracked='all',
+              ignore_submodules='no'):
         # TODO report more info from get_content_info() calls in return
         # value, those are cheap and possibly useful to a consumer
         status = OrderedDict()
-        # we need three calls to git
-        # 1. everything we know about the worktree, including os.stat
-        # for each file
-        wt = self.get_content_info(
-            paths=paths, ref=None, untracked=untracked)
-        # 2. the last committed state
-        head = self.get_content_info(paths=paths, ref='HEAD')
-        # 3. we want Git to tell us what it considers modified and avoid
-        # reimplementing logic ourselves
-        modified = set(
-            self.pathobj.joinpath(ut.PurePosixPath(p))
-            for p in self._git_custom_command(
-                paths, ['git', 'ls-files', '-z', '-m'])[0].split('\0')
-            if p)
+        # we need (at most) three calls to git
+        if to is None:
+            # everything we know about the worktree, including os.stat
+            # for each file
+            to_state = self.get_content_info(
+                paths=paths, ref=None, untracked=untracked)
+            # we want Git to tell us what it considers modified and avoid
+            # reimplementing logic ourselves
+            modified = set(
+                self.pathobj.joinpath(ut.PurePosixPath(p))
+                for p in self._git_custom_command(
+                    paths, ['git', 'ls-files', '-z', '-m'])[0].split('\0')
+                if p)
+        else:
+            to_state = self.get_content_info(paths=paths, ref=to)
+            # we do not need worktree modification detection in this case
+            modified = None
+        # origin state
+        from_state = self.get_content_info(paths=paths, ref=fr)
 
-        for f, wt_r in iteritems(wt):
+        for f, to_state_r in iteritems(to_state):
             props = None
-            if f not in head:
+            if f not in from_state:
                 # this is new, or rather not known to the previous state
                 props = dict(
-                    state='added' if wt_r['gitshasum'] else 'untracked',
-                    type=wt_r['type'],
+                    state='added' if to_state_r['gitshasum'] else 'untracked',
+                    type=to_state_r['type'],
                 )
-            elif wt_r['gitshasum'] == head[f]['gitshasum'] and \
-                    f not in modified:
-                if ignore_submodules != 'all' or wt_r['type'] != 'dataset':
+            elif to_state_r['gitshasum'] == from_state[f]['gitshasum'] and \
+                    (modified is None or f not in modified):
+                if ignore_submodules != 'all' or to_state_r['type'] != 'dataset':
                     # no change in git record, and no change on disk
                     props = dict(
                         state='clean' if f.exists() or
                               f.is_symlink() else 'deleted',
-                        type=wt_r['type'],
+                        type=to_state_r['type'],
                     )
             else:
                 # change in git record, or on disk
@@ -230,23 +248,23 @@ class RevolutionGitRepo(GitRepo):
                     f.is_symlink() else 'deleted',
                     # TODO record before and after state for diff-like use
                     # cases
-                    type=wt_r['type'],
+                    type=to_state_r['type'],
                 )
             if props['state'] in ('clean', 'added'):
-                props['gitshasum'] = wt_r['gitshasum']
+                props['gitshasum'] = to_state_r['gitshasum']
             status[f] = props
 
-        for f, head_r in iteritems(head):
-            if f not in wt:
+        for f, from_state_r in iteritems(from_state):
+            if f not in to_state:
                 # we new this, but now it is gone and Git is not complaining
                 # about it being missing -> properly deleted and deletion
                 # stages
                 status[f] = dict(
                     state='deleted',
-                    type=head_r['type'],
+                    type=from_state_r['type'],
                     # report the shasum to distinguish from a plainly vanished
                     # file
-                    gitshasum=head_r['gitshasum'],
+                    gitshasum=from_state_r['gitshasum'],
                 )
 
         if ignore_submodules == 'all':
