@@ -134,6 +134,17 @@ class RevolutionGitRepo(GitRepo):
                 inf['type'] = 'directory' if path.is_dir() \
                     else 'symlink' if path.is_symlink() else 'file'
             info[path] = inf
+
+        # final loop to filter out reports on paths (that where given)
+        # that do not belong to this repo (which status() would turn into
+        if paths is not None and ref is not None:
+            # dedicated paths were queried, but ls-tree would respond with
+            # an entry for each path that is actually contained in a
+            # submodule with a report on the respective subdataset path
+            # -> only report on paths that were actually queried
+            paths = {self.pathobj / p for p in paths}
+            info = {k: v for k, v in iteritems(info)
+                    if k in paths}
         return info
 
     def status(self, paths=None, untracked='all', ignore_submodules='no'):

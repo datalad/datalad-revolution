@@ -140,3 +140,20 @@ def test_compare_content_info(path):
     # for a clean repo HEAD and worktree query should yield identical results
     wt = ds.repo.get_content_info(ref=None)
     assert_dict_equal(wt, ds.repo.get_content_info(ref='HEAD'))
+
+
+@with_tempfile
+def test_subds_path(path):
+    # a dataset with a subdataset with a file, all neatly tracked
+    ds = Dataset(path).rev_create()
+    subds = ds.rev_create('sub')
+    with (subds.pathobj / 'some.txt').open('w') as f:
+        f.write('test')
+    ds.add('.', recursive=True)
+    assert_repo_status(path)
+
+    # querying the toplevel dataset repo for a subdspath should
+    # be quiet (like `git status` would do), and definitely not report the
+    # subdataset as deleted
+    # https://github.com/datalad/datalad-revolution/issues/17
+    assert_dict_equal({}, ds.repo.status(paths=[op.join('sub', 'some.txt')]))
