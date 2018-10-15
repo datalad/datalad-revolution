@@ -148,7 +148,7 @@ def test_subds_path(path):
     ds = Dataset(path).rev_create()
     subds = ds.rev_create('sub')
     with (subds.pathobj / 'some.txt').open('w') as f:
-        f.write('test')
+        f.write(u'test')
     ds.add('.', recursive=True)
     assert_repo_status(path)
 
