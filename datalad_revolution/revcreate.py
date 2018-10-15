@@ -53,6 +53,7 @@ from datalad_revolution.dataset import (
 )
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
+import datalad_revolution.utils as ut
 
 
 __docformat__ = 'restructuredtext'
@@ -316,22 +317,21 @@ class RevCreate(Interface):
         parentds_path = get_dataset_root(
             op.normpath(op.join(path['path'], os.pardir)))
         if parentds_path:
-            conflict = {
-                k: v for k, v in iteritems(
-                    # we cannot get away with a simple
-                    # GitRepo.get_content_info(), as we need to detect
-                    # uninstalled/added subdatasets too
-                    GitRepo(parentds_path).status(
-                        paths=[path['path']],
-                        untracked='no'))
+            # we cannot get away with a simple
+            # GitRepo.get_content_info(), as we need to detect
+            # uninstalled/added subdatasets too
+            subds_status = {k for k, v in iteritems(
+                GitRepo(parentds_path).status(untracked='no'))
                 if v.get('type', None) == 'dataset'}
-            if conflict:
+            check_paths = [ut.Path(path['path'])]
+            check_paths.extend(ut.Path(path['path']).parents)
+            if any(p in subds_status for p in check_paths):
+                conflict = [p for p in check_paths if p in subds_status]
                 path.update({
                     'status': 'error',
                     'message': (
-                        'collision with %s in dataset %s',
-                        ', '.join('{} ({})'.format(str(c), p.get('type', ''))
-                                  for c, p in iteritems(conflict)),
+                        'collision with %s (dataset) in dataset %s',
+                        str(conflict[0]),
                         parentds_path)})
                 yield path
                 return
