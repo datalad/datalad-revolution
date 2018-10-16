@@ -144,7 +144,7 @@ class RevolutionGitRepo(GitRepo):
             # -> only report on paths that were actually queried
             paths = {self.pathobj / p for p in paths}
             info = {k: v for k, v in iteritems(info)
-                    if k in paths}
+                    if k in paths or v.get('type', None) != 'dataset'}
         return info
 
     def status(self, paths=None, untracked='all', ignore_submodules='no'):
