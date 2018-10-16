@@ -214,7 +214,7 @@ class RevolutionGitRepo(GitRepo):
           `state`
             Can be 'added', 'untracked', 'clean', 'deleted', 'modified'.
         """
-        return {k: v for k, v in iteritems(self._diff(
+        return {k: v for k, v in iteritems(self.diffstatus(
             fr=fr, to=to, paths=paths,
             untracked=untracked,
             ignore_submodules=ignore_submodules))
