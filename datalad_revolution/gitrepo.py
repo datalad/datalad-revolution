@@ -150,9 +150,6 @@ class RevolutionGitRepo(GitRepo):
     def status(self, paths=None, untracked='all', ignore_submodules='no'):
         """Simplified `git status` equivalent.
 
-        Performs a comparison of a get_content_info(stat_wt=True) with a
-        get_content_info(ref='HEAD').
-
         Parameters
         ----------
         paths : list or None
@@ -178,7 +175,7 @@ class RevolutionGitRepo(GitRepo):
         """
         lgr.debug('Query status of %r for %s paths',
                   self, len(paths) if paths else 'all')
-        return self.diff(
+        return self.diffstatus(
             fr='HEAD',
             to=None,
             paths=paths,
@@ -187,14 +184,45 @@ class RevolutionGitRepo(GitRepo):
 
     def diff(self, fr, to, paths=None, untracked='all',
              ignore_submodules='no'):
+        """Like status(), but reports changes between to arbitrary revisions
+
+        Parameters
+        ----------
+        fr : str
+          Revision specification (anything that Git understands).
+        to : str or None
+          Revision specification (anything that Git understands), or None
+          to compare to the state of the work tree.
+        paths : list or None
+          If given, limits the query to the specified paths. To query all
+          paths specify `None`, not an empty list.
+        untracked : {'no', 'normal', 'all'}
+          If and how untracked content is reported when no `ref` was given:
+          'no': no untracked files are reported; 'normal': untracked files
+          and entire untracked directories are reported as such; 'all': report
+          individual files even in fully untracked directories.
+        ignore_submodules : {'no', 'other', 'all'}
+
+        Returns
+        -------
+        dict
+          Each content item has an entry under its relative path within
+          the repository. Each value is a dictionary with properties:
+
+          `type`
+            Can be 'file', 'symlink', 'dataset', 'directory'
+          `state`
+            Can be 'added', 'untracked', 'clean', 'deleted', 'modified'.
+        """
         return {k: v for k, v in iteritems(self._diff(
             fr=fr, to=to, paths=paths,
             untracked=untracked,
             ignore_submodules=ignore_submodules))
             if v.get('state', None) != 'clean'}
 
-    def _diff(self, fr, to, paths=None, untracked='all',
-              ignore_submodules='no'):
+    def diffstatus(self, fr, to, paths=None, untracked='all',
+                   ignore_submodules='no'):
+        """Like diff(), but reports the status of 'clean' content too"""
         # TODO report more info from get_content_info() calls in return
         # value, those are cheap and possibly useful to a consumer
         status = OrderedDict()
