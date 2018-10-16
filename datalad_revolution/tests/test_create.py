@@ -82,9 +82,8 @@ def test_create_raises(path, outside_path):
     assert_in_results(
         ds.rev_create('sub', **raw),
         status='error',
-        message=('collision with %s in dataset %s',
-                 '{} (dataset)'.format(
-                     str(ds.pathobj / 'sub')),
+        message=('collision with %s (dataset) in dataset %s',
+                 str(ds.pathobj / 'sub'),
                  ds.path)
     )
 
@@ -97,9 +96,8 @@ def test_create_raises(path, outside_path):
         assert_in_results(
             ds.rev_create(s, **raw),
             status='error',
-            message=('collision with %s in dataset %s',
-                     '{} (dataset)'.format(
-                         str(ds.pathobj / 'sub')),
+            message=('collision with %s (dataset) in dataset %s',
+                     str(ds.pathobj / 'sub'),
                      ds.path)
         )
 
