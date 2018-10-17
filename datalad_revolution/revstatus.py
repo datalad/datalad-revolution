@@ -181,7 +181,7 @@ class RevStatus(Interface):
         if not res['status'] == 'ok' or res.get('state', None) == 'clean':
             # logging reported already
             return
-        path = op.relpath(res['path'], start=res['refds']) \
+        path = res['path'].relative_to(res['refds']) \
             if res.get('refds', None) else res['path']
         type_ = res.get('type', res.get('type_src', ''))
         max_len = len('untracked(directory)')
