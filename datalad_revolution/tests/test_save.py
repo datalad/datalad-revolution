@@ -373,6 +373,7 @@ def test_add_subdataset(path, other):
     '.gitattributes': '* annex.largefiles=(not(mimetype=text/*))'}
 )
 def test_add_mimetypes(path):
+    ds = Dataset(path).rev_create(force=True)
     ds.repo.add('.gitattributes')
     ds.repo.commit('added attributes to git explicitly')
     # now test that those files will go into git/annex correspondingly
