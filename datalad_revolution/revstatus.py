@@ -152,7 +152,8 @@ class RevStatus(Interface):
         paths_by_ds = OrderedDict()
         if paths:
             for p in sorted(paths):
-                root = ut.Path(get_dataset_root(p))
+                # TODO have a better get_dataset_root that takes Pathobjs
+                root = ut.Path(get_dataset_root(str(p)))
                 ps = paths_by_ds.get(root, [])
                 if p != root:
                     ps.append(p)

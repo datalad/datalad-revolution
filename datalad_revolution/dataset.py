@@ -177,9 +177,10 @@ def resolve_path(path, ds=None):
         return ut.Path(path)
 
     # we have a dataset
-    if not op.isabs(path) and \
-            not (path.startswith(os.curdir + os.sep) or
-                 path.startswith(os.pardir + os.sep)):
+    # stringify in case a pathobj came in
+    if not op.isabs(str(path)) and \
+            not (str(path).startswith(os.curdir + os.sep) or
+                 str(path).startswith(os.pardir + os.sep)):
         # we have a dataset and no abspath nor an explicit relative path ->
         # resolve it against the dataset
         return ds.pathobj / path
