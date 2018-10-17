@@ -38,7 +38,10 @@ def test_resolve_path(path):
             eq_(str(resolve_path(d).cwd()), opath)
             # using pathlib's `resolve()` will resolve any
             # symlinks
-            eq_(resolve_path('.').resolve(), ut.Path(opath))
+            # also resolve `opath`, as on old windows systems the path might
+            # come in crippled (e.g. C:\Users\MIKE~1/...)
+            # and comparison would fails unjustified
+            eq_(resolve_path('.').resolve(), ut.Path(opath).resolve())
             # but by default no norming
             eq_(resolve_path('.'), ut.Path('.'))
             eq_(str(resolve_path('.')), os.curdir)
