@@ -22,8 +22,9 @@ def test_resolve_path(path):
     # initially ran into on OSX https://github.com/datalad/datalad/issues/2406
     opath = op.join(path, "origin")
     os.makedirs(opath)
-    lpath = op.join(path, "linked")
-    os.symlink('origin', lpath)
+    if not on_windows:
+        lpath = op.join(path, "linked")
+        os.symlink('origin', lpath)
 
     ds_global = Dataset(path)
     # path resolution of absolute paths is not influenced by symlinks
