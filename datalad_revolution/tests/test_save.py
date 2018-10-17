@@ -363,6 +363,9 @@ def test_add_subdataset(path, other):
     ok_(other_clone.is_installed())
 
 
+# CommandError: command '['git', '-c', 'receive.autogc=0', '-c', 'gc.auto=0', 'annex', 'add', '--json', '--', 'empty', 'file.txt']' failed with exitcode 1
+# Failed to run ['git', '-c', 'receive.autogc=0', '-c', 'gc.auto=0', 'annex', 'add', '--json', '--', 'empty', 'file.txt'] under 'C:\\Users\\appveyor\\AppData\\Local\\Temp\\1\\datalad_temp_tree_j2mk92y3'. Exit code=1.
+@known_failure_windows
 @with_tree(tree={
     'file.txt': 'some text',
     'empty': '',
@@ -374,6 +377,7 @@ def test_add_mimetypes(path):
     ds.repo.add('.gitattributes')
     ds.repo.commit('added attributes to git explicitly')
     # now test that those files will go into git/annex correspondingly
+    # WINDOWS FAILURE NEXT
     __not_tested__ = ds.rev_save(['file.txt', 'empty'])
     assert_repo_status(path, untracked=['file2.txt'])
     # But we should be able to force adding file to annex when desired

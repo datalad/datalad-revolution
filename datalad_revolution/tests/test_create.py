@@ -13,6 +13,7 @@ from datalad.tests.utils import known_failure_windows
 
 
 import os
+import os.path as op
 from os.path import join as opj
 from os.path import lexists
 
@@ -131,7 +132,7 @@ def test_create(path):
     eq_(ds.config.get("core.sharedrepository"), '2')
     runner = Runner()
     # check description in `info`
-    cmd = ['git-annex', 'info']
+    cmd = ['git', 'annex', 'info']
     cmlout = runner.run(cmd, cwd=path)
     assert_in('funny [here]', cmlout[0])
     # check datset ID
@@ -155,7 +156,8 @@ def test_create_sub(path):
     ok_clean_git(subds.path, annex=True)
 
     # subdataset is known to superdataset:
-    assert_in("some/what/deeper", ds.subdatasets(result_xfm='relpaths'))
+    assert_in(op.join("some", "what", "deeper"),
+              ds.subdatasets(result_xfm='relpaths'))
     # and was committed:
     ok_clean_git(ds.path)
 
@@ -179,6 +181,11 @@ def test_create_sub(path):
     assert_in("third", ds.subdatasets(result_xfm='relpaths'))
 
 
+# windows failure triggered by
+# File "C:\Miniconda35\envs\test-environment\lib\site-packages\datalad\tests\utils.py", line 421, in newfunc
+#    rmtemp(d)
+# PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\appveyor\\AppData\\Local\\Temp\\1\\datalad_temp_tree_h43urkyc\\origin'
+@known_failure_windows
 @with_tree(tree=_dataset_hierarchy_template)
 def test_create_subdataset_hierarchy_from_top(path):
     # how it would look like to overlay a subdataset hierarchy onto
@@ -207,6 +214,9 @@ def test_create_subdataset_hierarchy_from_top(path):
     ok_(ds.id != subds.id != subsubds.id)
 
 
+# CommandError: command '['git', '-c', 'receive.autogc=0', '-c', 'gc.auto=0', 'annex', 'init', '--version', '6']' failed with exitcode 1
+# Failed to run ['git', '-c', 'receive.autogc=0', '-c', 'gc.auto=0', 'annex', 'init', '--version', '6'] under 'C:\\Users\\appveyor\\AppData\\Local\\Temp\\1\\datalad_temp_okvmx7gq\\lvl1\\subds'. Exit code=1.
+@known_failure_windows
 @with_tempfile
 def test_nested_create(path):
     # to document some more organic usage pattern
@@ -220,6 +230,7 @@ def test_nested_create(path):
         f.write('some')
     ok_(ds.add('.'))
     # later create subdataset in a fresh dir
+    # WINDOWS FAILURE IS NEXT LINE
     subds1 = ds.rev_create(opj('lvl1', 'subds'))
     ok_clean_git(ds.path)
     eq_(ds.subdatasets(result_xfm='relpaths'), [opj('lvl1', 'subds')])
