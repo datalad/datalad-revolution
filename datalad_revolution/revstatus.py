@@ -176,7 +176,7 @@ class RevStatus(Interface):
                 )
 
     @staticmethod
-    def custom_result_renderer(res, **kwargs):
+    def custom_result_renderer(res, **kwargs):  # pragma: no cover
         from datalad.ui import ui
         if not res['status'] == 'ok' or res.get('state', None) == 'clean':
             # logging reported already
