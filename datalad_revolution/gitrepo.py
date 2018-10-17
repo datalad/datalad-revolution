@@ -237,7 +237,9 @@ class RevolutionGitRepo(GitRepo):
             modified = set(
                 self.pathobj.joinpath(ut.PurePosixPath(p))
                 for p in self._git_custom_command(
-                    paths, ['git', 'ls-files', '-z', '-m'])[0].split('\0')
+                    # low-level code cannot handle pathobjs
+                    [str(p) for p in paths] if paths else None,
+                    ['git', 'ls-files', '-z', '-m'])[0].split('\0')
                 if p)
         else:
             to_state = self.get_content_info(paths=paths, ref=to)

@@ -230,3 +230,16 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
         }
     )
     return ds
+
+
+def get_deeply_nested_structure(path):
+    ds = Dataset(path).rev_create()
+    (ds.pathobj / 'directory_untracked').mkdir()
+    # a subtree of datasets
+    ds.create('subds_modified')
+    # another dataset, plus an addition dir in it
+    (Dataset(
+        ds.create(
+            op.join('subds_modified', 'subds_lvl1_modified')
+        ).path).pathobj / 'directory_untracked').mkdir()
+    return ds
