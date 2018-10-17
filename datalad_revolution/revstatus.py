@@ -12,9 +12,10 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
-import os.path as op
 from six import iteritems
 from collections import OrderedDict
+
+import datalad.support.ansi_colors as ac
 
 from datalad.utils import (
     assure_list,
@@ -46,6 +47,12 @@ from datalad.support.param import Parameter
 
 lgr = logging.getLogger('datalad.revolution.status')
 
+
+state_color_map = {
+    'untracked': ac.RED,
+    'modified': ac.RED,
+    'added': ac.GREEN,
+}
 
 def _yield_status(ds, paths, untracked, recursion_limit, queried):
     # take the datase that went in first
@@ -80,7 +87,6 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried):
 class RevStatus(Interface):
     """
     """
-
     # make the custom renderer the default one, as the global default renderer
     # does not yield meaningful output for this command
     result_renderer = 'tailored'
@@ -102,10 +108,10 @@ class RevStatus(Interface):
             args=('--untracked',),
             constraints=EnsureChoice('no', 'normal', 'all'),
             doc="""If and how untracked content is reported when comparing
-            a revision to the state of the work tree. 'no': no untracked files
-            are reported; 'normal': untracked files and entire untracked
-            directories are reported as such; 'all': report individual files
-            even in fully untracked directories."""),
+            a revision to the state of the work tree. 'no': no untracked
+            content is reported; 'normal': untracked files and entire
+            untracked directories are reported as such; 'all': report
+            individual files even in fully untracked directories."""),
         recursive=recursion_flag,
         recursion_limit=recursion_limit)
 
@@ -185,10 +191,11 @@ class RevStatus(Interface):
             if res.get('refds', None) else res['path']
         type_ = res.get('type', res.get('type_src', ''))
         max_len = len('untracked(directory)')
-        state_msg = '{}{}'.format(
-            res['state'],
-            '({})'.format(type_ if type_ else ''))
-        ui.message('{fill}{state_msg}: {path}'.format(
-            fill=' ' * max(0, max_len - len(state_msg)),
-            state_msg=state_msg,
-            path=path))
+        ui.message('{fill}{state}: {path}{type_}'.format(
+            fill=' ' * max(0, max_len - len(res['state'])),
+            state=ac.color_word(
+                res['state'],
+                state_color_map.get(res['state'], ac.WHITE)),
+            path=path,
+            type_=' ({})'.format(
+                ac.color_word(type_, ac.MAGENTA) if type_ else '')))
