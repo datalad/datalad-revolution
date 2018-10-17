@@ -6,6 +6,7 @@ from datalad.utils import chpwd
 from datalad.tests.utils import (
     with_tempfile,
     eq_,
+    on_windows,
 )
 
 from datalad_revolution.dataset import (
@@ -26,7 +27,8 @@ def test_resolve_path(path):
 
     ds_global = Dataset(path)
     # path resolution of absolute paths is not influenced by symlinks
-    for d in opath, lpath:
+    # ignore the linked path on windows, it is not a symlink in the POSIX sense
+    for d in (opath,) if on_windows else (opath, lpath):
         ds_local = Dataset(d)
         # no symlink resolution
         eq_(str(resolve_path(d)), d)
