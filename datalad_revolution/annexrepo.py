@@ -3,6 +3,7 @@ __docformat__ = 'restructuredtext'
 from collections import OrderedDict
 import logging
 from six import iteritems
+from weakref import WeakValueDictionary
 
 import datalad_revolution.utils as ut
 
@@ -24,6 +25,11 @@ obsolete_methods = (
 
 
 class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
+
+    # Begin Flyweight:
+    _unique_instances = WeakValueDictionary()
+    # End Flyweight:
+
     def _mark_content_availability(self, info):
         objectstore = self.pathobj.joinpath(
             self.path, RevolutionGitRepo.get_git_dir(self), 'annex', 'objects')
