@@ -5,6 +5,7 @@ from collections import OrderedDict
 import logging
 import re
 from six import iteritems
+from weakref import WeakValueDictionary
 
 import datalad_revolution.utils as ut
 from datalad.support.gitrepo import (
@@ -23,6 +24,11 @@ obsolete_methods = (
 
 
 class RevolutionGitRepo(GitRepo):
+
+    # Begin Flyweight:
+    _unique_instances = WeakValueDictionary()
+    # End Flyweight:
+
     def __init__(self, *args, **kwargs):
         super(RevolutionGitRepo, self).__init__(*args, **kwargs)
         # the sole purpose of this init is to add a pathlib
