@@ -111,9 +111,16 @@ def test_status(_path, linkpath):
     # ds.repo.pathobj will have the symlink resolved
     arealpath = ds.repo.pathobj / rpath
     # TODO include explicit relative path in test
-    for p in (rpath, apath, arealpath):
+    for p in (rpath, apath, arealpath, None):
+        if p is None:
+            # change into the realpath of the dataset and
+            # query with an explicit path
+            with chpwd(ds.repo.path):
+                res = ds.rev_status(path=op.join('.', rpath))
+        else:
+            res = ds.rev_status(path=p)
         assert_result_count(
-            ds.rev_status(path=p),
+            res,
             1,
             state='untracked',
             type='directory',

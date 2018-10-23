@@ -201,7 +201,12 @@ def path_under_dataset(ds, path):
     ds_path = ds.pathobj
     root = get_dataset_root(text_type(path))
     while root is not None and not ds_path.samefile(root):
-        root = get_dataset_root(op.dirname(root))
+        # path and therefore root could be relative paths,
+        # hence in the next round we cannot use dirname()
+        # to jump in the the next directory up, but we have
+        # to use ./.. and get_dataset_root() will handle
+        # the rest just fine
+        root = get_dataset_root(op.join(root, op.pardir))
     if root is None:
         return None
-    return ds_path / op.relpath(path, root)
+    return ds_path / op.relpath(text_type(path), root)
