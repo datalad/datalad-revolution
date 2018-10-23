@@ -90,7 +90,43 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried):
 
 @build_doc
 class RevStatus(Interface):
-    """
+    """Report on the state of dataset content.
+
+    This is an analog to `git status` that is simultaneously crippled and more
+    powerful. It is crippled, because it only supports a fraction of the
+    functionality of its counter part and only distinguishes a subset of the
+    states that Git knows about. But it is also more powerful as it can handle
+    status reports for a whole hierarchy of datasets, with the ability to
+    report on a subset of the content (selection of paths) across any number
+    of datasets in the hierarchy.
+
+    All reports are guaranteed to use absolute paths that are underneath the
+    given or detected reference dataset, regardless of whether query paths are
+    given as absolute or relative paths (with respect to the working directory,
+    or to the reference dataset, when such a dataset is given explicitly).
+    Moreover, so-called "explicit relative paths" (i.e. paths that start with
+    '.' or '..') are also supported, and are interpreted as relative paths with
+    respect to the current working directory regardless of whether a reference
+    dataset with specified.
+
+    *Content types*
+
+    The following content types are distinguished:
+
+    - 'file'
+    - 'symlink'
+    - 'dataset'
+    - 'directory'
+
+    *Content states*
+
+    The following content states are distinguished:
+
+    - 'clean'
+    - 'added'
+    - 'modified'
+    - 'deleted'
+    - 'untracked'
     """
     # make the custom renderer the default one, as the global default renderer
     # does not yield meaningful output for this command

@@ -68,6 +68,17 @@ def test_status_basics(path, linkpath, otherdir):
 
 
 @with_tempfile(mkdir=True)
+@with_tempfile(mkdir=True)
+def test_status_nods(path, otherpath):
+    ds = Dataset(path).rev_create()
+    assert_result_count(
+        ds.rev_status(path=otherpath, on_failure='ignore'),
+        1,
+        status='error',
+        message='path not underneath this dataset')
+
+
+@with_tempfile(mkdir=True)
 @with_tempfile()
 def test_status(_path, linkpath):
     # do the setup on the real path, not the symlink to have its
