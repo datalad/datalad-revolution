@@ -18,7 +18,6 @@ from datalad.interface.results import get_status_dict
 lgr = logging.getLogger('datalad.revolution.gitrepo')
 
 obsolete_methods = (
-    'dirty',
     'is_dirty',
 )
 
@@ -516,6 +515,15 @@ class RevolutionGitRepo(GitRepo):
         self._save_post(message, status)
         # TODO yield result for commit, prev helper checked hexsha pre
         # and post...
+
+    # run() needs this ATM, but should eventually be RF'ed to a
+    # status(recursive=True) call
+    @property
+    def dirty(self):
+        return len([
+            p for p, props in iteritems(self.status(
+                untracked='normal', ignore_submodules='other'))
+            if props.get('state', None) != 'clean']) > 0
 
 
 # remove deprecated methods from API
