@@ -63,7 +63,9 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried):
     # take the datase that went in first
     repo_path = ds.repo.pathobj
     lgr.debug('query %s.status() for paths: %s', ds.repo, paths)
-    for path, props in iteritems(ds.repo.status(
+    for path, props in iteritems(ds.repo.diffstatus(
+            fr='HEAD',
+            to=None,
             paths=paths if paths else None,
             untracked=untracked,
             # TODO think about potential optimizations in case of

@@ -321,7 +321,12 @@ class RevolutionGitRepo(GitRepo):
             else:
                 # the recorded commit did not change, so we need to make
                 # a more expensive traversal
-                rstatus = subrepo.status(
+                rstatus = subrepo.diffstatus(
+                    # we can use 'HEAD' because we know that the commit
+                    # did not change. using 'HEAD' will facilitate
+                    # caching the result
+                    fr='HEAD',
+                    to=None,
                     paths=None,
                     untracked=untracked,
                     # TODO could be RF'ed to stop after the first find
