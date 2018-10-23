@@ -59,7 +59,7 @@ state_color_map = {
 }
 
 
-def _yield_status(ds, paths, untracked, recursion_limit, queried):
+def _yield_status(ds, paths, untracked, recursion_limit, queried, cache):
     # take the datase that went in first
     repo_path = ds.repo.pathobj
     lgr.debug('query %s.status() for paths: %s', ds.repo, paths)
@@ -71,7 +71,8 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried):
             # TODO think about potential optimizations in case of
             # recursive processing, as this will imply a semi-recursive
             # look into subdatasets
-            ignore_submodules='other')):
+            ignore_submodules='other',
+            _cache=cache)):
         cpath = ds.pathobj / path.relative_to(repo_path)
         yield dict(
             props,
@@ -86,7 +87,8 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried):
                         None,
                         untracked,
                         recursion_limit - 1,
-                        queried):
+                        queried,
+                        cache):
                     yield r
 
 
@@ -195,6 +197,7 @@ class RevStatus(Interface):
             paths_by_ds[ds.pathobj] = None
 
         queried = set()
+        content_info_cache = {}
         while paths_by_ds:
             qdspath, qpaths = paths_by_ds.popitem(last=False)
             # try to recode the dataset path wrt to the reference
@@ -233,7 +236,8 @@ class RevStatus(Interface):
                     recursion_limit
                     if recursion_limit is not None else -1
                     if recursive else 0,
-                    queried):
+                    queried,
+                    content_info_cache):
                 yield dict(
                     r,
                     refds=ds.pathobj,

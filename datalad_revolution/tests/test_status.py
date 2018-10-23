@@ -107,9 +107,7 @@ def test_status(_path, linkpath):
         assert ds.pathobj != ds.repo.pathobj
 
     # bunch of smoke tests
-    print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
     plain_recursive = ds.rev_status(recursive=True)
-    print("#####################################")
     # query of '.' is same as no path
     eq_(plain_recursive, ds.rev_status(path='.', recursive=True))
     # duplicate paths do not change things
