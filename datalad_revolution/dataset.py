@@ -18,7 +18,10 @@ from datalad.support.gitrepo import (
     NoSuchPathError,
 )
 
-from datalad.utils import optional_args
+from datalad.utils import (
+    optional_args,
+    get_dataset_root,
+)
 
 from datalad_revolution.gitrepo import RevolutionGitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo
@@ -189,3 +192,13 @@ def resolve_path(path, ds=None):
     # pathlib docs for why this is the only sane choice in the
     # face of the possibility of symlinks in the path
     return ut.Path(path)
+
+
+def path_under_dataset(ds, path):
+    ds_path = ds.pathobj
+    root = get_dataset_root(path)
+    while root is not None and not ds_path.samefile(root):
+        root = get_dataset_root(op.dirname(root))
+    if root is None:
+        return None
+    return ds_path / op.relpath(path, root)

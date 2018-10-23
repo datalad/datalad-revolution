@@ -98,6 +98,9 @@ def test_status(_path, linkpath):
     # just like `git status`, as long as there are no paths specified
     with chpwd(op.join(path, 'directory_untracked')):
         plain_recursive = status(recursive=True)
+    # should be able to take absolute paths and yield the same
+    # output
+    eq_(plain_recursive, ds.rev_status(path=ds.path, recursive=True))
 
     # query for a deeply nested path from the top, should just work with a
     # variety of approaches
@@ -107,6 +110,7 @@ def test_status(_path, linkpath):
     apath = str(apathobj)
     # ds.repo.pathobj will have the symlink resolved
     arealpath = ds.repo.pathobj / rpath
+    # TODO include explicit relative path in test
     for p in (rpath, apath, arealpath):
         assert_result_count(
             ds.rev_status(path=p),

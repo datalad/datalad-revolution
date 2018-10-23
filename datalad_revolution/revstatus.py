@@ -12,7 +12,10 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
-from six import iteritems
+from six import (
+    iteritems,
+    text_type,
+)
 from collections import OrderedDict
 
 import datalad.support.ansi_colors as ac
@@ -37,6 +40,7 @@ from datalad_revolution.dataset import (
     datasetmethod,
     require_dataset,
     resolve_path,
+    path_under_dataset,
 )
 import datalad_revolution.utils as ut
 
@@ -53,6 +57,7 @@ state_color_map = {
     'modified': ac.RED,
     'added': ac.GREEN,
 }
+
 
 def _yield_status(ds, paths, untracked, recursion_limit, queried):
     # take the datase that went in first
@@ -127,17 +132,14 @@ class RevStatus(Interface):
         ds = require_dataset(
             dataset, check_installed=True, purpose='status reporting')
 
-        paths = []
+        paths_by_ds = OrderedDict()
         if path:
-            # convert to pathobjs, decoding datalad path semantics
-            path = [resolve_path(p, dataset) for p in assure_list(path)]
-
-            # error on non-dataset paths
-            for p in path:
-                try:
-                    relp = p.resolve().relative_to(ds.repo.pathobj)
-                    paths.append(ds.pathobj / relp)
-                except ValueError as e:
+            # sort any path argument into the respective subdatasets
+            for p in sorted(assure_list(path)):
+                p = resolve_path(p, dataset)
+                root = get_dataset_root(str(p))
+                if root is None:
+                    # no root, not possibly underneath the refds
                     yield dict(
                         action='status',
                         path=p,
@@ -145,15 +147,8 @@ class RevStatus(Interface):
                         status='error',
                         message='path not underneath this dataset',
                         logger=lgr)
-                    # exit early at the cost of not reporting potential
-                    # further errors
-                    return
-
-        paths_by_ds = OrderedDict()
-        if paths:
-            for p in sorted(paths):
-                # TODO have a better get_dataset_root that takes Pathobjs
-                root = ut.Path(get_dataset_root(str(p)))
+                    continue
+                root = ut.Path(root)
                 ps = paths_by_ds.get(root, [])
                 if p != root:
                     ps.append(p)
@@ -164,7 +159,33 @@ class RevStatus(Interface):
         queried = set()
         while paths_by_ds:
             qdspath, qpaths = paths_by_ds.popitem(last=False)
+            # try to recode the dataset path wrt to the reference
+            # dataset
+            # the path that it might have been located by could
+            # have been a resolved path or another funky thing
+            qds_inrefds = path_under_dataset(ds, qdspath)
+            if qds_inrefds is None:
+                # nothing we support handling any further
+                # there is only a single refds
+                yield dict(
+                    path=text_type(qdspath),
+                    refds=ds.pathobj,
+                    action='status',
+                    status='error',
+                    message=(
+                        "dataset containing given paths is not underneath "
+                        "the reference dataset %s: %s",
+                        ds, qpaths),
+                )
+                continue
+            elif qds_inrefds != qdspath:
+                # the path this dataset was located by is not how it would
+                # be referenced underneath the refds (possibly resolved
+                # realpath) -> recode all paths to be underneath the refds
+                qpaths = [qds_inrefds / p.relative_to(qdspath) for p in qpaths]
+                qdspath = qds_inrefds
             if qdspath in queried:
+                # do not report on a single dataset twice
                 continue
             qds = Dataset(str(qdspath))
             for r in _yield_status(
@@ -188,8 +209,9 @@ class RevStatus(Interface):
         if not res['status'] == 'ok' or res.get('state', None) == 'clean':
             # logging reported already
             return
-        path = res['path'].relative_to(res['refds']) \
-            if res.get('refds', None) else res['path']
+        path=res['path']
+        #path = res['path'].relative_to(res['refds']) \
+        #    if res.get('refds', None) else res['path']
         type_ = res.get('type', res.get('type_src', ''))
         max_len = len('untracked(directory)')
         ui.message('{fill}{state}: {path}{type_}'.format(
