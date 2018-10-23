@@ -2,7 +2,10 @@ __docformat__ = 'restructuredtext'
 
 import os
 import os.path as op
-from six import PY2
+from six import (
+    PY2,
+    text_type,
+)
 import wrapt
 import logging
 import datalad_revolution.utils as ut
@@ -196,7 +199,7 @@ def resolve_path(path, ds=None):
 
 def path_under_dataset(ds, path):
     ds_path = ds.pathobj
-    root = get_dataset_root(path)
+    root = get_dataset_root(text_type(path))
     while root is not None and not ds_path.samefile(root):
         root = get_dataset_root(op.dirname(root))
     if root is None:
