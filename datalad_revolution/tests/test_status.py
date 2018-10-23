@@ -76,6 +76,16 @@ def test_status_nods(path, otherpath):
         1,
         status='error',
         message='path not underneath this dataset')
+    otherds = Dataset(otherpath).rev_create()
+    assert_result_count(
+        ds.rev_status(path=otherpath, on_failure='ignore'),
+        1,
+        path=otherds.path,
+        status='error',
+        message=(
+            'dataset containing given paths is not underneath the reference dataset %s: %s',
+            ds, [])
+        )
 
 
 @with_tempfile(mkdir=True)
@@ -97,7 +107,9 @@ def test_status(_path, linkpath):
         assert ds.pathobj != ds.repo.pathobj
 
     # bunch of smoke tests
+    print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
     plain_recursive = ds.rev_status(recursive=True)
+    print("#####################################")
     # query of '.' is same as no path
     eq_(plain_recursive, ds.rev_status(path='.', recursive=True))
     # duplicate paths do not change things
