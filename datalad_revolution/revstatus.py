@@ -22,7 +22,6 @@ import datalad.support.ansi_colors as ac
 
 from datalad.utils import (
     assure_list,
-    get_dataset_root,
 )
 from datalad.interface.base import (
     Interface,
@@ -41,6 +40,7 @@ from datalad_revolution.dataset import (
     require_dataset,
     resolve_path,
     path_under_dataset,
+    get_dataset_root,
 )
 import datalad_revolution.utils as ut
 

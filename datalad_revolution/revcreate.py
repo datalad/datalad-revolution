@@ -40,7 +40,6 @@ from datalad.support.constraints import EnsureKeyChoice
 from datalad.support.constraints import EnsureDType
 from datalad.support.param import Parameter
 from datalad.utils import getpwd
-from datalad.utils import get_dataset_root
 from datalad.distribution.subdatasets import Subdatasets
 
 # required to get the binding of `add` as a dataset method
@@ -50,6 +49,7 @@ from datalad_revolution.dataset import (
     RevolutionDataset as Dataset,
     datasetmethod,
     EnsureDataset,
+    get_dataset_root,
 )
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
