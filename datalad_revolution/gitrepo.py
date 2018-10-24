@@ -65,6 +65,14 @@ class RevolutionGitRepo(GitRepo):
 
           `type`
             Can be 'file', 'symlink', 'dataset', 'directory'
+
+            Note that the reported type will not always match the type of
+            content commited to Git, rather it will reflect the nature
+            of the content minus platform/mode-specifics. For example,
+            a symlink to a locked annexed file on Unix will have a type
+            'file', reported, while a symlink to a file in Git or directory
+            will be of type 'symlink'.
+
           `gitshasum`
             SHASUM of the item as tracked by Git, or None, if not
             tracked. This could be different from the SHASUM of the file
@@ -130,6 +138,13 @@ class RevolutionGitRepo(GitRepo):
                 inf['gitshasum'] = props.group(2 if not ref else 3)
                 inf['type'] = mode_type_map.get(
                     props.group(1), props.group(1))
+                if inf['type'] == 'symlink' and \
+                        '.git/annex/objects' in \
+                        (self.pathobj / path).resolve().as_posix():
+                    # report locked annexed files as file, their
+                    # symlink-nature is a technicality that is dependent
+                    # on the particular mode annex is in
+                    inf['type'] = 'file'
 
             # join item path with repo path to get a universally useful
             # path representation with auto-conversion and tons of other
@@ -137,8 +152,8 @@ class RevolutionGitRepo(GitRepo):
             path = self.pathobj.joinpath(path)
             if 'type' not in inf:
                 # be nice and assign types for untracked content
-                inf['type'] = 'directory' if path.is_dir() \
-                    else 'symlink' if path.is_symlink() else 'file'
+                inf['type'] = 'symlink' if path.is_symlink() \
+                    else 'directory' if path.is_dir() else 'file'
             info[path] = inf
 
         # final loop to filter out reports on paths (that where given)
