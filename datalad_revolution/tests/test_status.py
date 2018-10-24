@@ -8,6 +8,7 @@
 """Test status command"""
 
 import os.path as op
+from six import text_type
 import datalad_revolution.utils as ut
 
 from datalad.utils import (
@@ -91,7 +92,7 @@ def test_status_nods(path, otherpath):
 @with_tempfile(mkdir=True)
 @with_tempfile()
 def test_status(_path, linkpath):
-    # do the setup on the real path, not the symlink to have its
+    # do the setup on the real path, not the symlink, to have its
     # bugs not affect this test of status()
     ds = get_deeply_nested_structure(str(_path))
     if not on_windows:
@@ -106,8 +107,20 @@ def test_status(_path, linkpath):
         # check the premise of this test
         assert ds.pathobj != ds.repo.pathobj
 
-    # bunch of smoke tests
     plain_recursive = ds.rev_status(recursive=True)
+    # check integrity of individual reports with a focus on how symlinks
+    # are reported
+    for res in plain_recursive:
+        # anything that is an "intended" symlink should be reported
+        # as such. In contrast, anything that is a symlink for mere
+        # technical reasons (annex using it for something in some mode)
+        # should be reported as the thing it is representing (i.e.
+        # a file)
+        if 'link2' in text_type(res['path']):
+            assert res['type'] == 'symlink', res
+        else:
+            assert res['type'] != 'symlink', res
+    # bunch of smoke tests
     # query of '.' is same as no path
     eq_(plain_recursive, ds.rev_status(path='.', recursive=True))
     # duplicate paths do not change things

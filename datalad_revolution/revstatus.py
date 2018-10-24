@@ -117,10 +117,13 @@ class RevStatus(Interface):
 
     The following content types are distinguished:
 
-    - 'file'
-    - 'symlink'
-    - 'dataset'
-    - 'directory'
+    - 'dataset' -- any top-level dataset, or any subdataset that is properly
+      registered in superdataset
+    - 'directory' -- any directory that does not qualify for type 'dataset'
+    - 'file' -- any file, or any symlink that is placeholder to an annexed
+      file
+    - 'symlink' -- any symlink that is not used as a placeholder for an annexed
+      file
 
     *Content states*
 
