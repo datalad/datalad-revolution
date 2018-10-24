@@ -77,6 +77,9 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried, cache):
         yield dict(
             props,
             path=cpath,
+            # report the dataset path rather than the repo path to avoid
+            # realpath/symlink issues
+            parentds=ds.path,
         )
         queried.add(ds.pathobj)
         if recursion_limit and props.get('type', None) == 'dataset':

@@ -120,6 +120,9 @@ def test_status(_path, linkpath):
             assert res['type'] == 'symlink', res
         else:
             assert res['type'] != 'symlink', res
+        # every item must report its parent dataset
+        assert_in('parentds', res)
+
     # bunch of smoke tests
     # query of '.' is same as no path
     eq_(plain_recursive, ds.rev_status(path='.', recursive=True))
