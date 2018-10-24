@@ -145,8 +145,13 @@ class RevolutionGitRepo(GitRepo):
                 if inf['type'] == 'symlink' and \
                         '.git/annex/objects' in \
                         ut.Path(
-                            op.realpath(op.join(self.path, str(path)))
-                            ).as_posix():
+                            op.realpath(op.join(
+                                # this is unicode
+                                self.path,
+                                # this has to become unicode on older Pythons
+                                # it doesn't only look ugly, it is ugly
+                                # and probably wrong
+                                text_type(str(path), 'utf-8')))).as_posix():
                     # ugly thing above could be just
                     #  (self.pathobj / path).resolve().as_posix()
                     # but PY3.5 does not support resolve(strict=False)
