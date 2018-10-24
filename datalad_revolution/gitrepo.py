@@ -226,8 +226,14 @@ class RevolutionGitRepo(GitRepo):
             if v.get('state', None) != 'clean'}
 
     def diffstatus(self, fr, to, paths=None, untracked='all',
-                   ignore_submodules='no'):
+                   ignore_submodules='no', _cache=None):
         """Like diff(), but reports the status of 'clean' content too"""
+        def _get_cache_key(label, paths, ref, untracked=None):
+            return self.path, label, tuple(paths) if paths else None, \
+                ref, untracked
+
+        if _cache is None:
+            _cache = {}
         # TODO report more info from get_content_info() calls in return
         # value, those are cheap and possibly useful to a consumer
         status = OrderedDict()
@@ -235,23 +241,43 @@ class RevolutionGitRepo(GitRepo):
         if to is None:
             # everything we know about the worktree, including os.stat
             # for each file
-            to_state = self.get_content_info(
-                paths=paths, ref=None, untracked=untracked)
+            key = _get_cache_key('ci', paths, None, untracked)
+            if key in _cache:
+                to_state = _cache[key]
+            else:
+                to_state = self.get_content_info(
+                    paths=paths, ref=None, untracked=untracked)
+                _cache[key] = to_state
             # we want Git to tell us what it considers modified and avoid
             # reimplementing logic ourselves
-            modified = set(
-                self.pathobj.joinpath(ut.PurePosixPath(p))
-                for p in self._git_custom_command(
-                    # low-level code cannot handle pathobjs
-                    [str(p) for p in paths] if paths else None,
-                    ['git', 'ls-files', '-z', '-m'])[0].split('\0')
-                if p)
+            key = _get_cache_key('mod', paths, None)
+            if key in _cache:
+                modified = _cache[key]
+            else:
+                modified = set(
+                    self.pathobj.joinpath(ut.PurePosixPath(p))
+                    for p in self._git_custom_command(
+                        # low-level code cannot handle pathobjs
+                        [str(p) for p in paths] if paths else None,
+                        ['git', 'ls-files', '-z', '-m'])[0].split('\0')
+                    if p)
+                _cache[key] = modified
         else:
-            to_state = self.get_content_info(paths=paths, ref=to)
+            key = _get_cache_key('ci', paths, to)
+            if key in _cache:
+                to_state = _cache[key]
+            else:
+                to_state = self.get_content_info(paths=paths, ref=to)
+                _cache[key] = to_state
             # we do not need worktree modification detection in this case
             modified = None
         # origin state
-        from_state = self.get_content_info(paths=paths, ref=fr)
+        key = _get_cache_key('ci', paths, fr)
+        if key in _cache:
+            from_state = _cache[key]
+        else:
+            from_state = self.get_content_info(paths=paths, ref=fr)
+            _cache[key] = to_state
 
         for f, to_state_r in iteritems(to_state):
             props = None
@@ -321,13 +347,19 @@ class RevolutionGitRepo(GitRepo):
             else:
                 # the recorded commit did not change, so we need to make
                 # a more expensive traversal
-                rstatus = subrepo.status(
+                rstatus = subrepo.diffstatus(
+                    # we can use 'HEAD' because we know that the commit
+                    # did not change. using 'HEAD' will facilitate
+                    # caching the result
+                    fr='HEAD',
+                    to=None,
                     paths=None,
                     untracked=untracked,
                     # TODO could be RF'ed to stop after the first find
                     # of a modified subdataset
                     # ATM implementation performs an exhaustive search
-                    ignore_submodules='other')
+                    ignore_submodules='other',
+                    _cache=_cache)
                 if any(v['state'] != 'clean'
                        for k, v in iteritems(rstatus)):
                     st['state'] = 'modified'

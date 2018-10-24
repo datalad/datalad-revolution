@@ -12,7 +12,10 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
-from six import iteritems
+from six import (
+    iteritems,
+    text_type,
+)
 from collections import OrderedDict
 
 import datalad.support.ansi_colors as ac
@@ -37,6 +40,7 @@ from datalad_revolution.dataset import (
     datasetmethod,
     require_dataset,
     resolve_path,
+    path_under_dataset,
 )
 import datalad_revolution.utils as ut
 
@@ -54,17 +58,21 @@ state_color_map = {
     'added': ac.GREEN,
 }
 
-def _yield_status(ds, paths, untracked, recursion_limit, queried):
+
+def _yield_status(ds, paths, untracked, recursion_limit, queried, cache):
     # take the datase that went in first
     repo_path = ds.repo.pathobj
     lgr.debug('query %s.status() for paths: %s', ds.repo, paths)
-    for path, props in iteritems(ds.repo.status(
+    for path, props in iteritems(ds.repo.diffstatus(
+            fr='HEAD',
+            to=None,
             paths=paths if paths else None,
             untracked=untracked,
             # TODO think about potential optimizations in case of
             # recursive processing, as this will imply a semi-recursive
             # look into subdatasets
-            ignore_submodules='other')):
+            ignore_submodules='other',
+            _cache=cache)):
         cpath = ds.pathobj / path.relative_to(repo_path)
         yield dict(
             props,
@@ -79,13 +87,50 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried):
                         None,
                         untracked,
                         recursion_limit - 1,
-                        queried):
+                        queried,
+                        cache):
                     yield r
 
 
 @build_doc
 class RevStatus(Interface):
-    """
+    """Report on the state of dataset content.
+
+    This is an analog to `git status` that is simultaneously crippled and more
+    powerful. It is crippled, because it only supports a fraction of the
+    functionality of its counter part and only distinguishes a subset of the
+    states that Git knows about. But it is also more powerful as it can handle
+    status reports for a whole hierarchy of datasets, with the ability to
+    report on a subset of the content (selection of paths) across any number
+    of datasets in the hierarchy.
+
+    All reports are guaranteed to use absolute paths that are underneath the
+    given or detected reference dataset, regardless of whether query paths are
+    given as absolute or relative paths (with respect to the working directory,
+    or to the reference dataset, when such a dataset is given explicitly).
+    Moreover, so-called "explicit relative paths" (i.e. paths that start with
+    '.' or '..') are also supported, and are interpreted as relative paths with
+    respect to the current working directory regardless of whether a reference
+    dataset with specified.
+
+    *Content types*
+
+    The following content types are distinguished:
+
+    - 'file'
+    - 'symlink'
+    - 'dataset'
+    - 'directory'
+
+    *Content states*
+
+    The following content states are distinguished:
+
+    - 'clean'
+    - 'added'
+    - 'modified'
+    - 'deleted'
+    - 'untracked'
     """
     # make the custom renderer the default one, as the global default renderer
     # does not yield meaningful output for this command
@@ -127,17 +172,14 @@ class RevStatus(Interface):
         ds = require_dataset(
             dataset, check_installed=True, purpose='status reporting')
 
-        paths = []
+        paths_by_ds = OrderedDict()
         if path:
-            # convert to pathobjs, decoding datalad path semantics
-            path = [resolve_path(p, dataset) for p in assure_list(path)]
-
-            # error on non-dataset paths
-            for p in path:
-                try:
-                    relp = p.resolve().relative_to(ds.repo.pathobj)
-                    paths.append(ds.pathobj / relp)
-                except ValueError as e:
+            # sort any path argument into the respective subdatasets
+            for p in sorted(assure_list(path)):
+                p = resolve_path(p, dataset)
+                root = get_dataset_root(str(p))
+                if root is None:
+                    # no root, not possibly underneath the refds
                     yield dict(
                         action='status',
                         path=p,
@@ -145,15 +187,8 @@ class RevStatus(Interface):
                         status='error',
                         message='path not underneath this dataset',
                         logger=lgr)
-                    # exit early at the cost of not reporting potential
-                    # further errors
-                    return
-
-        paths_by_ds = OrderedDict()
-        if paths:
-            for p in sorted(paths):
-                # TODO have a better get_dataset_root that takes Pathobjs
-                root = ut.Path(get_dataset_root(str(p)))
+                    continue
+                root = ut.Path(root)
                 ps = paths_by_ds.get(root, [])
                 if p != root:
                     ps.append(p)
@@ -162,9 +197,36 @@ class RevStatus(Interface):
             paths_by_ds[ds.pathobj] = None
 
         queried = set()
+        content_info_cache = {}
         while paths_by_ds:
             qdspath, qpaths = paths_by_ds.popitem(last=False)
+            # try to recode the dataset path wrt to the reference
+            # dataset
+            # the path that it might have been located by could
+            # have been a resolved path or another funky thing
+            qds_inrefds = path_under_dataset(ds, qdspath)
+            if qds_inrefds is None:
+                # nothing we support handling any further
+                # there is only a single refds
+                yield dict(
+                    path=text_type(qdspath),
+                    refds=ds.pathobj,
+                    action='status',
+                    status='error',
+                    message=(
+                        "dataset containing given paths is not underneath "
+                        "the reference dataset %s: %s",
+                        ds, qpaths),
+                )
+                continue
+            elif qds_inrefds != qdspath:
+                # the path this dataset was located by is not how it would
+                # be referenced underneath the refds (possibly resolved
+                # realpath) -> recode all paths to be underneath the refds
+                qpaths = [qds_inrefds / p.relative_to(qdspath) for p in qpaths]
+                qdspath = qds_inrefds
             if qdspath in queried:
+                # do not report on a single dataset twice
                 continue
             qds = Dataset(str(qdspath))
             for r in _yield_status(
@@ -174,7 +236,8 @@ class RevStatus(Interface):
                     recursion_limit
                     if recursion_limit is not None else -1
                     if recursive else 0,
-                    queried):
+                    queried,
+                    content_info_cache):
                 yield dict(
                     r,
                     refds=ds.pathobj,
@@ -188,8 +251,9 @@ class RevStatus(Interface):
         if not res['status'] == 'ok' or res.get('state', None) == 'clean':
             # logging reported already
             return
-        path = res['path'].relative_to(res['refds']) \
-            if res.get('refds', None) else res['path']
+        path=res['path']
+        #path = res['path'].relative_to(res['refds']) \
+        #    if res.get('refds', None) else res['path']
         type_ = res.get('type', res.get('type_src', ''))
         max_len = len('untracked(directory)')
         ui.message('{fill}{state}: {path}{type_}'.format(

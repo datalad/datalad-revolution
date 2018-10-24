@@ -2,7 +2,10 @@ __docformat__ = 'restructuredtext'
 
 import os
 import os.path as op
-from six import PY2
+from six import (
+    PY2,
+    text_type,
+)
 import wrapt
 import logging
 import datalad_revolution.utils as ut
@@ -18,7 +21,10 @@ from datalad.support.gitrepo import (
     NoSuchPathError,
 )
 
-from datalad.utils import optional_args
+from datalad.utils import (
+    optional_args,
+    get_dataset_root,
+)
 
 from datalad_revolution.gitrepo import RevolutionGitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo
@@ -189,3 +195,18 @@ def resolve_path(path, ds=None):
     # pathlib docs for why this is the only sane choice in the
     # face of the possibility of symlinks in the path
     return ut.Path(path)
+
+
+def path_under_dataset(ds, path):
+    ds_path = ds.pathobj
+    root = get_dataset_root(text_type(path))
+    while root is not None and not ds_path.samefile(root):
+        # path and therefore root could be relative paths,
+        # hence in the next round we cannot use dirname()
+        # to jump in the the next directory up, but we have
+        # to use ./.. and get_dataset_root() will handle
+        # the rest just fine
+        root = get_dataset_root(op.join(root, op.pardir))
+    if root is None:
+        return None
+    return ds_path / op.relpath(text_type(path), root)
