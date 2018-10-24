@@ -8,6 +8,7 @@ import re
 from six import (
     iteritems,
     text_type,
+    PY2,
 )
 from weakref import WeakValueDictionary
 
@@ -151,7 +152,8 @@ class RevolutionGitRepo(GitRepo):
                                 # this has to become unicode on older Pythons
                                 # it doesn't only look ugly, it is ugly
                                 # and probably wrong
-                                text_type(str(path), 'utf-8')))).as_posix():
+                                unicode(str(path), 'utf-8')
+                                if PY2 else str(path)))).as_posix():
                     # ugly thing above could be just
                     #  (self.pathobj / path).resolve().as_posix()
                     # but PY3.5 does not support resolve(strict=False)
