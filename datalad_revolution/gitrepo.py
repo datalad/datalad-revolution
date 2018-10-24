@@ -1,10 +1,14 @@
 __docformat__ = 'restructuredtext'
 
 
+import os.path as op
 from collections import OrderedDict
 import logging
 import re
-from six import iteritems
+from six import (
+    iteritems,
+    text_type,
+)
 from weakref import WeakValueDictionary
 
 from datalad.dochelpers import exc_str
@@ -140,7 +144,13 @@ class RevolutionGitRepo(GitRepo):
                     props.group(1), props.group(1))
                 if inf['type'] == 'symlink' and \
                         '.git/annex/objects' in \
-                        (self.pathobj / path).resolve().as_posix():
+                        ut.Path(
+                            op.realpath(op.join(self.path, str(path)))
+                            ).as_posix():
+                    # ugly thing above could be just
+                    #  (self.pathobj / path).resolve().as_posix()
+                    # but PY3.5 does not support resolve(strict=False)
+
                     # report locked annexed files as file, their
                     # symlink-nature is a technicality that is dependent
                     # on the particular mode annex is in
