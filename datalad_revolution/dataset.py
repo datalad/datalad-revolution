@@ -24,7 +24,7 @@ from datalad.support.gitrepo import (
 
 from datalad.utils import (
     optional_args,
-    get_dataset_root,
+    getpwd,
 )
 
 from datalad_revolution.gitrepo import RevolutionGitRepo
@@ -186,21 +186,28 @@ def resolve_path(path, ds=None):
     """
     if ds is None:
         # CWD is the reference
-        return ut.Path(path)
-
+        path = ut.Path(path)
     # we have a dataset
     # stringify in case a pathobj came in
-    if not op.isabs(str(path)) and \
+    elif not op.isabs(str(path)) and \
             not (str(path).startswith(os.curdir + os.sep) or
                  str(path).startswith(os.pardir + os.sep)):
         # we have a dataset and no abspath nor an explicit relative path ->
         # resolve it against the dataset
-        return ds.pathobj / path
+        path = ds.pathobj / path
+    else:
+        # CWD is the reference
+        path = ut.Path(path)
 
-    # note that this will not "normpath()" the result, check the
+    # make sure we return an absolute path, but without actually
+    # resolving anything
+    if not path.is_absolute():
+        # not using ut.Path.cwd(), because it is symlinks resolved!!
+        path = ut.Path(getpwd()) / path
+    # note that we will not "normpath()" the result, check the
     # pathlib docs for why this is the only sane choice in the
     # face of the possibility of symlinks in the path
-    return ut.Path(path)
+    return path
 
 
 def path_under_dataset(ds, path):

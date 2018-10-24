@@ -1,7 +1,10 @@
 import os
 import os.path as op
 
-from datalad.utils import chpwd
+from datalad.utils import (
+    chpwd,
+    getpwd,
+)
 
 from datalad.tests.utils import (
     with_tempfile,
@@ -42,20 +45,20 @@ def test_resolve_path(path):
             # come in crippled (e.g. C:\Users\MIKE~1/...)
             # and comparison would fails unjustified
             eq_(resolve_path('.').resolve(), ut.Path(opath).resolve())
-            # but by default no norming
-            eq_(resolve_path('.'), ut.Path('.'))
-            eq_(str(resolve_path('.')), os.curdir)
+            # no norming, but absolute paths, without resolving links
+            eq_(resolve_path('.'), ut.Path(d))
+            eq_(str(resolve_path('.')), d)
 
             eq_(str(resolve_path(op.join(os.curdir, 'bu'), ds=ds_global)),
-                'bu')
+                op.join(d, 'bu'))
             eq_(str(resolve_path(op.join(os.pardir, 'bu'), ds=ds_global)),
-                op.join(os.pardir, 'bu'))
+                op.join(d, os.pardir, 'bu'))
 
         # resolve against a dataset
         eq_(str(resolve_path('bu', ds=ds_local)), op.join(d, 'bu'))
         eq_(str(resolve_path('bu', ds=ds_global)), op.join(path, 'bu'))
         # but paths outside the dataset are left untouched
         eq_(str(resolve_path(op.join(os.curdir, 'bu'), ds=ds_global)),
-            'bu')
+            op.join(getpwd(), 'bu'))
         eq_(str(resolve_path(op.join(os.pardir, 'bu'), ds=ds_global)),
-            op.join(os.pardir, 'bu'))
+            op.join(getpwd(), os.pardir, 'bu'))
