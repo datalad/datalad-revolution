@@ -7,6 +7,7 @@ import re
 from six import iteritems
 from weakref import WeakValueDictionary
 
+from datalad.dochelpers import exc_str
 import datalad_revolution.utils as ut
 from datalad.support.gitrepo import (
     GitRepo,
@@ -493,7 +494,8 @@ class RevolutionGitRepo(GitRepo):
                     ds=self,
                     path=self.pathobj / ut.PurePosixPath(cand_sm),
                     status='error',
-                    message=e.stderr,
+                    message=e.stderr if hasattr(e, 'stderr')
+                    else ('not a Git repository: %s', exc_str(e)),
                     logger=lgr)
                 continue
             added_submodule = True
