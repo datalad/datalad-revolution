@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import os.path as op
 from six import iteritems
