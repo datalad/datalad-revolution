@@ -233,13 +233,67 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
 
 
 def get_deeply_nested_structure(path):
+    """ Here is what this does (assuming UNIX, locked):
+    .
+    ├── directory_untracked
+    │   └── link2dir -> ../subdir
+    ├── file_modified
+    ├── link2dir -> subdir
+    ├── link2subdsdir -> subds_modified/subdir
+    ├── link2subdsroot -> subds_modified
+    ├── subdir
+    │   ├── annexed_file.txt -> ../.git/annex/objects/...
+    │   ├── file_modified
+    │   ├── git_file.txt
+    │   └── link2annex_files.txt -> annexed_file.txt
+    └── subds_modified
+        ├── link2superdsdir -> ../subdir
+        ├── subdir
+        │   └── annexed_file.txt -> ../.git/annex/objects/...
+        └── subds_lvl1_modified
+            └── directory_untracked
+    """
     ds = Dataset(path).rev_create()
-    (ds.pathobj / 'directory_untracked').mkdir()
+    (ds.pathobj / 'subdir').mkdir()
+    (ds.pathobj / 'subdir' / 'annexed_file.txt').write_text(u'dummy')
+    ds.rev_save()
+    (ds.pathobj / 'subdir' / 'git_file.txt').write_text(u'dummy')
+    ds.rev_save(to_git=True)
     # a subtree of datasets
-    ds.create('subds_modified')
-    # another dataset, plus an addition dir in it
+    subds = ds.create('subds_modified')
+    # another dataset, plus an additional dir in it
     (Dataset(
         ds.create(
             op.join('subds_modified', 'subds_lvl1_modified')
         ).path).pathobj / 'directory_untracked').mkdir()
+    create_tree(
+        ds.path,
+        {
+            'subdir': {
+                'file_modified': 'file_modified',
+            },
+            'file_modified': 'file_modified',
+        }
+    )
+    (ut.Path(subds.path) / 'subdir').mkdir()
+    (ut.Path(subds.path) / 'subdir' / 'annexed_file.txt').write_text(u'dummy')
+    subds.add('.')
+    (ds.pathobj / 'directory_untracked').mkdir()
+    # symlink farm #1
+    # symlink to annexed file
+    (ds.pathobj / 'subdir' / 'link2annex_files.txt').symlink_to(
+        'annexed_file.txt')
+    # symlink to directory within the dataset
+    (ds.pathobj / 'link2dir').symlink_to('subdir')
+    # upwards pointing symlink to directory within the same dataset
+    (ds.pathobj / 'directory_untracked' / 'link2dir').symlink_to(
+        op.join('..', 'subdir'))
+    # symlink pointing to a subdataset mount in the same dataset
+    (ds.pathobj / 'link2subdsroot').symlink_to('subds_modified')
+    # symlink to a dir in a subdataset (across dataset boundaries)
+    (ds.pathobj / 'link2subdsdir').symlink_to(
+        op.join('subds_modified', 'subdir'))
+    # symlink to a dir in a superdataset (across dataset boundaries)
+    (ut.Path(subds.path) / 'link2superdsdir').symlink_to(
+        op.join('..', 'subdir'))
     return ds

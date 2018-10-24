@@ -91,7 +91,7 @@ def test_status_nods(path, otherpath):
 @with_tempfile(mkdir=True)
 @with_tempfile()
 def test_status(_path, linkpath):
-    # do the setup on the real path, not the symlink to have its
+    # do the setup on the real path, not the symlink, to have its
     # bugs not affect this test of status()
     ds = get_deeply_nested_structure(str(_path))
     if not on_windows:
