@@ -388,9 +388,6 @@ class RevolutionGitRepo(GitRepo):
                     to=None,
                     paths=None,
                     untracked=untracked,
-                    # TODO could be RF'ed to stop after the first find
-                    # of a modified subdataset
-                    # ATM implementation performs an exhaustive search
                     ignore_submodules='other',
                     _cache=_cache)
                 if any(v['state'] != 'clean'
@@ -468,7 +465,7 @@ class RevolutionGitRepo(GitRepo):
           limited to a single dataset.
         _status : dict or None
           If None, Repo.status() will be queried for the given `ds`. If
-          a dict is given, its content will be used as a constrain.
+          a dict is given, its content will be used as a constraint.
           For example, to save only modified content, but no untracked
           content, set `paths` to None and provide a `_status` that has
           no entries for untracked content.
@@ -502,6 +499,11 @@ class RevolutionGitRepo(GitRepo):
         # - commit (with all paths that have been touched, to bypass
         #   potential pre-staged bits)
 
+        # TODO this additonal query should not be, base on status as given
+        # if anyhow possible, however, when paths are given, status may
+        # not contain all required information. In case of path=None AND
+        # _status=None, we should be able to avoid this, because
+        # status should have the full info already
         # looks for contained repositories
         to_add_submodules = [sm for sm, sm_props in iteritems(
             self.get_content_info(
