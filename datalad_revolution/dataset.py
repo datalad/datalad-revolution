@@ -7,6 +7,7 @@ from six import (
     text_type,
 )
 import wrapt
+from weakref import WeakValueDictionary
 import logging
 import datalad_revolution.utils as ut
 
@@ -33,6 +34,11 @@ lgr = logging.getLogger('datalad.revolution.dataset')
 
 
 class RevolutionDataset(_Dataset):
+
+    # Begin Flyweight:
+    _unique_instances = WeakValueDictionary()
+    # End Flyweight:
+
     @property
     def pathobj(self):
         """pathobj for the dataset"""
