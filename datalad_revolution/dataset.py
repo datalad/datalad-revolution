@@ -212,6 +212,15 @@ def resolve_path(path, ds=None):
 
 def path_under_dataset(ds, path):
     ds_path = ds.pathobj
+    try:
+        rpath = text_type(ut.Path(path).relative_to(ds_path))
+        if not rpath.startswith(op.pardir):
+            # path is already underneath the dataset
+            return path
+    except Exception:
+        # whatever went wrong, we gotta play save
+        pass
+
     root = get_dataset_root(text_type(path))
     while root is not None and not ds_path.samefile(root):
         # path and therefore root could be relative paths,
