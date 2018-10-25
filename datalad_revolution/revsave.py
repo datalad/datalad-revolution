@@ -13,6 +13,7 @@
 __docformat__ = 'restructuredtext'
 
 import logging
+from six import iteritems
 
 from datalad.interface.base import (
     Interface,
@@ -24,7 +25,11 @@ from datalad.interface.common_opts import (
     save_message_opt,
 )
 from datalad.interface.results import get_status_dict
-from datalad.interface.utils import eval_results
+from datalad.interface.utils import (
+    eval_results,
+    get_tree_roots,
+    discover_dataset_trace_to_targets,
+)
 from datalad.support.param import Parameter
 from datalad.support.constraints import (
     EnsureStr,
@@ -33,11 +38,16 @@ from datalad.support.constraints import (
 from datalad.utils import (
     assure_list,
 )
+import datalad_revolution.utils as ut
 
 from datalad_revolution.dataset import (
+    RevolutionDataset as Dataset,
     EnsureDataset,
     datasetmethod,
     require_dataset,
+)
+from datalad_revolution.revstatus import (
+    RevStatus as Status,
 )
 
 lgr = logging.getLogger('datalad.revolution.save')
@@ -175,23 +185,75 @@ class RevSave(Interface):
 
         # TODO track if anything happened and issue 'notneeded' if not
 
-        if not recursive:
-            worker = ds.repo.save_(
-                message=message,
-                # do not pass empty list
-                paths=path if path else None,
-                # prevent whining of GitRepo
-                git=True if not hasattr(ds.repo, 'annexstatus')
-                else to_git,
-                untracked=untracked_mode)
-        else:
-            raise NotImplementedError
+        # use status() to do all discovery and annotation of paths
+        paths_by_ds = {}
+        for s in Status()(
+                dataset=ds,
+                path=path,
+                untracked=untracked_mode,
+                recursive=recursive,
+                recursion_limit=recursion_limit,
+                result_renderer='disabled'):
+            # fish out status dict for this parent dataset
+            ds_status = paths_by_ds.get(s['parentds'], {})
+            # reassemble path status info as repo.status() would have made it
+            ds_status[ut.Path(s['path'])] = \
+                {k: v for k, v in iteritems(s)
+                 if k not in (
+                     'path', 'parentds', 'refds', 'status', 'action',
+                     'logger')}
+            paths_by_ds[s['parentds']] = ds_status
 
-        for res in worker:
-            # TODO remove stringification when datalad-core can handle
-            # path objects, or when PY3.6 is the lowest supported version
-            for k in ('path', 'refds'):
-                if k in res:
-                    res[k] = str(res[k])
-            yield res
+        # figure out what datasets to process, start with the ones containing
+        # the paths that were given as arguments
+        discovered_datasets = list(paths_by_ds.keys())
+        if dataset:
+            # if a reference dataset was given we want to save all the way up
+            # to it, so let's throw it into the mix
+            discovered_datasets.append(ds.path)
+        # sort the datasets into (potentially) disjoint hierarchies,
+        # or a single one, if a reference dataset was given
+        dataset_hierarchies = get_tree_roots(discovered_datasets)
+        for rootds, children in iteritems(dataset_hierarchies):
+            edges = {}
+            discover_dataset_trace_to_targets(
+                rootds, children, [], edges, includeds=children)
+            for superds, subdss in iteritems(edges):
+                superds_status = paths_by_ds.get(superds, {})
+                for subds in subdss:
+                    # TODO actually start from an entry that may already
+                    # exist in the status record
+                    superds_status[ut.Path(subds)] = dict(
+                        # shot from the hip, some status config
+                        # to trigger this specific super/sub
+                        # relation to be saved
+                        state='untracked',
+                        type='dataset')
+                paths_by_ds[superds] = superds_status
+
+        # TODO parallelize, whenever we have multiple subdataset of a single
+        # dataset they can all be processed simultaneously
+        # sort list of dataset to handle, starting with the ones deep down
+        for pdspath in sorted(paths_by_ds, reverse=True):
+            # pop status for this dataset, we are not coming back to it
+            pds_status = paths_by_ds.pop(pdspath)
+            pds = Dataset(pdspath)
+            for res in pds.repo.save_(
+                    message=message,
+                    # make sure to have the `path` arg be None, as we want to
+                    # prevent and bypass any additional repo.status() calls
+                    paths=None,
+                    # prevent whining of GitRepo
+                    git=True if not hasattr(ds.repo, 'annexstatus')
+                    else to_git,
+                    # we are supplying the full status already, do not detect
+                    # anything else
+                    untracked='no',
+                    _status=pds_status):
+                # TODO remove stringification when datalad-core can handle
+                # path objects, or when PY3.6 is the lowest supported version
+                for k in ('path', 'refds'):
+                    if k in res:
+                        res[k] = str(res[k])
+                yield res
         # TODO add tag, if desired
