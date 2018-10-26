@@ -488,9 +488,6 @@ class RevCreate(Interface):
         if isinstance(dataset, Dataset) and dataset.path != tbds.path:
             # we created a dataset in another dataset
             # -> make submodule
-            # TODO this will not be able to handle saving
-            # a subdataset that is itself in a subdataset
-            # of `dataset`, yet...
             for r in dataset.rev_save(
                     path=tbds.path,
             ):
