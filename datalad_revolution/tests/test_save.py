@@ -17,6 +17,7 @@ from datalad.utils import (
 )
 from datalad.tests.utils import (
     assert_status,
+    assert_result_count,
     assert_in,
     assert_not_in,
     assert_raises,
@@ -318,12 +319,9 @@ def test_add_files(path):
             result = ds.rev_save('dir', to_git=arg[1])
             status = ds.repo.annexstatus(['dir'])
         else:
-            result = ds.rev_save(
-                arg[0], to_git=arg[1],
-                result_xfm='relpaths',
-                return_type='item-or-list')
-            # order depends on how annex processes it, so let's sort
-            eq_(sorted(result), sorted(arg[0]))
+            result = ds.rev_save(arg[0], to_git=arg[1])
+            for a in assure_list(arg[0]):
+                assert_result_count(result, 1, path=str(ds.pathobj / a))
             status = ds.repo.get_content_annexinfo(assure_list(arg[0]))
         for f, p in iteritems(status):
             if arg[1]:
@@ -437,5 +435,34 @@ def test_update_known_submodule(path):
 
     # attempt two, same as above but call add via reference dataset
     ds = get_baseline(op.join(path, 'w_ref'))
-    save(recursive=True)
+    ds.rev_save(recursive=True)
     assert_repo_status(ds.path)
+
+
+@with_tempfile(mkdir=True)
+def test_add_recursive(path):
+    # make simple hierarchy
+    parent = Dataset(path).rev_create()
+    assert_repo_status(parent.path)
+    sub1 = parent.rev_create(op.join('down', 'sub1'))
+    assert_repo_status(parent.path)
+    sub2 = parent.rev_create('sub2')
+    # next one make the parent dirty
+    subsub = sub2.rev_create('subsub')
+    assert_repo_status(parent.path, modified=['sub2'])
+    res = parent.rev_save()
+    assert_repo_status(parent.path)
+
+    # now add content deep in the hierarchy
+    create_tree(subsub.path, {'new': 'empty'})
+    assert_repo_status(parent.path, modified=['sub2'])
+
+    # recursive add should not even touch sub1, because
+    # it knows that it is clean
+    res = parent.rev_save(recursive=True)
+    # the key action is done
+    assert_result_count(
+        res, 1, path=op.join(subsub.path, 'new'), action='add', status='ok')
+    # saved all the way up
+    assert_result_count(res, 3, action='save', status='ok')
+    assert_repo_status(parent.path)

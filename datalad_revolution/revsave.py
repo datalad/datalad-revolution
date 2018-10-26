@@ -172,17 +172,7 @@ class RevSave(Interface):
         #   This avoids complex annotation loops and hierarchy tracking.
         # - any modification upwards from the root dataset
 
-        # disambiguation of path arguments:
-        # - when a subdataset root is given as a path to save, it is
-        #   interpreted as instructions to save the present subdataset
-        #   commit as the state referenced in the parent
-        # - when the same path is given with --recursive, the subdataset's
-        #   content itself will be saved first before recording the new
-        #   state in the parent
-
         ds = require_dataset(dataset, check_installed=True, purpose='saving')
-
-        # TODO track if anything happened and issue 'notneeded' if not
 
         # use status() to do all discovery and annotation of paths
         paths_by_ds = {}
@@ -243,6 +233,7 @@ class RevSave(Interface):
                 # lower levels
                 pds.repo.pathobj / p.relative_to(pdspath): props
                 for p, props in iteritems(paths_by_ds.pop(pdspath))}
+            start_commit = pds.repo.get_hexsha()
             for res in pds.repo.save_(
                     message=message,
                     # make sure to have the `path` arg be None, as we want to
@@ -261,4 +252,14 @@ class RevSave(Interface):
                     if k in res:
                         res[k] = str(res[k])
                 yield res
+            # report on the dataset itself
+            yield dict(
+                action='save',
+                path=pds.path,
+                refds=ds.path,
+                status='ok'
+                if start_commit != pds.repo.get_hexsha()
+                else 'notneeded',
+                logger=lgr,
+            )
         # TODO add tag, if desired

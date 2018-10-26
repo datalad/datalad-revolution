@@ -310,7 +310,7 @@ class RevolutionGitRepo(GitRepo):
             from_state = _cache[key]
         else:
             from_state = self.get_content_info(paths=paths, ref=fr)
-            _cache[key] = to_state
+            _cache[key] = from_state
 
         for f, to_state_r in iteritems(to_state):
             props = None
