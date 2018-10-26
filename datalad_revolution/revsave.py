@@ -24,7 +24,6 @@ from datalad.interface.common_opts import (
     recursion_flag,
     save_message_opt,
 )
-from datalad.interface.results import get_status_dict
 from datalad.interface.utils import (
     eval_results,
     get_tree_roots,
@@ -235,9 +234,15 @@ class RevSave(Interface):
         # dataset they can all be processed simultaneously
         # sort list of dataset to handle, starting with the ones deep down
         for pdspath in sorted(paths_by_ds, reverse=True):
-            # pop status for this dataset, we are not coming back to it
-            pds_status = paths_by_ds.pop(pdspath)
             pds = Dataset(pdspath)
+            # pop status for this dataset, we are not coming back to it
+            pds_status = {
+                # for handing over to the low-level code, we recode any
+                # path relative to the real repo location, this avoid
+                # cumbersome symlink handling without context in the
+                # lower levels
+                pds.repo.pathobj / p.relative_to(pdspath): props
+                for p, props in iteritems(paths_by_ds.pop(pdspath))}
             for res in pds.repo.save_(
                     message=message,
                     # make sure to have the `path` arg be None, as we want to
