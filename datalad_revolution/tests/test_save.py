@@ -352,6 +352,8 @@ def test_add_subdataset(path, other):
     other = create(other)
     # install into superdataset, but don't add
     other_clone = install(source=other.path, path=op.join(ds.path, 'other'))
+    # little dance to get the revolution-type dataset
+    other_clone = Dataset(other_clone.path)
     ok_(other_clone.is_installed)
     assert_not_in('other', ds.subdatasets(result_xfm='relpaths'))
     # now add, it should pick up the source URL
@@ -418,3 +420,22 @@ def test_gh1597_simpler(path):
     assert_not_in(
         'key',
         ds.repo.get_content_annexinfo([attrfile]).popitem()[1])
+
+
+@with_tempfile(mkdir=True)
+def test_update_known_submodule(path):
+    def get_baseline(p):
+        ds = Dataset(p).rev_create()
+        sub = create(str(ds.pathobj / 'sub'))
+        assert_repo_status(ds.path, untracked=['sub'])
+        return ds
+    # attempt one
+    ds = get_baseline(op.join(path, 'wo_ref'))
+    with chpwd(ds.path):
+        save(recursive=True)
+    assert_repo_status(ds.path)
+
+    # attempt two, same as above but call add via reference dataset
+    ds = get_baseline(op.join(path, 'w_ref'))
+    save(recursive=True)
+    assert_repo_status(ds.path)
