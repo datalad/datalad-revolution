@@ -399,6 +399,25 @@ def test_add_mimetypes(path):
 
 
 @with_tempfile(mkdir=True)
+def test_gh1597(path):
+    ds = Dataset(path).rev_create()
+    sub = ds.create('sub')
+    res = ds.subdatasets()
+    assert_result_count(res, 1, path=sub.path)
+    # now modify .gitmodules with another command
+    ds.subdatasets(contains=sub.path, set_property=[('this', 'that')])
+    # now modify low-level
+    with open(op.join(ds.path, '.gitmodules'), 'a') as f:
+        f.write('\n')
+    assert_repo_status(ds.path, modified=['.gitmodules'])
+    ds.rev_save('.gitmodules')
+    # must not come under annex mangement
+    assert_not_in(
+        'key',
+        ds.repo.annexstatus(paths=['.gitmodules']).popitem()[1])
+
+
+@with_tempfile(mkdir=True)
 def test_gh1597_simpler(path):
     ds = Dataset(path).rev_create()
     # same goes for .gitattributes
@@ -477,4 +496,15 @@ def test_relpath_add(path):
         # and now add all
         save('..')
     # auto-save enabled
+    assert_repo_status(ds.path)
+
+
+@with_tempfile()
+def test_bf2541(path):
+    ds = create(path)
+    subds = ds.rev_create('sub')
+    assert_repo_status(ds.path)
+    os.symlink('sub', op.join(ds.path, 'symlink'))
+    with chpwd(ds.path):
+        res = save(recursive=True)
     assert_repo_status(ds.path)
