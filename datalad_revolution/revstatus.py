@@ -108,6 +108,8 @@ class RevStatus(Interface):
     report on a subset of the content (selection of paths) across any number
     of datasets in the hierarchy.
 
+    *Path conventions*
+
     All reports are guaranteed to use absolute paths that are underneath the
     given or detected reference dataset, regardless of whether query paths are
     given as absolute or relative paths (with respect to the working directory,
@@ -116,6 +118,30 @@ class RevStatus(Interface):
     '.' or '..') are also supported, and are interpreted as relative paths with
     respect to the current working directory regardless of whether a reference
     dataset with specified.
+
+    When it is necessary to address a subdataset record in a superdataset
+    without causing a status query for the state _within_ the subdataset
+    itself, this can be achieved by explicitly providing a reference dataset
+    and the path to the root of the subdataset like so::
+
+      datalad rev-status --dataset . subdspath
+
+    In contrast, when the state of the subdataset within the superdataset is
+    not relevant, a status query for the content of the subdataset can be
+    obtained by adding a trailing path separator to the query path (rsync-like
+    syntax)::
+
+      datalad rev-status --dataset . subdspath/
+
+    When both aspects are relevant (the state of the subdataset content
+    and the state of the subdataset within the superdataset), both queries
+    can be combined::
+
+      datalad rev-status --dataset . subdspath subdspath/
+
+    When performing a recursive status query, both status aspects of subdataset
+    are always included in the report.
+
 
     *Content types*
 
