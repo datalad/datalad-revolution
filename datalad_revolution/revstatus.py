@@ -12,6 +12,7 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
+import os.path as op
 from six import (
     iteritems,
     text_type,
@@ -182,6 +183,10 @@ class RevStatus(Interface):
         if path:
             # sort any path argument into the respective subdatasets
             for p in sorted(assure_list(path)):
+                # it is important to capture the exact form of the
+                # given path argument, before any normalization happens
+                # for further decision logic below
+                orig_path = str(p)
                 p = resolve_path(p, dataset)
                 root = get_dataset_root(str(p))
                 if root is None:
@@ -194,10 +199,25 @@ class RevStatus(Interface):
                         message='path not underneath this dataset',
                         logger=lgr)
                     continue
+                else:
+                    if dataset and root == str(p) and \
+                            not orig_path.endswith(op.sep):
+                        # the given path is pointing to a dataset
+                        # distinguish rsync-link syntax to identify
+                        # the dataset as whole (e.g. 'ds') vs its
+                        # content (e.g. 'ds/')
+                        super_root = get_dataset_root(op.dirname(root))
+                        if super_root:
+                            # the dataset identified by the path argument
+                            # is contained in a superdataset, and no
+                            # trailing path separator was found in the
+                            # argument -> user wants to address the dataset
+                            # as a whole (in the superdataset)
+                            root = super_root
+
                 root = ut.Path(root)
                 ps = paths_by_ds.get(root, [])
-                if p != root:
-                    ps.append(p)
+                ps.append(p)
                 paths_by_ds[root] = ps
         else:
             paths_by_ds[ds.pathobj] = None
@@ -206,6 +226,10 @@ class RevStatus(Interface):
         content_info_cache = {}
         while paths_by_ds:
             qdspath, qpaths = paths_by_ds.popitem(last=False)
+            if qpaths and qdspath in qpaths:
+                # this is supposed to be a full query, save some
+                # cycles sifting through the actual path arguments
+                qpaths = []
             # try to recode the dataset path wrt to the reference
             # dataset
             # the path that it might have been located by could
