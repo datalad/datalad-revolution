@@ -34,8 +34,8 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
         objectstore = self.pathobj.joinpath(
             self.path, RevolutionGitRepo.get_git_dir(self), 'annex', 'objects')
         for f, r in iteritems(info):
-            if 'key' not in r:
-                # not annexed
+            if 'key' not in r or 'has_content' in r:
+                # not annexed or already processed
                 continue
             # test hashdirmixed first, as it is used in non-bare repos
             # which be a more frequent target
@@ -65,9 +65,6 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             self, paths=None, init='git', ref=None, eval_availability=False,
             **kwargs):
         """
-        Calling without any options given will always give the fastest
-        performance.
-
         Parameters
         ----------
         paths : list
