@@ -177,7 +177,10 @@ class RevSave(Interface):
         # use status() to do all discovery and annotation of paths
         paths_by_ds = {}
         for s in Status()(
-                dataset=ds,
+                # ATTN: it is vital to pass the `dataset` argument as it,
+                # and not a dataset instance in order to maintain the path
+                # semantics between here and the status() call
+                dataset=dataset,
                 path=path,
                 untracked=untracked_mode,
                 recursive=recursive,
@@ -193,6 +196,8 @@ class RevSave(Interface):
                      'logger')}
             paths_by_ds[s['parentds']] = ds_status
 
+        lgr.debug('Determined %i datasets for saving from input arguments',
+                  len(paths_by_ds))
         # figure out what datasets to process, start with the ones containing
         # the paths that were given as arguments
         discovered_datasets = list(paths_by_ds.keys())
@@ -233,6 +238,10 @@ class RevSave(Interface):
                 # lower levels
                 pds.repo.pathobj / p.relative_to(pdspath): props
                 for p, props in iteritems(paths_by_ds.pop(pdspath))}
+            if all(p['state'] == 'clean' for p in pds_status.values()):
+                yield dict(action='save', path=pds.path, refds=ds.path,
+                           status='notneeded', logger=lgr)
+                continue
             start_commit = pds.repo.get_hexsha()
             for res in pds.repo.save_(
                     message=message,

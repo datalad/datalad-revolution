@@ -466,3 +466,15 @@ def test_add_recursive(path):
     # saved all the way up
     assert_result_count(res, 3, action='save', status='ok')
     assert_repo_status(parent.path)
+
+
+@with_tree(**tree_arg)
+def test_relpath_add(path):
+    ds = Dataset(path).rev_create(force=True)
+    with chpwd(op.join(path, 'dir')):
+        eq_(save('testindir')[0]['path'],
+            op.join(ds.path, 'dir', 'testindir'))
+        # and now add all
+        save('..')
+    # auto-save enabled
+    assert_repo_status(ds.path)
