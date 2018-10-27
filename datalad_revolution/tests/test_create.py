@@ -40,6 +40,7 @@ from datalad.tests.utils import (
     with_tree,
     ok_file_has_content,
     ok_file_under_git,
+    SkipTest,
 )
 
 
@@ -293,6 +294,8 @@ def test_saving_prior(topdir):
 @known_failure_windows  # https://github.com/datalad/datalad/issues/2606
 @with_tempfile(mkdir=True)
 def test_create_withprocedure(path):
+    raise SkipTest(
+        'Needs resolution of https://github.com/datalad/datalad/pull/2946')
     # first without
     ds = create(path)
     assert(not op.lexists(op.join(ds.path, 'README.rst')))
