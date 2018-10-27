@@ -30,6 +30,7 @@ from datalad.support.exceptions import (
 from datalad_revolution.dataset import RevolutionDataset as Dataset
 from datalad_revolution.tests.utils import (
     get_deeply_nested_structure,
+    has_symlink_capability,
 )
 from datalad.api import (
     rev_status as status,
@@ -95,7 +96,7 @@ def test_status(_path, linkpath):
     # do the setup on the real path, not the symlink, to have its
     # bugs not affect this test of status()
     ds = get_deeply_nested_structure(str(_path))
-    if not on_windows:
+    if has_symlink_capability():
         # make it more complicated by default
         ut.Path(linkpath).symlink_to(_path, target_is_directory=True)
         path = linkpath
@@ -103,7 +104,7 @@ def test_status(_path, linkpath):
         path = _path
 
     ds = Dataset(path)
-    if not on_windows:
+    if has_symlink_capability():
         # check the premise of this test
         assert ds.pathobj != ds.repo.pathobj
 

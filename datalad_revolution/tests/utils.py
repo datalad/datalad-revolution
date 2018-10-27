@@ -305,6 +305,18 @@ def get_deeply_nested_structure(path):
     return ds
 
 
+def has_symlink_capability():
+    try:
+        wdir = ut.Path(tempfile.mkdtemp())
+        (wdir / 'target').touch()
+        (wdir / 'link').symlink_to(wdir / 'target')
+        return True
+    except Exception:
+        return False
+    finally:
+        shutil.rmtree(str(wdir))
+
+
 def skip_wo_symlink_capability(func):
     """Skip test when environment does not support symlinks
 
@@ -314,13 +326,7 @@ def skip_wo_symlink_capability(func):
     @wraps(func)
     @attr('skip_wo_symlink_capability')
     def newfunc(*args, **kwargs):
-        try:
-            wdir = ut.Path(tempfile.mkdtemp())
-            (wdir / 'target').touch()
-            (wdir / 'link').symlink_to(wdir / 'target')
-        except Exception:
+        if not has_symlink_capability():
             raise SkipTest("no symlink capabilities")
-        finally:
-            shutil.rmtree(str(wdir))
         return func(*args, **kwargs)
     return newfunc
