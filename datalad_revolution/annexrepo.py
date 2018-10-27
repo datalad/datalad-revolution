@@ -57,7 +57,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 if testpath.exists():
                     r.pop('hashdirlower', None)
                     r.pop('hashdirmixed', None)
-                    r['objloc'] = testpath
+                    r['objloc'] = str(testpath)
                     r['has_content'] = True
                     break
 

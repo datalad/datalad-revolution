@@ -85,7 +85,7 @@ def _yield_status(ds, paths, annexinfo, untracked, recursion_limit, queried, cac
         cpath = ds.pathobj / path.relative_to(repo_path)
         yield dict(
             props,
-            path=cpath,
+            path=str(cpath),
             # report the dataset path rather than the repo path to avoid
             # realpath/symlink issues
             parentds=ds.path,
@@ -324,7 +324,7 @@ class RevStatus(Interface):
                     content_info_cache):
                 yield dict(
                     r,
-                    refds=ds.pathobj,
+                    refds=ds.path,
                     action='status',
                     status='ok',
                 )

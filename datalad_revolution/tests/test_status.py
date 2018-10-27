@@ -70,14 +70,12 @@ def test_status_basics(path, linkpath, otherdir):
     assert len(stat) > 2
     # check the composition
     for s in stat:
-        # all paths are native path objects
-        assert isinstance(s['path'], ut.Path)
         eq_(s['status'], 'ok')
         eq_(s['action'], 'status')
         eq_(s['state'], 'clean')
         eq_(s['type'], 'file')
         assert_in('gitshasum', s)
-        eq_(s['refds'], ds.pathobj)
+        eq_(s['refds'], ds.path)
 
 
 @with_tempfile(mkdir=True)
@@ -126,12 +124,12 @@ def test_status(_path, linkpath):
     assert_result_count(
         ds.rev_status(annex='all'),
         1,
-        path=ds.pathobj / 'subdir' / 'annexed_file.txt',
+        path=str(ds.pathobj / 'subdir' / 'annexed_file.txt'),
         key='MD5E-s5--275876e34cf609db118f3d84b799a790.txt',
         has_content=True,
-        objloc=ds.repo.pathobj / '.git' / 'annex' / 'objects' /
+        objloc=str(ds.repo.pathobj / '.git' / 'annex' / 'objects' /
         '7p' / 'gp' / 'MD5E-s5--275876e34cf609db118f3d84b799a790.txt' /
-        'MD5E-s5--275876e34cf609db118f3d84b799a790.txt')
+        'MD5E-s5--275876e34cf609db118f3d84b799a790.txt'))
 
     plain_recursive = ds.rev_status(recursive=True)
     # check integrity of individual reports with a focus on how symlinks
@@ -187,23 +185,23 @@ def test_status(_path, linkpath):
             1,
             state='untracked',
             type='directory',
-            refds=ds.pathobj,
+            refds=ds.path,
             # path always comes out a full path inside the queried dataset
-            path=apathobj,
+            path=apath,
         )
 
     assert_result_count(
         ds.rev_status(
             recursive=True),
         1,
-        path=apathobj)
+        path=apath)
     # limiting recursion will exclude this particular path
     assert_result_count(
         ds.rev_status(
             recursive=True,
             recursion_limit=1),
         0,
-        path=apathobj)
+        path=apath)
     # negative limit is unlimited limit
     eq_(
         ds.rev_status(recursive=True, recursion_limit=-1),
