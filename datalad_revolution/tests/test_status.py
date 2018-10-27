@@ -128,7 +128,10 @@ def test_status(_path, linkpath):
         key='MD5E-s5--275876e34cf609db118f3d84b799a790.txt',
         has_content=True,
         objloc=str(ds.repo.pathobj / '.git' / 'annex' / 'objects' /
-        '7p' / 'gp' / 'MD5E-s5--275876e34cf609db118f3d84b799a790.txt' /
+        # hashdir is different on windows
+        ('f33' if on_windows else '7p') /
+        ('94b' if on_windows else 'gp') /
+        'MD5E-s5--275876e34cf609db118f3d84b799a790.txt' /
         'MD5E-s5--275876e34cf609db118f3d84b799a790.txt'))
 
     plain_recursive = ds.rev_status(recursive=True)

@@ -120,7 +120,8 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             opts = [ref]
         else:
             cmd = 'find'
-            opts = paths if paths else ['--include', '*']
+            # stringify any pathobjs
+            opts = [str(p) for p in paths] if paths else ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
             path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
             rec = info.get(path, {})

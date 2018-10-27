@@ -201,8 +201,8 @@ def test_symlinked_relpath(path):
 
     # Let's also do in subdirectory
     with chpwd(op.join(dspath, 'd')):
-        ds.repo.add("mike2", git=True)
-        ds.rev_save(message="committing", path="./mike2")
+        ds.rev_save(
+            message="committing", path=op.join(op.curdir, "mike2"))
 
         later = op.join(op.pardir, "later")
         ds.repo.add(later, git=True)
