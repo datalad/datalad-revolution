@@ -225,7 +225,7 @@ class RevolutionGitRepo(GitRepo):
         lgr.debug('Query status of %r for %s paths',
                   self, len(paths) if paths else 'all')
         return self.diffstatus(
-            fr='HEAD',
+            fr='HEAD' if self.get_hexsha() else None,
             to=None,
             paths=paths,
             untracked=untracked,
@@ -238,7 +238,8 @@ class RevolutionGitRepo(GitRepo):
         Parameters
         ----------
         fr : str
-          Revision specification (anything that Git understands).
+          Revision specification (anything that Git understands). Passing
+          `None` considers anything in the target state as new.
         to : str or None
           Revision specification (anything that Git understands), or None
           to compare to the state of the work tree.
@@ -320,7 +321,11 @@ class RevolutionGitRepo(GitRepo):
         if key in _cache:
             from_state = _cache[key]
         else:
-            from_state = self.get_content_info(paths=paths, ref=fr)
+            if fr:
+                from_state = self.get_content_info(paths=paths, ref=fr)
+            else:
+                # no ref means from nothing
+                from_state = {}
             _cache[key] = from_state
 
         for f, to_state_r in iteritems(to_state):

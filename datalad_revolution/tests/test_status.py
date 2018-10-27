@@ -28,6 +28,7 @@ from datalad.support.exceptions import (
     IncompleteResultsError,
 )
 from datalad_revolution.dataset import RevolutionDataset as Dataset
+from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad_revolution.tests.utils import (
     get_deeply_nested_structure,
     has_symlink_capability,
@@ -35,6 +36,16 @@ from datalad_revolution.tests.utils import (
 from datalad.api import (
     rev_status as status,
 )
+
+
+@with_tempfile(mkdir=True)
+def test_runnin_on_empty(path):
+    # empty repo
+    repo = AnnexRepo(path, create=True)
+    # just wrap with a dataset
+    ds = Dataset(path)
+    # and run status ... should be good and do nothing
+    eq_([], ds.rev_status())
 
 
 @with_tempfile(mkdir=True)

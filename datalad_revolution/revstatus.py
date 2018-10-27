@@ -65,7 +65,7 @@ def _yield_status(ds, paths, annexinfo, untracked, recursion_limit, queried, cac
     repo_path = ds.repo.pathobj
     lgr.debug('query %s.status() for paths: %s', ds.repo, paths)
     status = ds.repo.diffstatus(
-        fr='HEAD',
+        fr='HEAD' if ds.repo.get_hexsha() else None,
         to=None,
         paths=paths if paths else None,
         untracked=untracked,
