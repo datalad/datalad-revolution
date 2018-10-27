@@ -108,7 +108,8 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
             'get_convoluted_situation() causes appveyor to crash, '
             'reason unknown')
     repo = repocls(path, create=True)
-    ds = Dataset(repo.path)
+    # use create(force) to get an ID and config into the empty repo
+    ds = Dataset(repo.path).rev_create(force=True)
     # base content
     create_tree(
         ds.path,
@@ -266,7 +267,7 @@ def get_deeply_nested_structure(path):
     (ds.pathobj / 'subdir' / 'git_file.txt').write_text(u'dummy')
     ds.rev_save(to_git=True)
     # a subtree of datasets
-    subds = ds.create('subds_modified')
+    subds = ds.rev_create('subds_modified')
     # another dataset, plus an additional dir in it
     (Dataset(
         ds.create(
