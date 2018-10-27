@@ -149,7 +149,7 @@ def test_subds_path(path):
     subds = ds.rev_create('sub')
     with (subds.pathobj / 'some.txt').open('w') as f:
         f.write(u'test')
-    ds.add('.', recursive=True)
+    ds.rev_save(recursive=True)
     assert_repo_status(path)
 
     # querying the toplevel dataset repo for a subdspath should
