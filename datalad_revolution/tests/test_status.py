@@ -115,9 +115,23 @@ def test_status(_path, linkpath):
         path = _path
 
     ds = Dataset(path)
-    if has_symlink_capability():
+    if not on_windows:
+        # TODO test should also be has_symlink_capability(), but
+        # something in the repo base class is not behaving yet
         # check the premise of this test
         assert ds.pathobj != ds.repo.pathobj
+
+    # spotcheck that annex status reporting and availability evaluation
+    # works
+    assert_result_count(
+        ds.rev_status(annex='all'),
+        1,
+        path=ds.pathobj / 'subdir' / 'annexed_file.txt',
+        key='MD5E-s5--275876e34cf609db118f3d84b799a790.txt',
+        has_content=True,
+        objloc=ds.repo.pathobj / '.git' / 'annex' / 'objects' /
+        '7p' / 'gp' / 'MD5E-s5--275876e34cf609db118f3d84b799a790.txt' /
+        'MD5E-s5--275876e34cf609db118f3d84b799a790.txt')
 
     plain_recursive = ds.rev_status(recursive=True)
     # check integrity of individual reports with a focus on how symlinks
