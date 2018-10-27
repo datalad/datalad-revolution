@@ -2,7 +2,11 @@
 
 import os
 import os.path as op
+import shutil
+import tempfile
 from six import iteritems
+from functools import wraps
+from nose.plugins.attrib import attr
 
 from datalad.api import (
     create,
@@ -299,3 +303,24 @@ def get_deeply_nested_structure(path):
     (ut.Path(subds.path) / 'link2superdsdir').symlink_to(
         op.join('..', 'subdir'))
     return ds
+
+
+def skip_wo_symlink_capability(func):
+    """Skip test when environment does not support symlinks
+
+    Perform a behavioral test instead of top-down logic, as on
+    windows this could be on or off on a case-by-case basis.
+    """
+    @wraps(func)
+    @attr('skip_wo_symlink_capability')
+    def newfunc(*args, **kwargs):
+        try:
+            wdir = ut.Path(tempfile.mkdtemp())
+            (wdir / 'target').touch()
+            (wdir / 'link').symlink_to(wdir / 'target')
+        except Exception:
+            raise SkipTest("no symlink capabilities")
+        finally:
+            shutil.rmtree(str(wdir))
+        return func(*args, **kwargs)
+    return newfunc

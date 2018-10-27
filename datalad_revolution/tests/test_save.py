@@ -44,6 +44,7 @@ from datalad.api import (
 
 from datalad_revolution.tests.utils import (
     assert_repo_status,
+    skip_wo_symlink_capability,
 )
 
 
@@ -177,7 +178,7 @@ def test_subdataset_save(path):
     assert_repo_status(parent.path, untracked=['untracked'], modified=['sub'])
 
 
-@known_failure_windows  # there are no symlinks in a POSIX sense
+@skip_wo_symlink_capability
 @with_tempfile(mkdir=True)
 def test_symlinked_relpath(path):
     # initially ran into on OSX https://github.com/datalad/datalad/issues/2406
@@ -210,7 +211,7 @@ def test_symlinked_relpath(path):
     assert_repo_status(dspath)
 
 
-@known_failure_windows  # there are no symlinks in a POSIX sense
+@skip_wo_symlink_capability
 @with_tempfile(mkdir=True)
 def test_bf1886(path):
     parent = Dataset(path).rev_create()
@@ -505,6 +506,7 @@ def test_relpath_add(path):
     assert_repo_status(ds.path)
 
 
+@skip_wo_symlink_capability
 @with_tempfile()
 def test_bf2541(path):
     ds = create(path)
