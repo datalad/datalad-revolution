@@ -204,7 +204,7 @@ def test_create_subdataset_hierarchy_from_top(path):
     ok_(subsubds.is_installed())
     ok_(subsubds.repo.dirty)
     ok_(ds.id != subds.id != subsubds.id)
-    ds.save(recursive=True)
+    ds.rev_save(updated=True, recursive=True)
     # 'file*' in each repo was untracked before and should remain as such
     # (we don't want a #1419 resurrection
     ok_(ds.repo.dirty)
