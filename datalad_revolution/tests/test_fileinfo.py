@@ -16,6 +16,7 @@ from datalad.tests.utils import (
     assert_dict_equal,
     assert_in,
     assert_not_in,
+    assert_raises,
 )
 
 from datalad_revolution.dataset import RevolutionDataset as Dataset
@@ -30,6 +31,8 @@ from datalad_revolution.tests.utils import (
 def test_get_content_info(path):
     repo = GitRepo(path)
     assert_equal(repo.get_content_info(), {})
+    # an invalid reference causes an exception
+    assert_raises(ValueError, repo.get_content_info, ref='HEAD')
 
     ds = get_convoluted_situation(path)
     repopath = ds.repo.pathobj

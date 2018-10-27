@@ -82,6 +82,12 @@ class RevolutionGitRepo(GitRepo):
             SHASUM of the item as tracked by Git, or None, if not
             tracked. This could be different from the SHASUM of the file
             in the worktree, if it was modified.
+
+        Raises
+        ------
+        ValueError
+          In case of an invalid Git reference (e.g. 'HEAD' in an empty
+          repository)
         """
         # TODO limit by file type to replace code in subdatasets command
         info = OrderedDict()
@@ -116,17 +122,22 @@ class RevolutionGitRepo(GitRepo):
         # works for both modes
         props_re = re.compile(r'([0-9]+) (.*) (.*)\t(.*)$')
 
-        stdout, stderr = self._git_custom_command(
-            [str(f) for f in paths] if paths else [],
-            cmd,
-            log_stderr=True,
-            log_stdout=True,
-            # not sure why exactly, but log_online has to be false!
-            log_online=False,
-            expect_stderr=False,
-            shell=False,
-            # we don't want it to scream on stdout
-            expect_fail=True)
+        try:
+            stdout, stderr = self._git_custom_command(
+                [str(f) for f in paths] if paths else [],
+                cmd,
+                log_stderr=True,
+                log_stdout=True,
+                # not sure why exactly, but log_online has to be false!
+                log_online=False,
+                expect_stderr=False,
+                shell=False,
+                # we don't want it to scream on stdout
+                expect_fail=True)
+        except CommandError as exc:
+            if "fatal: Not a valid object name" in str(exc):
+                raise ValueError("Git reference '{}' invalid".format(ref))
+            raise
 
         for line in stdout.split('\0'):
             if not line:
