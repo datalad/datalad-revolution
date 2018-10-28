@@ -40,6 +40,7 @@ setup(
     author_email="team@datalad.org",
     version=get_version(),
     description="Revolutionary DataLad extension package",
+    long_description=long_description,
     packages=[pkg for pkg in find_packages('.') if pkg.startswith('datalad')],
     install_requires=[
         'datalad',
