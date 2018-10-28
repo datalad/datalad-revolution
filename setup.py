@@ -50,5 +50,8 @@ setup(
         'datalad.extensions': [
             'revolution=datalad_revolution:command_suite',
         ]
+        'datalad.tests': [
+            'revolution=datalad_revolution',
+        ],
     },
 )
