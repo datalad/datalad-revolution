@@ -51,6 +51,9 @@ from datalad_revolution.dataset import (
     EnsureDataset,
     get_dataset_root,
 )
+# for bound dataset method
+from datalad_revolution.revsave import RevSave
+
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 import datalad_revolution.utils as ut
