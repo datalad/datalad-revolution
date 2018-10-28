@@ -11,8 +11,8 @@ and speed in mind.
 Additional commands
 
 - `rev-status` -- like `git status`, but simpler and working with dataset hierarchies
-- `rev-save` -- a 2-in-1 replacement for `save` and `add` (incomplete, no recursion yet)
-- `rev-create` -- a faster `create`(incomplete, not recursive safe in superdatasets yet)
+- `rev-save` -- a 2-in-1 replacement for `save` and `add`
+- `rev-create` -- a faster `create`
 
 Additional base class functionality
 

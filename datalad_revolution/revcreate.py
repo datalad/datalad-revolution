@@ -40,7 +40,6 @@ from datalad.support.constraints import EnsureKeyChoice
 from datalad.support.constraints import EnsureDType
 from datalad.support.param import Parameter
 from datalad.utils import getpwd
-from datalad.utils import get_dataset_root
 from datalad.distribution.subdatasets import Subdatasets
 
 # required to get the binding of `add` as a dataset method
@@ -50,6 +49,7 @@ from datalad_revolution.dataset import (
     RevolutionDataset as Dataset,
     datasetmethod,
     EnsureDataset,
+    get_dataset_root,
 )
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
@@ -420,7 +420,8 @@ class RevCreate(Interface):
         # to be able to track siblings and children
         id_var = 'datalad.dataset.id'
         if id_var in tbds.config:
-            # make sure we reset this variable completely, in case of a re-create
+            # make sure we reset this variable completely, in case of a
+            # re-create
             tbds.config.unset(id_var, where='dataset')
 
         if _seed is None:
@@ -460,7 +461,8 @@ class RevCreate(Interface):
 
         # prevent git annex from ever annexing .git* stuff (gh-1597)
         attrs = tbds.repo.get_gitattributes('.git')
-        if not attrs.get('.git', {}).get('annex.largefiles', None) == 'nothing':
+        if not attrs.get('.git', {}).get(
+                'annex.largefiles', None) == 'nothing':
             tbds.repo.set_gitattributes([
                 ('**/.git*', {'annex.largefiles': 'nothing'})])
             # must use the repo.pathobj as this will have resolved symlinks
@@ -486,11 +488,8 @@ class RevCreate(Interface):
         if isinstance(dataset, Dataset) and dataset.path != tbds.path:
             # we created a dataset in another dataset
             # -> make submodule
-            # TODO this will not be able to handle saving
-            # a subdataset that is itself in a subdataset
-            # of `dataset`, yet...
-            for r in dataset.repo.save_(
-                    paths=[tbds.path],
+            for r in dataset.rev_save(
+                    path=tbds.path,
             ):
                 yield r
 

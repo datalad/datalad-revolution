@@ -34,8 +34,8 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
         objectstore = self.pathobj.joinpath(
             self.path, RevolutionGitRepo.get_git_dir(self), 'annex', 'objects')
         for f, r in iteritems(info):
-            if 'key' not in r:
-                # not annexed
+            if 'key' not in r or 'has_content' in r:
+                # not annexed or already processed
                 continue
             # test hashdirmixed first, as it is used in non-bare repos
             # which be a more frequent target
@@ -57,7 +57,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 if testpath.exists():
                     r.pop('hashdirlower', None)
                     r.pop('hashdirmixed', None)
-                    r['objloc'] = testpath
+                    r['objloc'] = str(testpath)
                     r['has_content'] = True
                     break
 
@@ -65,9 +65,6 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             self, paths=None, init='git', ref=None, eval_availability=False,
             **kwargs):
         """
-        Calling without any options given will always give the fastest
-        performance.
-
         Parameters
         ----------
         paths : list
@@ -123,7 +120,8 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             opts = [ref]
         else:
             cmd = 'find'
-            opts = paths if paths else ['--include', '*']
+            # stringify any pathobjs
+            opts = [str(p) for p in paths] if paths else ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
             path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
             rec = info.get(path, {})

@@ -12,6 +12,7 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
+import os.path as op
 from six import (
     iteritems,
     text_type,
@@ -22,7 +23,6 @@ import datalad.support.ansi_colors as ac
 
 from datalad.utils import (
     assure_list,
-    get_dataset_root,
 )
 from datalad.interface.base import (
     Interface,
@@ -41,6 +41,7 @@ from datalad_revolution.dataset import (
     require_dataset,
     resolve_path,
     path_under_dataset,
+    get_dataset_root,
 )
 import datalad_revolution.utils as ut
 
@@ -59,24 +60,35 @@ state_color_map = {
 }
 
 
-def _yield_status(ds, paths, untracked, recursion_limit, queried, cache):
+def _yield_status(ds, paths, annexinfo, untracked, recursion_limit, queried, cache):
     # take the datase that went in first
     repo_path = ds.repo.pathobj
     lgr.debug('query %s.status() for paths: %s', ds.repo, paths)
-    for path, props in iteritems(ds.repo.diffstatus(
-            fr='HEAD',
-            to=None,
+    status = ds.repo.diffstatus(
+        fr='HEAD' if ds.repo.get_hexsha() else None,
+        to=None,
+        paths=paths if paths else None,
+        untracked=untracked,
+        # TODO think about potential optimizations in case of
+        # recursive processing, as this will imply a semi-recursive
+        # look into subdatasets
+        ignore_submodules='other',
+        _cache=cache)
+    if annexinfo and hasattr(ds.repo, 'get_content_annexinfo'):
+        # this will ammend `status`
+        ds.repo.get_content_annexinfo(
             paths=paths if paths else None,
-            untracked=untracked,
-            # TODO think about potential optimizations in case of
-            # recursive processing, as this will imply a semi-recursive
-            # look into subdatasets
-            ignore_submodules='other',
-            _cache=cache)):
+            init=status,
+            eval_availability=annexinfo in ('availability', 'all'),
+            ref=None)
+    for path, props in iteritems(status):
         cpath = ds.pathobj / path.relative_to(repo_path)
         yield dict(
             props,
-            path=cpath,
+            path=str(cpath),
+            # report the dataset path rather than the repo path to avoid
+            # realpath/symlink issues
+            parentds=ds.path,
         )
         queried.add(ds.pathobj)
         if recursion_limit and props.get('type', None) == 'dataset':
@@ -85,6 +97,7 @@ def _yield_status(ds, paths, untracked, recursion_limit, queried, cache):
                 for r in _yield_status(
                         subds,
                         None,
+                        annexinfo,
                         untracked,
                         recursion_limit - 1,
                         queried,
@@ -104,6 +117,8 @@ class RevStatus(Interface):
     report on a subset of the content (selection of paths) across any number
     of datasets in the hierarchy.
 
+    *Path conventions*
+
     All reports are guaranteed to use absolute paths that are underneath the
     given or detected reference dataset, regardless of whether query paths are
     given as absolute or relative paths (with respect to the working directory,
@@ -112,6 +127,30 @@ class RevStatus(Interface):
     '.' or '..') are also supported, and are interpreted as relative paths with
     respect to the current working directory regardless of whether a reference
     dataset with specified.
+
+    When it is necessary to address a subdataset record in a superdataset
+    without causing a status query for the state _within_ the subdataset
+    itself, this can be achieved by explicitly providing a reference dataset
+    and the path to the root of the subdataset like so::
+
+      datalad rev-status --dataset . subdspath
+
+    In contrast, when the state of the subdataset within the superdataset is
+    not relevant, a status query for the content of the subdataset can be
+    obtained by adding a trailing path separator to the query path (rsync-like
+    syntax)::
+
+      datalad rev-status --dataset . subdspath/
+
+    When both aspects are relevant (the state of the subdataset content
+    and the state of the subdataset within the superdataset), both queries
+    can be combined::
+
+      datalad rev-status --dataset . subdspath subdspath/
+
+    When performing a recursive status query, both status aspects of subdataset
+    are always included in the report.
+
 
     *Content types*
 
@@ -144,7 +183,7 @@ class RevStatus(Interface):
             args=("-d", "--dataset"),
             doc="""specify the dataset to query.  If
             no dataset is given, an attempt is made to identify the dataset
-            based on the input and/or the current working directory""",
+            based on the current working directory""",
             constraints=EnsureDataset() | EnsureNone()),
         path=Parameter(
             args=("path",),
@@ -152,8 +191,25 @@ class RevStatus(Interface):
             doc="""path to be evaluated""",
             nargs="*",
             constraints=EnsureStr() | EnsureNone()),
+        annex=Parameter(
+            args=('--annex',),
+            metavar='MODE',
+            constraints=EnsureChoice(None, 'basic', 'availability', 'all'),
+            doc="""Switch whether to include information on the annex
+            content of individual files in the status report, such as
+            recorded file size. By default no annex information is reported
+            (faster). Three report modes are available: basic information
+            like file size and key name ('basic'); additionally test whether
+            file content is present in the local annex ('availability';
+            requires one or two additional file system stat calls, but does
+            not call git-annex), this will add the result properties
+            'has_content' (boolean flag) and 'objloc' (absolute path to an
+            existing annex object file); or 'all' which will report all
+            available information (presently identical to 'availability').
+            """),
         untracked=Parameter(
             args=('--untracked',),
+            metavar='MODE',
             constraints=EnsureChoice('no', 'normal', 'all'),
             doc="""If and how untracked content is reported when comparing
             a revision to the state of the work tree. 'no': no untracked
@@ -169,6 +225,7 @@ class RevStatus(Interface):
     def __call__(
             path=None,
             dataset=None,
+            annex=None,
             untracked='normal',
             recursive=False,
             recursion_limit=None):
@@ -179,6 +236,10 @@ class RevStatus(Interface):
         if path:
             # sort any path argument into the respective subdatasets
             for p in sorted(assure_list(path)):
+                # it is important to capture the exact form of the
+                # given path argument, before any normalization happens
+                # for further decision logic below
+                orig_path = str(p)
                 p = resolve_path(p, dataset)
                 root = get_dataset_root(str(p))
                 if root is None:
@@ -191,10 +252,25 @@ class RevStatus(Interface):
                         message='path not underneath this dataset',
                         logger=lgr)
                     continue
+                else:
+                    if dataset and root == str(p) and \
+                            not orig_path.endswith(op.sep):
+                        # the given path is pointing to a dataset
+                        # distinguish rsync-link syntax to identify
+                        # the dataset as whole (e.g. 'ds') vs its
+                        # content (e.g. 'ds/')
+                        super_root = get_dataset_root(op.dirname(root))
+                        if super_root:
+                            # the dataset identified by the path argument
+                            # is contained in a superdataset, and no
+                            # trailing path separator was found in the
+                            # argument -> user wants to address the dataset
+                            # as a whole (in the superdataset)
+                            root = super_root
+
                 root = ut.Path(root)
                 ps = paths_by_ds.get(root, [])
-                if p != root:
-                    ps.append(p)
+                ps.append(p)
                 paths_by_ds[root] = ps
         else:
             paths_by_ds[ds.pathobj] = None
@@ -203,6 +279,10 @@ class RevStatus(Interface):
         content_info_cache = {}
         while paths_by_ds:
             qdspath, qpaths = paths_by_ds.popitem(last=False)
+            if qpaths and qdspath in qpaths:
+                # this is supposed to be a full query, save some
+                # cycles sifting through the actual path arguments
+                qpaths = []
             # try to recode the dataset path wrt to the reference
             # dataset
             # the path that it might have been located by could
@@ -235,6 +315,7 @@ class RevStatus(Interface):
             for r in _yield_status(
                     qds,
                     qpaths,
+                    annex,
                     untracked,
                     recursion_limit
                     if recursion_limit is not None else -1
@@ -243,7 +324,7 @@ class RevStatus(Interface):
                     content_info_cache):
                 yield dict(
                     r,
-                    refds=ds.pathobj,
+                    refds=ds.path,
                     action='status',
                     status='ok',
                 )

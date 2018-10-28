@@ -37,7 +37,7 @@ from datalad_revolution.tests.utils import (
 def test_diff(path, norepo):
     ds = Dataset(path).rev_create()
     assert_repo_status(ds.path)
-    assert_raises(CommandError, ds.repo.diff, fr='WTF', to='MIKE')
+    assert_raises(ValueError, ds.repo.diff, fr='WTF', to='MIKE')
     # no diff
     eq_(ds.repo.diff('HEAD', None), {})
     # bogus path makes no difference

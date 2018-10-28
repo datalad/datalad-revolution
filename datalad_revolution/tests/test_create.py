@@ -14,32 +14,34 @@ from datalad.tests.utils import known_failure_windows
 
 import os
 import os.path as op
-from os.path import join as opj
-from os.path import lexists
 
 from datalad_revolution.dataset import (
     RevolutionDataset as Dataset
 )
 from datalad.api import rev_create as create
-from datalad.utils import chpwd
-from datalad.utils import _path_
+from datalad.utils import (
+    chpwd,
+    _path_,
+)
 from datalad.cmd import Runner
 
-from datalad.tests.utils import with_tempfile
-from datalad.tests.utils import create_tree
-from datalad.tests.utils import eq_
-from datalad.tests.utils import ok_
-from datalad.tests.utils import assert_not_in
-from datalad.tests.utils import assert_in
-from datalad.tests.utils import assert_raises
-from datalad.tests.utils import assert_equal
-from datalad.tests.utils import assert_status
-from datalad.tests.utils import assert_in_results
-from datalad.tests.utils import ok_clean_git
-from datalad.tests.utils import ok_exists
-from datalad.tests.utils import with_tree
-from datalad.tests.utils import ok_file_has_content
-from datalad.tests.utils import ok_file_under_git
+from datalad.tests.utils import (
+    with_tempfile,
+    create_tree,
+    eq_,
+    ok_,
+    assert_not_in,
+    assert_in,
+    assert_raises,
+    assert_equal,
+    assert_status,
+    assert_in_results,
+    ok_clean_git,
+    with_tree,
+    ok_file_has_content,
+    ok_file_under_git,
+    SkipTest,
+)
 
 
 _dataset_hierarchy_template = {
@@ -62,7 +64,7 @@ def test_create_raises(path, outside_path):
     assert_raises(ValueError, ds.create, no_annex=True, annex_opts=['some'])
     assert_raises(ValueError, ds.create, no_annex=True, annex_init_opts=['some'])
 
-    with open(opj(path, "somefile.tst"), 'w') as f:
+    with open(op.join(path, "somefile.tst"), 'w') as f:
         f.write("some")
     # non-empty without `force`:
     assert_in_results(
@@ -165,7 +167,7 @@ def test_create_sub(path):
     ok_(subds.get_superdataset() == ds)
 
     # 2. create sub without adding to super:
-    subds2 = Dataset(opj(path, "someother")).rev_create()
+    subds2 = Dataset(op.join(path, "someother")).rev_create()
     ok_(isinstance(subds2, Dataset))
     ok_(subds2.is_installed())
     ok_clean_git(subds2.path, annex=True)
@@ -190,7 +192,7 @@ def test_create_sub(path):
 def test_create_subdataset_hierarchy_from_top(path):
     # how it would look like to overlay a subdataset hierarchy onto
     # an existing directory tree
-    ds = Dataset(opj(path, 'origin')).rev_create(force=True)
+    ds = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # we got a dataset ....
     ok_(ds.is_installed())
     # ... but it has untracked content
@@ -202,14 +204,17 @@ def test_create_subdataset_hierarchy_from_top(path):
     ok_(subsubds.is_installed())
     ok_(subsubds.repo.dirty)
     ok_(ds.id != subds.id != subsubds.id)
-    ds.save(recursive=True)
+    ds.rev_save(updated=True, recursive=True)
     # 'file*' in each repo was untracked before and should remain as such
     # (we don't want a #1419 resurrection
     ok_(ds.repo.dirty)
     ok_(subds.repo.dirty)
     ok_(subsubds.repo.dirty)
     # if we add these three, we should get clean
-    ds.add(['file1', opj(subds.path, 'file2'), opj(subsubds.path, 'file3')])
+    ds.rev_save([
+        'file1',
+        op.join(subds.path, 'file2'),
+        op.join(subsubds.path, 'file3')])
     ok_clean_git(ds.path)
     ok_(ds.id != subds.id != subsubds.id)
 
@@ -222,20 +227,20 @@ def test_nested_create(path):
     # to document some more organic usage pattern
     ds = Dataset(path).rev_create()
     ok_clean_git(ds.path)
-    lvl2relpath = opj('lvl1', 'lvl2')
-    lvl2path = opj(ds.path, lvl2relpath)
+    lvl2relpath = op.join('lvl1', 'lvl2')
+    lvl2path = op.join(ds.path, lvl2relpath)
     os.makedirs(lvl2path)
-    os.makedirs(opj(ds.path, 'lvl1', 'empty'))
-    with open(opj(lvl2path, 'file'), 'w') as f:
+    os.makedirs(op.join(ds.path, 'lvl1', 'empty'))
+    with open(op.join(lvl2path, 'file'), 'w') as f:
         f.write('some')
-    ok_(ds.add('.'))
+    ok_(ds.rev_save())
     # later create subdataset in a fresh dir
     # WINDOWS FAILURE IS NEXT LINE
-    subds1 = ds.rev_create(opj('lvl1', 'subds'))
+    subds1 = ds.rev_create(op.join('lvl1', 'subds'))
     ok_clean_git(ds.path)
-    eq_(ds.subdatasets(result_xfm='relpaths'), [opj('lvl1', 'subds')])
+    eq_(ds.subdatasets(result_xfm='relpaths'), [op.join('lvl1', 'subds')])
     # later create subdataset in an existing empty dir
-    subds2 = ds.rev_create(opj('lvl1', 'empty'))
+    subds2 = ds.rev_create(op.join('lvl1', 'empty'))
     ok_clean_git(ds.path)
     # later try to wrap existing content into a new subdataset
     # but that won't work
@@ -252,7 +257,7 @@ def test_nested_create(path):
     #              on_failure='ignore', result_xfm=None, result_filter=None),
     #    status='error', action='add')
     # only way to make it work is to unannex the content upfront
-    ds.repo._run_annex_command('unannex', annex_options=[opj(lvl2relpath, 'file')])
+    ds.repo._run_annex_command('unannex', annex_options=[op.join(lvl2relpath, 'file')])
     # nothing to save, git-annex commits the unannex itself
     assert_status(
         'ok' if ds.repo.config.getint("annex", "version") == 6 else 'notneeded',
@@ -292,11 +297,13 @@ def test_saving_prior(topdir):
 @known_failure_windows  # https://github.com/datalad/datalad/issues/2606
 @with_tempfile(mkdir=True)
 def test_create_withprocedure(path):
+    raise SkipTest(
+        'Needs resolution of https://github.com/datalad/datalad/pull/2946')
     # first without
     ds = create(path)
-    assert(not lexists(opj(ds.path, 'README.rst')))
+    assert(not op.lexists(op.join(ds.path, 'README.rst')))
     ds.remove()
-    assert(not lexists(ds.path))
+    assert(not op.lexists(ds.path))
     # now for reals...
     ds = create(
         # needs to identify the dataset, otherwise post-proc
@@ -332,7 +339,7 @@ def test_create_text_no_annex(path):
                      # should we adjust the rule to consider only non empty files?
         }
     )
-    ds.add(['t', 'b'])
+    ds.rev_save(['t', 'b'])
     ok_file_under_git(path, 't', annexed=False)
     ok_file_under_git(path, 'b', annexed=True)
 

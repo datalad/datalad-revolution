@@ -28,12 +28,24 @@ from datalad.support.exceptions import (
     IncompleteResultsError,
 )
 from datalad_revolution.dataset import RevolutionDataset as Dataset
+from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
 from datalad_revolution.tests.utils import (
     get_deeply_nested_structure,
+    has_symlink_capability,
 )
 from datalad.api import (
     rev_status as status,
 )
+
+
+@with_tempfile(mkdir=True)
+def test_runnin_on_empty(path):
+    # empty repo
+    repo = AnnexRepo(path, create=True)
+    # just wrap with a dataset
+    ds = Dataset(path)
+    # and run status ... should be good and do nothing
+    eq_([], ds.rev_status())
 
 
 @with_tempfile(mkdir=True)
@@ -58,14 +70,12 @@ def test_status_basics(path, linkpath, otherdir):
     assert len(stat) > 2
     # check the composition
     for s in stat:
-        # all paths are native path objects
-        assert isinstance(s['path'], ut.Path)
         eq_(s['status'], 'ok')
         eq_(s['action'], 'status')
         eq_(s['state'], 'clean')
         eq_(s['type'], 'file')
         assert_in('gitshasum', s)
-        eq_(s['refds'], ds.pathobj)
+        eq_(s['refds'], ds.path)
 
 
 @with_tempfile(mkdir=True)
@@ -95,7 +105,7 @@ def test_status(_path, linkpath):
     # do the setup on the real path, not the symlink, to have its
     # bugs not affect this test of status()
     ds = get_deeply_nested_structure(str(_path))
-    if not on_windows:
+    if has_symlink_capability():
         # make it more complicated by default
         ut.Path(linkpath).symlink_to(_path, target_is_directory=True)
         path = linkpath
@@ -104,8 +114,25 @@ def test_status(_path, linkpath):
 
     ds = Dataset(path)
     if not on_windows:
+        # TODO test should also be has_symlink_capability(), but
+        # something in the repo base class is not behaving yet
         # check the premise of this test
         assert ds.pathobj != ds.repo.pathobj
+
+    # spotcheck that annex status reporting and availability evaluation
+    # works
+    assert_result_count(
+        ds.rev_status(annex='all'),
+        1,
+        path=str(ds.pathobj / 'subdir' / 'annexed_file.txt'),
+        key='MD5E-s5--275876e34cf609db118f3d84b799a790.txt',
+        has_content=True,
+        objloc=str(ds.repo.pathobj / '.git' / 'annex' / 'objects' /
+        # hashdir is different on windows
+        ('f33' if on_windows else '7p') /
+        ('94b' if on_windows else 'gp') /
+        'MD5E-s5--275876e34cf609db118f3d84b799a790.txt' /
+        'MD5E-s5--275876e34cf609db118f3d84b799a790.txt'))
 
     plain_recursive = ds.rev_status(recursive=True)
     # check integrity of individual reports with a focus on how symlinks
@@ -120,6 +147,9 @@ def test_status(_path, linkpath):
             assert res['type'] == 'symlink', res
         else:
             assert res['type'] != 'symlink', res
+        # every item must report its parent dataset
+        assert_in('parentds', res)
+
     # bunch of smoke tests
     # query of '.' is same as no path
     eq_(plain_recursive, ds.rev_status(path='.', recursive=True))
@@ -158,23 +188,23 @@ def test_status(_path, linkpath):
             1,
             state='untracked',
             type='directory',
-            refds=ds.pathobj,
+            refds=ds.path,
             # path always comes out a full path inside the queried dataset
-            path=apathobj,
+            path=apath,
         )
 
     assert_result_count(
         ds.rev_status(
             recursive=True),
         1,
-        path=apathobj)
+        path=apath)
     # limiting recursion will exclude this particular path
     assert_result_count(
         ds.rev_status(
             recursive=True,
             recursion_limit=1),
         0,
-        path=apathobj)
+        path=apath)
     # negative limit is unlimited limit
     eq_(
         ds.rev_status(recursive=True, recursion_limit=-1),

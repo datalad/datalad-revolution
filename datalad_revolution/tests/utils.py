@@ -2,7 +2,11 @@
 
 import os
 import os.path as op
+import shutil
+import tempfile
 from six import iteritems
+from functools import wraps
+from nose.plugins.attrib import attr
 
 from datalad.api import (
     create,
@@ -104,7 +108,8 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
             'get_convoluted_situation() causes appveyor to crash, '
             'reason unknown')
     repo = repocls(path, create=True)
-    ds = Dataset(repo.path)
+    # use create(force) to get an ID and config into the empty repo
+    ds = Dataset(repo.path).rev_create(force=True)
     # base content
     create_tree(
         ds.path,
@@ -130,7 +135,7 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
                 'file_dropped_clean': 'file_dropped_clean',
             }
         )
-    ds.add('.')
+    ds.rev_save()
     if isinstance(ds.repo, AnnexRepo):
         # some files straight in git
         create_tree(
@@ -144,7 +149,7 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
                 'file_ingit_modified': 'file_ingit_clean',
             }
         )
-        ds.add('.', to_git=True)
+        ds.rev_save(to_git=True)
         ds.drop([
             'file_dropped_clean',
             op.join('subdir', 'file_dropped_clean')],
@@ -172,7 +177,7 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
         pdspath,
         {'file_clean': 'file_ingit_clean'}
     )
-    Dataset(pdspath).add('.')
+    Dataset(pdspath).rev_save()
     assert_repo_status(pdspath)
     # staged subds, and files
     create(op.join(ds.path, 'subds_added'))
@@ -262,7 +267,7 @@ def get_deeply_nested_structure(path):
     (ds.pathobj / 'subdir' / 'git_file.txt').write_text(u'dummy')
     ds.rev_save(to_git=True)
     # a subtree of datasets
-    subds = ds.create('subds_modified')
+    subds = ds.rev_create('subds_modified')
     # another dataset, plus an additional dir in it
     (Dataset(
         ds.create(
@@ -279,7 +284,7 @@ def get_deeply_nested_structure(path):
     )
     (ut.Path(subds.path) / 'subdir').mkdir()
     (ut.Path(subds.path) / 'subdir' / 'annexed_file.txt').write_text(u'dummy')
-    subds.add('.')
+    subds.rev_save()
     (ds.pathobj / 'directory_untracked').mkdir()
     # symlink farm #1
     # symlink to annexed file
@@ -299,3 +304,30 @@ def get_deeply_nested_structure(path):
     (ut.Path(subds.path) / 'link2superdsdir').symlink_to(
         op.join('..', 'subdir'))
     return ds
+
+
+def has_symlink_capability():
+    try:
+        wdir = ut.Path(tempfile.mkdtemp())
+        (wdir / 'target').touch()
+        (wdir / 'link').symlink_to(wdir / 'target')
+        return True
+    except Exception:
+        return False
+    finally:
+        shutil.rmtree(str(wdir))
+
+
+def skip_wo_symlink_capability(func):
+    """Skip test when environment does not support symlinks
+
+    Perform a behavioral test instead of top-down logic, as on
+    windows this could be on or off on a case-by-case basis.
+    """
+    @wraps(func)
+    @attr('skip_wo_symlink_capability')
+    def newfunc(*args, **kwargs):
+        if not has_symlink_capability():
+            raise SkipTest("no symlink capabilities")
+        return func(*args, **kwargs)
+    return newfunc
