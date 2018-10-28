@@ -211,6 +211,7 @@ def test_symlinked_relpath(path):
     assert_repo_status(dspath)
 
 
+@known_failure_windows  # https://github.com/datalad/datalad/issues/2955
 @skip_wo_symlink_capability
 @with_tempfile(mkdir=True)
 def test_bf1886(path):
@@ -506,6 +507,7 @@ def test_relpath_add(path):
     assert_repo_status(ds.path)
 
 
+@known_failure_windows  # https://github.com/datalad/datalad/issues/2955
 @skip_wo_symlink_capability
 @with_tempfile()
 def test_bf2541(path):
