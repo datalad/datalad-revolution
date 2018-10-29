@@ -77,8 +77,9 @@ def test_create_raises(path, outside_path):
     assert_in_results(
         ds.rev_create(outside_path, **raw),
         status='error',
-        message='path not associated with any dataset')
-
+        message=(
+            'dataset containing given paths is not underneath the reference '
+            'dataset %s: %s', ds, outside_path))
     # create a sub:
     ds.rev_create('sub')
     # fail when doing it again
@@ -124,8 +125,7 @@ def test_create_curdir(path, path2):
 @with_tempfile
 def test_create(path):
     ds = Dataset(path)
-    ds.rev_create(description="funny", native_metadata_type=['bim', 'bam', 'bum'],
-              shared_access='world')
+    ds.rev_create(description="funny", shared_access='world')
     ok_(ds.is_installed())
     ok_clean_git(ds.path, annex=True)
 
@@ -140,9 +140,6 @@ def test_create(path):
     # check datset ID
     eq_(ds.config.get_value('datalad.dataset', 'id'),
         ds.id)
-    assert_equal(
-        ds.config.get_value('datalad.metadata', 'nativetype'),
-        ('bim', 'bam', 'bum'))
 
 
 @with_tempfile
@@ -313,35 +310,6 @@ def test_create_withprocedure(path):
     ok_clean_git(path)
     ds.config.reload()
     eq_(ds.config['datalad.metadata.nativetype'], ('xmp', 'datacite'))
-
-
-# Skipping on Windows due to lack of MagicMime support:
-# https://github.com/datalad/datalad/pull/2770#issuecomment-415842284
-@known_failure_windows
-@with_tempfile(mkdir=True)
-def test_create_text_no_annex(path):
-    ds = create(path, text_no_annex=True)
-    ok_clean_git(path)
-    import re
-    ok_file_has_content(
-        _path_(path, '.gitattributes'),
-        content='\* annex\.largefiles=\(not\(mimetype=text/\*\)\)',
-        re_=True,
-        match=False,
-        flags=re.MULTILINE
-    )
-    # and check that it is really committing text files to git and binaries
-    # to annex
-    create_tree(path,
-        {
-            't': 'some text',
-            'b': ''  # empty file is not considered to be a text file
-                     # should we adjust the rule to consider only non empty files?
-        }
-    )
-    ds.rev_save(['t', 'b'])
-    ok_file_under_git(path, 't', annexed=False)
-    ok_file_under_git(path, 'b', annexed=True)
 
 
 @with_tempfile(mkdir=True)

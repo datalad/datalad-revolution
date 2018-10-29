@@ -247,7 +247,7 @@ class RevStatus(Interface):
                     yield dict(
                         action='status',
                         path=p,
-                        refds=ds.pathobj,
+                        refds=ds.path,
                         status='error',
                         message='path not underneath this dataset',
                         logger=lgr)
@@ -293,7 +293,7 @@ class RevStatus(Interface):
                 # there is only a single refds
                 yield dict(
                     path=text_type(qdspath),
-                    refds=ds.pathobj,
+                    refds=ds.path,
                     action='status',
                     status='error',
                     message=(
