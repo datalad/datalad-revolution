@@ -15,6 +15,7 @@ import logging
 import random
 import uuid
 from six import iteritems
+from argparse import REMAINDER
 
 from os import listdir
 import os.path as op
@@ -25,18 +26,13 @@ from datalad.interface.base import Interface
 from datalad.interface.utils import eval_results
 from datalad.interface.base import build_doc
 from datalad.interface.common_opts import (
-    git_opts,
-    annex_opts,
-    annex_init_opts,
     location_description,
-    shared_access_opt,
 )
 from datalad.interface.results import ResultXFM
 from datalad.support.constraints import (
     EnsureStr,
     EnsureNone,
     EnsureKeyChoice,
-    EnsureDType,
 )
 from datalad.support.param import Parameter
 from datalad.utils import getpwd
@@ -134,18 +130,18 @@ class RevCreate(Interface):
     _params_ = dict(
         path=Parameter(
             args=("path",),
+            nargs='?',
             metavar='PATH',
             doc="""path where the dataset shall be created, directories
             will be created as necessary. If no location is provided, a dataset
             will be created in the current working directory. Either way the
             command will error if the target directory is not empty.
             Use `force` to create a dataset in a non-empty directory.""",
-            nargs='?',
             # put dataset 2nd to avoid useless conversion
             constraints=EnsureStr() | EnsureDataset() | EnsureNone()),
         dataset=Parameter(
             args=("-d", "--dataset"),
-            metavar='PATH',
+            metavar='DATASET',
             doc="""specify the dataset to perform the create operation on. If
             a dataset is given, a new subdataset will be created in it.""",
             constraints=EnsureDataset() | EnsureNone()),
@@ -154,34 +150,19 @@ class RevCreate(Interface):
             doc="""enforce creation of a dataset in a non-empty directory""",
             action='store_true'),
         description=location_description,
-        # TODO could move into cfg_annex plugin
         no_annex=Parameter(
             args=("--no-annex",),
             doc="""if set, a plain Git repository will be created without any
             annex""",
             action='store_true'),
-        annex_version=Parameter(
-            args=("--annex-version",),
-            doc="""select a particular annex repository version. The
-            list of supported versions depends on the available git-annex
-            version. This should be left untouched, unless you know what
-            you are doing""",
-            constraints=EnsureDType(int) | EnsureNone()),
-        # TODO could move into cfg_annex plugin
-        annex_backend=Parameter(
-            args=("--annex-backend",),
+        opts=Parameter(
+            args=("opts",),
+            metavar='OPTION',
+            nargs=REMAINDER,
             constraints=EnsureStr() | EnsureNone(),
-            # not listing choices here on purpose to avoid future bugs
-            doc="""set default hashing backend used by the new dataset.
-            For a list of supported backends see the git-annex
-            documentation. The default is optimized for maximum compatibility
-            of datasets across platforms (especially those with limited
-            path lengths)"""),
-        # TODO could move into cfg_access/permissions plugin
-        shared_access=shared_access_opt,
-        git_opts=git_opts,
-        annex_opts=annex_opts,
-        annex_init_opts=annex_init_opts,
+            doc="""options for :command:`git init`"""),
+        # TODO seems to only cause a config flag to be set, this could be done
+        # in a procedure
         fake_dates=Parameter(
             args=('--fake-dates',),
             action='store_true',
@@ -199,15 +180,9 @@ class RevCreate(Interface):
             description=None,
             dataset=None,
             no_annex=False,
-            annex_version=None,
-            annex_backend='MD5E',
-            shared_access=None,
-            git_opts=None,
-            annex_opts=None,
-            annex_init_opts=None,
-            fake_dates=False
+            fake_dates=False,
+            opts=None
     ):
-
         refds_path = dataset.path if hasattr(dataset, 'path') else dataset
         orig_path = path
 
@@ -218,22 +193,11 @@ class RevCreate(Interface):
         #    desired location, either at `path` or PWD
 
         # sanity check first
-        if git_opts:
-            lgr.warning(
-                "`git_opts` argument is presently ignored, please complain!")
         if no_annex:
             if description:
                 raise ValueError("Incompatible arguments: cannot specify "
                                  "description for annex repo and declaring "
                                  "no annex repo.")
-            if annex_opts:
-                raise ValueError("Incompatible arguments: cannot specify "
-                                 "options for annex and declaring no "
-                                 "annex repo.")
-            if annex_init_opts:
-                raise ValueError("Incompatible arguments: cannot specify "
-                                 "options for annex init and declaring no "
-                                 "annex repo.")
 
         if path:
             path = resolve_path(path, dataset)
@@ -306,12 +270,6 @@ class RevCreate(Interface):
                 yield res
                 return
 
-        if git_opts is None:
-            git_opts = {}
-        if shared_access:
-            # configure `git --shared` value
-            git_opts['shared'] = shared_access
-
         # important to use the given Dataset object to avoid spurious ID
         # changes with not-yet-materialized Datasets
         tbds = dataset if isinstance(dataset, Dataset) and \
@@ -330,6 +288,9 @@ class RevCreate(Interface):
         # stuff that we create and want to have tracked with git (not annex)
         add_to_git = {}
 
+        if opts is not None and isinstance(opts, list):
+            opts = {'_from_cmdline_': opts}
+
         # create and configure desired repository
         if no_annex:
             lgr.info("Creating a new git repo at %s", tbds.path)
@@ -337,7 +298,7 @@ class RevCreate(Interface):
                 tbds.path,
                 url=None,
                 create=True,
-                git_opts=git_opts,
+                git_opts=opts,
                 fake_dates=fake_dates)
             # place a .noannex file to indicate annex to leave this repo alone
             stamp_path = ut.Path(tbds.path) / '.noannex'
@@ -354,16 +315,16 @@ class RevCreate(Interface):
                 create=True,
                 # do not set backend here, to avoid a dedicated commit
                 backend=None,
-                version=annex_version,
+                # None causes version to be taken from config
+                version=None,
                 description=description,
-                git_opts=git_opts,
-                annex_opts=annex_opts,
-                annex_init_opts=annex_init_opts,
+                git_opts=opts,
                 fake_dates=fake_dates
             )
             # set the annex backend in .gitattributes as a staged change
             tbrepo.set_default_backend(
-                annex_backend, persistent=True, commit=False)
+                cfg.obtain('datalad.repo.backend', default='MD5E'),
+                persistent=True, commit=False)
             add_to_git[tbds.repo.pathobj / '.gitattributes'] = {
                 'type': 'file',
                 'state': 'added'}

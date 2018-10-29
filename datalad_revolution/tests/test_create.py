@@ -126,7 +126,10 @@ def test_create_curdir(path, path2):
 @with_tempfile
 def test_create(path):
     ds = Dataset(path)
-    ds.rev_create(description="funny", shared_access='world')
+    ds.rev_create(
+        description="funny",
+        # custom git init option
+        opts=dict(shared='world'))
     ok_(ds.is_installed())
     ok_clean_git(ds.path, annex=True)
 
