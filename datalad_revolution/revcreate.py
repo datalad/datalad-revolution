@@ -18,8 +18,6 @@ from six import iteritems
 
 from os import listdir
 import os.path as op
-from os.path import isdir
-from os.path import join as opj
 
 from datalad import cfg
 from datalad import _seed
@@ -27,17 +25,21 @@ from datalad.interface.base import Interface
 from datalad.interface.annotate_paths import AnnotatePaths
 from datalad.interface.utils import eval_results
 from datalad.interface.base import build_doc
-from datalad.interface.common_opts import git_opts
-from datalad.interface.common_opts import annex_opts
-from datalad.interface.common_opts import annex_init_opts
-from datalad.interface.common_opts import location_description
-from datalad.interface.common_opts import nosave_opt
-from datalad.interface.common_opts import shared_access_opt
+from datalad.interface.common_opts import (
+    git_opts,
+    annex_opts,
+    annex_init_opts,
+    location_description,
+    nosave_opt,
+    shared_access_opt,
+)
 from datalad.interface.results import ResultXFM
-from datalad.support.constraints import EnsureStr
-from datalad.support.constraints import EnsureNone
-from datalad.support.constraints import EnsureKeyChoice
-from datalad.support.constraints import EnsureDType
+from datalad.support.constraints import (
+    EnsureStr,
+    EnsureNone,
+    EnsureKeyChoice,
+    EnsureDType,
+)
 from datalad.support.param import Parameter
 from datalad.utils import getpwd
 from datalad.distribution.subdatasets import Subdatasets
@@ -61,7 +63,7 @@ import datalad_revolution.utils as ut
 
 __docformat__ = 'restructuredtext'
 
-lgr = logging.getLogger('datalad.distribution.create')
+lgr = logging.getLogger('datalad.revolution.create')
 
 
 # TODO for now carry a copy of this one, until datalad-core returns
@@ -357,7 +359,7 @@ class RevCreate(Interface):
             else Dataset(path['path'])
 
         # don't create in non-empty directory without `force`:
-        if isdir(tbds.path) and listdir(tbds.path) != [] and not force:
+        if op.isdir(tbds.path) and listdir(tbds.path) != [] and not force:
             path.update({
                 'status': 'error',
                 'message':
