@@ -91,14 +91,14 @@ class RevCreate(Interface):
     current directory. The new dataset can optionally be registered in an
     existing :term:`superdataset` (the new dataset's path needs to be located
     within the superdataset for that, and the superdataset needs to be given
-    explicitly). It is recommended to provide a brief description to label
-    the dataset's nature *and* location, e.g. "Michael's music on black
-    laptop". This helps humans to identify data locations in distributed
-    scenarios.  By default an identifier comprised of user and machine name,
-    plus path will be generated.
+    explicitly via [PY: `dataset` PY][CMD: --dataset CMD]). It is recommended
+    to provide a brief description to label the dataset's nature *and*
+    location, e.g. "Michael's music on black laptop". This helps humans to
+    identify data locations in distributed scenarios.  By default an identifier
+    comprised of user and machine name, plus path will be generated.
 
-    This command only creates a new dataset, it does not add any content to it,
-    even if the target directory already contains additional files or
+    This command only creates a new dataset, it does not add existing content
+    to it, even if the target directory already contains additional files or
     directories.
 
     Plain Git repositories can be created via the [PY: `no_annex` PY][CMD: --no-annex CMD] flag.
@@ -155,12 +155,17 @@ class RevCreate(Interface):
             doc="""if set, a plain Git repository will be created without any
             annex""",
             action='store_true'),
-        opts=Parameter(
-            args=("opts",),
-            metavar='OPTION',
+        initopts=Parameter(
+            args=("initopts",),
+            metavar='INIT OPTIONS',
             nargs=REMAINDER,
-            constraints=EnsureStr() | EnsureNone(),
-            doc="""options for :command:`git init`"""),
+            doc="""options to pass to :command:`git init`. [PY: Options can be
+            given as a list of command line arguments or as a GitPython-style
+            option dictionary PY][CMD: Any argument specified after the
+            destination path of the repository will be passed to git-init
+            as-is CMD]. Note that not all options will lead to viable results.
+            For example '--bare' will not yield a repository where DataLad
+            can adjust files in its worktree."""),
         # TODO seems to only cause a config flag to be set, this could be done
         # in a procedure
         fake_dates=Parameter(
@@ -181,7 +186,7 @@ class RevCreate(Interface):
             dataset=None,
             no_annex=False,
             fake_dates=False,
-            opts=None
+            initopts=None
     ):
         refds_path = dataset.path if hasattr(dataset, 'path') else dataset
         orig_path = path
@@ -288,8 +293,8 @@ class RevCreate(Interface):
         # stuff that we create and want to have tracked with git (not annex)
         add_to_git = {}
 
-        if opts is not None and isinstance(opts, list):
-            opts = {'_from_cmdline_': opts}
+        if initopts is not None and isinstance(initopts, list):
+            initopts = {'_from_cmdline_': initopts}
 
         # create and configure desired repository
         if no_annex:
@@ -298,7 +303,7 @@ class RevCreate(Interface):
                 tbds.path,
                 url=None,
                 create=True,
-                git_opts=opts,
+                git_opts=initopts,
                 fake_dates=fake_dates)
             # place a .noannex file to indicate annex to leave this repo alone
             stamp_path = ut.Path(tbds.path) / '.noannex'
@@ -318,7 +323,7 @@ class RevCreate(Interface):
                 # None causes version to be taken from config
                 version=None,
                 description=description,
-                git_opts=opts,
+                git_opts=initopts,
                 fake_dates=fake_dates
             )
             # set the annex backend in .gitattributes as a staged change

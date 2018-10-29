@@ -61,8 +61,6 @@ def test_create_raises(path, outside_path):
     ds = Dataset(path)
     # incompatible arguments (annex only):
     assert_raises(ValueError, ds.create, no_annex=True, description='some')
-    assert_raises(ValueError, ds.create, no_annex=True, annex_opts=['some'])
-    assert_raises(ValueError, ds.create, no_annex=True, annex_init_opts=['some'])
 
     with open(op.join(path, "somefile.tst"), 'w') as f:
         f.write("some")
@@ -129,7 +127,7 @@ def test_create(path):
     ds.rev_create(
         description="funny",
         # custom git init option
-        opts=dict(shared='world'))
+        initopts=dict(shared='world'))
     ok_(ds.is_installed())
     ok_clean_git(ds.path, annex=True)
 
