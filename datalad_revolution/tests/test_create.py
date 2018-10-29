@@ -27,19 +27,15 @@ from datalad.cmd import Runner
 
 from datalad.tests.utils import (
     with_tempfile,
-    create_tree,
     eq_,
     ok_,
     assert_not_in,
     assert_in,
     assert_raises,
-    assert_equal,
     assert_status,
     assert_in_results,
     ok_clean_git,
     with_tree,
-    ok_file_has_content,
-    ok_file_under_git,
     SkipTest,
 )
 

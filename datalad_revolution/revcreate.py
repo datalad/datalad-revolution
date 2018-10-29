@@ -235,17 +235,6 @@ class RevCreate(Interface):
                         dataset, str(path)),
                 )
                 return
-        if orig_path and dataset and refds is None:
-            # Given a path and a dataset (path) not pointing to installed
-            # dataset
-                msg = "No installed dataset at %s found." % dataset.path
-                dsroot = get_dataset_root(dataset.path)
-                if dsroot:
-                    msg += " If you meant to add to the %s dataset, use that path " \
-                           "instead but remember that if dataset is provided, " \
-                           "relative paths are relative to the top of the " \
-                           "dataset." % dsroot
-                raise ValueError(msg)
 
         # try to locate an immediate parent dataset
         # we want to know this (irrespective of whether we plan on adding
@@ -414,7 +403,7 @@ class RevCreate(Interface):
         yield res
 
     @staticmethod
-    def custom_result_renderer(res, **kwargs):
+    def custom_result_renderer(res, **kwargs):  # pragma: no cover
         from datalad.ui import ui
         if res.get('action', None) == 'create' and \
                res.get('status', None) == 'ok' and \
