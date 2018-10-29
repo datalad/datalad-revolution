@@ -339,6 +339,12 @@ class RevCreate(Interface):
                 create=True,
                 git_opts=git_opts,
                 fake_dates=fake_dates)
+            # place a .noannex file to indicate annex to leave this repo alone
+            stamp_path = ut.Path(tbds.path) / '.noannex'
+            stamp_path.touch()
+            add_to_git[stamp_path] = {
+                'type': 'file',
+                'state': 'untracked'}
         else:
             # always come with annex when created from scratch
             lgr.info("Creating a new annex repo at %s", tbds.path)

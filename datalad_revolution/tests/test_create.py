@@ -120,6 +120,7 @@ def test_create_curdir(path, path2):
     ds = Dataset(path2)
     ok_(ds.is_installed())
     ok_clean_git(ds.path, annex=False)
+    ok_(op.exists(op.join(ds.path, '.noannex')))
 
 
 @with_tempfile
