@@ -285,7 +285,7 @@ class RevCreate(Interface):
         # in this location
         # it will cost some filesystem traversal though...
         parentds_path = get_dataset_root(
-            op.normpath(op.join(path, os.pardir)))
+            op.normpath(op.join(str(path), os.pardir)))
         if parentds_path:
             # we cannot get away with a simple
             # GitRepo.get_content_info(), as we need to detect
