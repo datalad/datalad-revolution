@@ -330,6 +330,7 @@ class RevCreate(Interface):
         # stuff that we create and want to have tracked with git (not annex)
         add_to_git = {}
 
+        # create and configure desired repository
         if no_annex:
             lgr.info("Creating a new git repo at %s", tbds.path)
             GitRepo(
@@ -360,6 +361,35 @@ class RevCreate(Interface):
             add_to_git[tbds.repo.pathobj / '.gitattributes'] = {
                 'type': 'file',
                 'state': 'added'}
+            # make sure that v6 annex repos never commit content under .datalad
+            attrs_cfg = (
+                ('config', 'annex.largefiles', 'nothing'),
+                ('metadata/aggregate*', 'annex.largefiles', 'nothing'),
+                ('metadata/objects/**', 'annex.largefiles',
+                 '({})'.format(cfg.obtain(
+                     'datalad.metadata.create-aggregate-annex-limit'))))
+            attrs = tbds.repo.get_gitattributes(
+                [op.join('.datalad', i[0]) for i in attrs_cfg])
+            set_attrs = []
+            for p, k, v in attrs_cfg:
+                if not attrs.get(
+                        op.join('.datalad', p), {}).get(k, None) == v:
+                    set_attrs.append((p, {k: v}))
+            if set_attrs:
+                tbds.repo.set_gitattributes(
+                    set_attrs,
+                    attrfile=op.join('.datalad', '.gitattributes'))
+
+            # prevent git annex from ever annexing .git* stuff (gh-1597)
+            attrs = tbds.repo.get_gitattributes('.git')
+            if not attrs.get('.git', {}).get(
+                    'annex.largefiles', None) == 'nothing':
+                tbds.repo.set_gitattributes([
+                    ('**/.git*', {'annex.largefiles': 'nothing'})])
+                # must use the repo.pathobj as this will have resolved symlinks
+                add_to_git[tbds.repo.pathobj / '.gitattributes'] = {
+                    'type': 'file',
+                    'state': 'untracked'}
 
         # record an ID for this repo for the afterlife
         # to be able to track siblings and children
@@ -384,36 +414,6 @@ class RevCreate(Interface):
         add_to_git[tbds.repo.pathobj / '.datalad'] = {
             'type': 'directory',
             'state': 'untracked'}
-
-        # make sure that v6 annex repos never commit content under .datalad
-        attrs_cfg = (
-            ('config', 'annex.largefiles', 'nothing'),
-            ('metadata/aggregate*', 'annex.largefiles', 'nothing'),
-            ('metadata/objects/**', 'annex.largefiles',
-             '({})'.format(cfg.obtain(
-                 'datalad.metadata.create-aggregate-annex-limit'))))
-        attrs = tbds.repo.get_gitattributes(
-            [op.join('.datalad', i[0]) for i in attrs_cfg])
-        set_attrs = []
-        for p, k, v in attrs_cfg:
-            if not attrs.get(
-                    op.join('.datalad', p), {}).get(k, None) == v:
-                set_attrs.append((p, {k: v}))
-        if set_attrs:
-            tbds.repo.set_gitattributes(
-                set_attrs,
-                attrfile=op.join('.datalad', '.gitattributes'))
-
-        # prevent git annex from ever annexing .git* stuff (gh-1597)
-        attrs = tbds.repo.get_gitattributes('.git')
-        if not attrs.get('.git', {}).get(
-                'annex.largefiles', None) == 'nothing':
-            tbds.repo.set_gitattributes([
-                ('**/.git*', {'annex.largefiles': 'nothing'})])
-            # must use the repo.pathobj as this will have resolved symlinks
-            add_to_git[tbds.repo.pathobj / '.gitattributes'] = {
-                'type': 'file',
-                'state': 'untracked'}
 
         # save everything, we need to do this now and cannot merge with the
         # call below, because we may need to add this subdataset to a parent
