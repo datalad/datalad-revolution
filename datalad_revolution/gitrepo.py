@@ -603,6 +603,7 @@ class RevolutionGitRepo(GitRepo):
                     **{k: kwargs[k] for k in kwargs
                        if k in (('git',) if hasattr(self, 'annexstatus')
                                 else tuple())}):
+                # TODO the helper can yield proper dicts right away
                 yield get_status_dict(
                     action=r.get('command', 'add'),
                     refds=self.pathobj,
@@ -636,7 +637,7 @@ class RevolutionGitRepo(GitRepo):
         # and post...
 
     def _save_add(self, files, git_opts=None):
-        """SImple helper to add files in save()"""
+        """Simple helper to add files in save()"""
         try:
             # without --verbose git 2.9.3  add does not return anything
             add_out = self._git_custom_command(
