@@ -1,13 +1,13 @@
 __docformat__ = 'restructuredtext'
 
 
+import os
 import os.path as op
 from collections import OrderedDict
 import logging
 import re
 from six import (
     iteritems,
-    text_type,
     PY2,
 )
 from weakref import WeakValueDictionary
@@ -17,6 +17,7 @@ import datalad_revolution.utils as ut
 from datalad.support.gitrepo import (
     GitRepo,
     InvalidGitRepositoryError,
+    to_options,
 )
 from datalad.support.exceptions import CommandError
 from datalad.interface.results import get_status_dict
@@ -41,6 +42,35 @@ class RevolutionGitRepo(GitRepo):
         # XXX this relies on the assumption that self.path as managed
         # by the base class is always a native path
         self.pathobj = ut.Path(self.path)
+
+    def _create_empty_repo(self, path, **kwargs):
+        cmd = ['git', 'init']
+        cmd.extend(kwargs.pop('_from_cmdline_', []))
+        cmd.extend(to_options(**kwargs))
+        lgr.debug(
+            "Initialize empty Git repository at '%s'%s",
+            path,
+            ' %s' % cmd[2:] if cmd[2:] else '')
+        if not op.exists(path):
+            os.makedirs(path)
+        try:
+            stdout, stderr = self._git_custom_command(
+                None,
+                cmd,
+                cwd=path,
+                log_stderr=True,
+                log_stdout=True,
+                log_online=False,
+                expect_stderr=False,
+                shell=False,
+                # we don't want it to scream on stdout
+                expect_fail=True)
+        except CommandError as exc:
+            lgr.error(exc_str(exc))
+            raise
+        # we want to return None and have lazy eval take care of
+        # the rest
+        return
 
     def get_content_info(self, paths=None, ref=None, untracked='all'):
         """Get identifier and type information from repository content.
