@@ -150,19 +150,23 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
 
         return info
 
-
     def _save_add(self, files, git=None, git_opts=None):
         """Simple helper to add files in save()"""
-        options = []
+        # alter default behavior of git-annex by considering dotfiles
+        # too
+        # however, this helper is controlled by save() which itself
+        # operates on status() which itself honors .gitignore, so
+        # there is a standard mechanism that is uniform between Git
+        # Annex repos to decide on the behavior on a case-by-case
+        # basis
+        # TODO have a dedicated test for this
+        options = ['--include-dotfiles']
         # if None -- leave it to annex to decide
         if git is not None:
             options += [
                 '-c',
                 'annex.largefiles=%s' % (('anything', 'nothing')[int(git)])
             ]
-            if git:
-                # to maintain behaviour similar to git
-                options += ['--include-dotfiles']
         for r in self._run_annex_command_json(
                 'add',
                 opts=options,
