@@ -12,6 +12,8 @@ from six import (
 )
 from weakref import WeakValueDictionary
 
+from datalad.utils import assure_list
+
 from datalad.dochelpers import exc_str
 import datalad_revolution.utils as ut
 from datalad.support.gitrepo import (
@@ -590,14 +592,17 @@ class RevolutionGitRepo(GitRepo):
             for f, props in iteritems(status)
             if props.get('state', None) in ('modified', 'untracked')]
         if to_add:
-            lgr.debug('%i paths to add to %r %s',
+            lgr.debug(
+                '%i paths to add to %r %s',
                 len(to_add), self, to_add if len(to_add) < 10 else '')
-            for r in self.add_(
+            for r in self._save_add(
+                    # TODO actually pass the relevant status records
+                    # and make use of them in the helper!!
                     to_add,
-                    git_options=None,
-                    # this would possibly counteract our own logic
-                    update=False,
-                    **{k: kwargs[k] for k in kwargs if k in ('git',)}):
+                    git_opts=None,
+                    **{k: kwargs[k] for k in kwargs
+                       if k in (('git',) if hasattr(self, 'annexstatus')
+                                else tuple())}):
                 yield get_status_dict(
                     action=r.get('command', 'add'),
                     refds=self.pathobj,
@@ -629,6 +634,21 @@ class RevolutionGitRepo(GitRepo):
         self._save_post(message, status)
         # TODO yield result for commit, prev helper checked hexsha pre
         # and post...
+
+    def _save_add(self, files, git_opts=None):
+        """SImple helper to add files in save()"""
+        try:
+            # without --verbose git 2.9.3  add does not return anything
+            add_out = self._git_custom_command(
+                files,
+                ['git', 'add'] + assure_list(git_opts) + ['--verbose']
+            )
+            # get all the entries
+            for o in self._process_git_get_output(*add_out):
+                yield o
+        except OSError as e:
+            lgr.error("add: %s" % e)
+            raise
 
     # run() needs this ATM, but should eventually be RF'ed to a
     # status(recursive=True) call
