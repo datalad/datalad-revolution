@@ -5,6 +5,8 @@ import logging
 from six import iteritems
 from weakref import WeakValueDictionary
 
+from datalad.utils import on_windows
+
 import datalad_revolution.utils as ut
 
 from datalad.support.annexrepo import AnnexRepo
@@ -167,10 +169,27 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 '-c',
                 'annex.largefiles=%s' % (('anything', 'nothing')[int(git)])
             ]
+        if on_windows:
+            # git-annex ignores symlinks on windows
+            # https://github.com/datalad/datalad/issues/2955
+            # check if there are any and pass them to git-add
+            symlinks_toadd = {
+                p: props for p, props in iteritems(files)
+                if props.get('type', None) == 'symlink'}
+            if symlinks_toadd:
+                for r in RevolutionGitRepo._save_add(
+                        self,
+                        symlinks_toadd,
+                        git_opts=git_opts):
+                    yield r
+            # trim `files` of symlinks
+            files = {
+                p: props for p, props in iteritems(files)
+                if props.get('type', None) != 'symlink'}
         for r in self._run_annex_command_json(
                 'add',
                 opts=options,
-                files=files,
+                files=list(files.keys()),
                 backend=None,
                 expect_fail=True,
                 # TODO

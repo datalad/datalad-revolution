@@ -589,19 +589,17 @@ class RevolutionGitRepo(GitRepo):
             # need to include .gitmodules in what needs saving
             status[self.pathobj.joinpath('.gitmodules')] = dict(
                 type='file', state='modified')
-        to_add = [
+        to_add = {
             # TODO remove pathobj stringification when add() can
             # handle it
-            str(f.relative_to(self.pathobj))
+            str(f.relative_to(self.pathobj)): props
             for f, props in iteritems(status)
-            if props.get('state', None) in ('modified', 'untracked')]
+            if props.get('state', None) in ('modified', 'untracked')}
         if to_add:
             lgr.debug(
                 '%i paths to add to %r %s',
                 len(to_add), self, to_add if len(to_add) < 10 else '')
             for r in self._save_add(
-                    # TODO actually pass the relevant status records
-                    # and make use of them in the helper!!
                     to_add,
                     git_opts=None,
                     **{k: kwargs[k] for k in kwargs
@@ -645,7 +643,7 @@ class RevolutionGitRepo(GitRepo):
         try:
             # without --verbose git 2.9.3  add does not return anything
             add_out = self._git_custom_command(
-                files,
+                list(files.keys()),
                 ['git', 'add'] + assure_list(git_opts) + ['--verbose']
             )
             # get all the entries
