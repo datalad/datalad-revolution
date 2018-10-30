@@ -19,7 +19,7 @@ Commands provided by this extension
 
 - `rev-status` -- like `git status`, but simpler and working with dataset hierarchies
 - `rev-save` -- a 2-in-1 replacement for `save` and `add`
-- `rev-create` -- a faster `create`
+- `rev-create` -- a ~30% faster `create`
 
 Additional base class functionality
 
