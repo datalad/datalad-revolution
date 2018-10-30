@@ -9,7 +9,7 @@ from functools import wraps
 from nose.plugins.attrib import attr
 
 from datalad.api import (
-    create,
+    rev_create as create,
 )
 
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
@@ -155,10 +155,10 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
             op.join('subdir', 'file_dropped_clean')],
             check=False)
     # clean and proper subdatasets
-    ds.create('subds_clean')
-    ds.create(op.join('subdir', 'subds_clean'))
-    ds.create('subds_unavailable_clean')
-    ds.create(op.join('subdir', 'subds_unavailable_clean'))
+    ds.rev_create('subds_clean')
+    ds.rev_create(op.join('subdir', 'subds_clean'))
+    ds.rev_create('subds_unavailable_clean')
+    ds.rev_create(op.join('subdir', 'subds_unavailable_clean'))
     # uninstall some subdatasets (still clean)
     ds.uninstall([
         'subds_unavailable_clean',
@@ -166,13 +166,13 @@ def get_convoluted_situation(path, repocls=AnnexRepo):
         check=False)
     assert_repo_status(ds.path)
     # make a dirty subdataset
-    ds.create('subds_modified')
-    ds.create(op.join('subds_modified', 'someds'))
-    ds.create(op.join('subds_modified', 'someds', 'dirtyds'))
+    ds.rev_create('subds_modified')
+    ds.rev_create(op.join('subds_modified', 'someds'))
+    ds.rev_create(op.join('subds_modified', 'someds', 'dirtyds'))
     # make a subdataset with additional commits
-    ds.create(op.join('subdir', 'subds_modified'))
+    ds.rev_create(op.join('subdir', 'subds_modified'))
     pdspath = op.join(ds.path, 'subdir', 'subds_modified', 'progressedds')
-    ds.create(pdspath)
+    ds.rev_create(pdspath)
     create_tree(
         pdspath,
         {'file_clean': 'file_ingit_clean'}
