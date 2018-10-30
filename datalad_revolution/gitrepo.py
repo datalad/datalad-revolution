@@ -480,7 +480,11 @@ class RevolutionGitRepo(GitRepo):
         to_commit = [str(f.relative_to(self.pathobj))
                      for f, props in iteritems(status)]
         if to_commit:
-            self.commit(
+            # we directly call GitRepo.commit() to avoid a whole slew
+            # if direct-mode safeguards and workarounds in the AnnexRepo
+            # implementation (which also run an additional dry-run commit
+            GitRepo.commit(
+                self,
                 files=to_commit,
                 msg=message,
                 _datalad_msg=_datalad_msg,
