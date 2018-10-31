@@ -112,8 +112,19 @@ def test_save(path):
     assert_repo_status(subds.path, annex=isinstance(subds.repo, AnnexRepo))
     ok_(ds.repo.dirty)
     # and save via subdataset path
-    ds.rev_save('subds')
+    ds.rev_save('subds', version_tag='new_sub')
     assert_repo_status(path, annex=isinstance(ds.repo, AnnexRepo))
+    tags = ds.repo.get_tags()
+    ok_(len(tags) == 1)
+    eq_(tags[0], dict(hexsha=ds.repo.get_hexsha(), name='new_sub'))
+    # fails when retagged, like git does
+    res = ds.rev_save(version_tag='new_sub', on_failure='ignore')
+    assert_status('error', res)
+    assert_result_count(
+        res, 1,
+        action='save', type='dataset', path=ds.path,
+        message=('cannot tag this version: %s',
+                 "fatal: tag 'new_sub' already exists"))
 
 
 @with_tempfile()

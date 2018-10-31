@@ -241,14 +241,7 @@ class RevSave(Interface):
                 pds.repo.pathobj / p.relative_to(pdspath): props
                 for p, props in iteritems(paths_by_ds.pop(pdspath))}
             start_commit = pds.repo.get_hexsha()
-            if all(p['state'] == 'clean' for p in pds_status.values()):
-                yield dict(
-                    action='save',
-                    path=pds.path,
-                    refds=ds.path,
-                    status='notneeded',
-                    logger=lgr)
-            else:
+            if not all(p['state'] == 'clean' for p in pds_status.values()):
                 for res in pds.repo.save_(
                         message=message,
                         # make sure to have the `path` arg be None, as we want
@@ -272,6 +265,7 @@ class RevSave(Interface):
             # report on the dataset itself
             dsres = dict(
                 action='save',
+                type='dataset',
                 path=pds.path,
                 refds=ds.path,
                 status='ok'
