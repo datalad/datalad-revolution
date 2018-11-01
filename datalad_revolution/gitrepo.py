@@ -12,6 +12,8 @@ from six import (
 )
 from weakref import WeakValueDictionary
 
+from datalad.utils import assure_list
+
 from datalad.dochelpers import exc_str
 import datalad_revolution.utils as ut
 from datalad.support.gitrepo import (
@@ -478,7 +480,11 @@ class RevolutionGitRepo(GitRepo):
         to_commit = [str(f.relative_to(self.pathobj))
                      for f, props in iteritems(status)]
         if to_commit:
-            self.commit(
+            # we directly call GitRepo.commit() to avoid a whole slew
+            # if direct-mode safeguards and workarounds in the AnnexRepo
+            # implementation (which also run an additional dry-run commit
+            GitRepo.commit(
+                self,
                 files=to_commit,
                 msg=message,
                 _datalad_msg=_datalad_msg,
@@ -583,21 +589,23 @@ class RevolutionGitRepo(GitRepo):
             # need to include .gitmodules in what needs saving
             status[self.pathobj.joinpath('.gitmodules')] = dict(
                 type='file', state='modified')
-        to_add = [
+        to_add = {
             # TODO remove pathobj stringification when add() can
             # handle it
-            str(f.relative_to(self.pathobj))
+            str(f.relative_to(self.pathobj)): props
             for f, props in iteritems(status)
-            if props.get('state', None) in ('modified', 'untracked')]
+            if props.get('state', None) in ('modified', 'untracked')}
         if to_add:
-            lgr.debug('%i paths to add to %r %s',
+            lgr.debug(
+                '%i paths to add to %r %s',
                 len(to_add), self, to_add if len(to_add) < 10 else '')
-            for r in self.add_(
+            for r in self._save_add(
                     to_add,
-                    git_options=None,
-                    # this would possibly counteract our own logic
-                    update=False,
-                    **{k: kwargs[k] for k in kwargs if k in ('git',)}):
+                    git_opts=None,
+                    **{k: kwargs[k] for k in kwargs
+                       if k in (('git',) if hasattr(self, 'annexstatus')
+                                else tuple())}):
+                # TODO the helper can yield proper dicts right away
                 yield get_status_dict(
                     action=r.get('command', 'add'),
                     refds=self.pathobj,
@@ -629,6 +637,21 @@ class RevolutionGitRepo(GitRepo):
         self._save_post(message, status)
         # TODO yield result for commit, prev helper checked hexsha pre
         # and post...
+
+    def _save_add(self, files, git_opts=None):
+        """Simple helper to add files in save()"""
+        try:
+            # without --verbose git 2.9.3  add does not return anything
+            add_out = self._git_custom_command(
+                list(files.keys()),
+                ['git', 'add'] + assure_list(git_opts) + ['--verbose']
+            )
+            # get all the entries
+            for o in self._process_git_get_output(*add_out):
+                yield o
+        except OSError as e:
+            lgr.error("add: %s" % e)
+            raise
 
     # run() needs this ATM, but should eventually be RF'ed to a
     # status(recursive=True) call

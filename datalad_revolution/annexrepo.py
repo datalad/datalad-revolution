@@ -1,9 +1,14 @@
 __docformat__ = 'restructuredtext'
 
+import os
+import os.path as op
 from collections import OrderedDict
 import logging
 from six import iteritems
 from weakref import WeakValueDictionary
+
+from datalad.utils import on_windows
+from datalad.ui import ui
 
 import datalad_revolution.utils as ut
 
@@ -149,6 +154,63 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             info[f] = inf
 
         return info
+
+    def _save_add(self, files, git=None, git_opts=None):
+        """Simple helper to add files in save()"""
+        # alter default behavior of git-annex by considering dotfiles
+        # too
+        # however, this helper is controlled by save() which itself
+        # operates on status() which itself honors .gitignore, so
+        # there is a standard mechanism that is uniform between Git
+        # Annex repos to decide on the behavior on a case-by-case
+        # basis
+        # TODO have a dedicated test for this
+        options = ['--include-dotfiles']
+        # if None -- leave it to annex to decide
+        if git is not None:
+            options += [
+                '-c',
+                'annex.largefiles=%s' % (('anything', 'nothing')[int(git)])
+            ]
+        if on_windows:
+            # git-annex ignores symlinks on windows
+            # https://github.com/datalad/datalad/issues/2955
+            # check if there are any and pass them to git-add
+            symlinks_toadd = {
+                p: props for p, props in iteritems(files)
+                if props.get('type', None) == 'symlink'}
+            if symlinks_toadd:
+                for r in RevolutionGitRepo._save_add(
+                        self,
+                        symlinks_toadd,
+                        git_opts=git_opts):
+                    yield r
+            # trim `files` of symlinks
+            files = {
+                p: props for p, props in iteritems(files)
+                if props.get('type', None) != 'symlink'}
+
+        expected_additions = None
+        if ui.is_interactive:
+            # without an interactive UI there is little benefit from
+            # progressbar info, hence save the stat calls
+            def _get_file_size(relpath):
+                path = op.join(self.path, relpath)
+                return 0 if not op.exists(path) else os.stat(path).st_size
+
+            expected_additions = {p: _get_file_size(p) for p in files}
+
+        for r in self._run_annex_command_json(
+                'add',
+                opts=options,
+                files=list(files.keys()),
+                backend=None,
+                expect_fail=True,
+                # TODO
+                jobs=None,
+                expected_entries=expected_additions,
+                expect_stderr=True):
+            yield r
 
 
 # remove deprecated methods from API
