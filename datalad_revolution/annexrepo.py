@@ -1,11 +1,14 @@
 __docformat__ = 'restructuredtext'
 
+import os
+import os.path as op
 from collections import OrderedDict
 import logging
 from six import iteritems
 from weakref import WeakValueDictionary
 
 from datalad.utils import on_windows
+from datalad.ui import ui
 
 import datalad_revolution.utils as ut
 
@@ -186,6 +189,17 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             files = {
                 p: props for p, props in iteritems(files)
                 if props.get('type', None) != 'symlink'}
+
+        expected_additions = None
+        if ui.is_interactive:
+            # without an interactive UI there is little benefit from
+            # progressbar info, hence save the stat calls
+            def _get_file_size(relpath):
+                path = op.join(self.path, relpath)
+                return 0 if not op.exists(path) else os.stat(path).st_size
+
+            expected_additions = {p: _get_file_size(p) for p in files}
+
         for r in self._run_annex_command_json(
                 'add',
                 opts=options,
@@ -194,8 +208,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 expect_fail=True,
                 # TODO
                 jobs=None,
-                # TODO
-                #expected_entries=expected_additions,
+                expected_entries=expected_additions,
                 expect_stderr=True):
             yield r
 
