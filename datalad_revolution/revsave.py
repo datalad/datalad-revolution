@@ -34,6 +34,7 @@ from datalad.support.constraints import (
     EnsureStr,
     EnsureNone,
 )
+from datalad.support.exceptions import CommandError
 from datalad.utils import (
     assure_list,
 )
@@ -98,9 +99,10 @@ class RevSave(Interface):
             mutually exclusive with -m.""",
             constraints=EnsureStr() | EnsureNone()),
         version_tag=Parameter(
-            args=("--version-tag",),
+            args=("-t", "--version-tag",),
             metavar='ID',
-            doc="""an additional marker for that state.""",
+            doc="""an additional marker for that state. Every dataset that
+            is touched will receive the tag.""",
             constraints=EnsureStr() | EnsureNone()),
         recursive=recursion_flag,
         recursion_limit=recursion_limit,
@@ -238,32 +240,32 @@ class RevSave(Interface):
                 # lower levels
                 pds.repo.pathobj / p.relative_to(pdspath): props
                 for p, props in iteritems(paths_by_ds.pop(pdspath))}
-            if all(p['state'] == 'clean' for p in pds_status.values()):
-                yield dict(action='save', path=pds.path, refds=ds.path,
-                           status='notneeded', logger=lgr)
-                continue
             start_commit = pds.repo.get_hexsha()
-            for res in pds.repo.save_(
-                    message=message,
-                    # make sure to have the `path` arg be None, as we want to
-                    # prevent and bypass any additional repo.status() calls
-                    paths=None,
-                    # prevent whining of GitRepo
-                    git=True if not hasattr(ds.repo, 'annexstatus')
-                    else to_git,
-                    # we are supplying the full status already, do not detect
-                    # anything else
-                    untracked='no',
-                    _status=pds_status):
-                # TODO remove stringification when datalad-core can handle
-                # path objects, or when PY3.6 is the lowest supported version
-                for k in ('path', 'refds'):
-                    if k in res:
-                        res[k] = str(res[k])
-                yield res
+            if not all(p['state'] == 'clean' for p in pds_status.values()):
+                for res in pds.repo.save_(
+                        message=message,
+                        # make sure to have the `path` arg be None, as we want
+                        # to prevent and bypass any additional repo.status()
+                        # calls
+                        paths=None,
+                        # prevent whining of GitRepo
+                        git=True if not hasattr(ds.repo, 'annexstatus')
+                        else to_git,
+                        # we are supplying the full status already, do not
+                        # detect anything else
+                        untracked='no',
+                        _status=pds_status):
+                    # TODO remove stringification when datalad-core can handle
+                    # path objects, or when PY3.6 is the lowest supported
+                    # version
+                    for k in ('path', 'refds'):
+                        if k in res:
+                            res[k] = str(res[k])
+                    yield res
             # report on the dataset itself
-            yield dict(
+            dsres = dict(
                 action='save',
+                type='dataset',
                 path=pds.path,
                 refds=ds.path,
                 status='ok'
@@ -271,4 +273,21 @@ class RevSave(Interface):
                 else 'notneeded',
                 logger=lgr,
             )
-        # TODO add tag, if desired
+            if not version_tag:
+                yield dsres
+                continue
+            try:
+                pds.repo.tag(version_tag)
+                dsres.update(
+                    status='ok',
+                    version_tag=version_tag)
+                yield dsres
+            except CommandError as e:
+                if dsres['status'] == 'ok':
+                    # first we yield the result for the actual save
+                    yield dsres.copy()
+                # and now complain that tagging didn't work
+                dsres.update(
+                    status='error',
+                    message=('cannot tag this version: %s', e.stderr.strip()))
+                yield dsres
