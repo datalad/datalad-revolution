@@ -49,6 +49,15 @@ test_script:
   - datalad wtf
   # and now this...
   - python -m nose -s -v --with-cov --cover-package datalad_revolution --cover-xml --cover-xml-file=coverage.xml datalad_revolution
+  # and test the core pieces that we rely on for the functionality offered
+  # by this extension
+  - python -m nose -s -v \
+    datalad.ui \
+    datalad.distribution.tests.test_clone \
+    datalad.distribution.tests.test_install \
+    datalad.interface.tests.test_unlock \
+    datalad.distribution.tests.test_get \
+    datalad.distribution.tests.test_uninstall 
 
 after_test:
   - ps: |
