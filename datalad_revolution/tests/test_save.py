@@ -14,6 +14,7 @@ from six import iteritems
 from datalad.utils import (
     on_windows,
     assure_list,
+    rmtree,
 )
 from datalad.tests.utils import (
     assert_status,
@@ -526,4 +527,25 @@ def test_bf2541(path):
     os.symlink('sub', op.join(ds.path, 'symlink'))
     with chpwd(ds.path):
         res = save(recursive=True)
+    assert_repo_status(ds.path)
+
+
+@with_tempfile()
+def test_remove_subds(path):
+    ds = create(path)
+    ds.rev_create('sub')
+    ds.rev_create(op.join('sub', 'subsub'))
+    assert_repo_status(ds.path)
+    assert_result_count(
+        ds.subdatasets(), 1,
+        path=op.join(ds.path, 'sub'))
+    # all good at this point, subdataset known, dataset clean
+    # now have some external force wipe out the subdatasets
+    rmtree(op.join(ds.path, 'sub'))
+    assert_result_count(
+        ds.rev_status(), 1,
+        path=op.join(ds.path, 'sub'),
+        state='deleted')
+    # a single call to save() must fix up the mess
+    assert_status('ok', ds.rev_save())
     assert_repo_status(ds.path)
