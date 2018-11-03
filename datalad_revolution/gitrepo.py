@@ -563,6 +563,10 @@ class RevolutionGitRepo(GitRepo):
             # those should not be processed as git rm will error
             # due to them being properly gone already
             not props.get('gitshasum', None)]
+        vanished_subds = any(
+            props.get('type', None) == 'dataset' and
+            props.get('state', None) == 'deleted'
+            for f, props in iteritems(status))
         if to_remove:
             for r in self.remove(
                     to_remove,
@@ -605,7 +609,7 @@ class RevolutionGitRepo(GitRepo):
                     logger=lgr)
                 continue
             added_submodule = True
-        if added_submodule:
+        if added_submodule or vanished_subds:
             # need to include .gitmodules in what needs saving
             status[self.pathobj.joinpath('.gitmodules')] = dict(
                 type='file', state='modified')
