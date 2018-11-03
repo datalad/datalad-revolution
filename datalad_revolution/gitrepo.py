@@ -546,10 +546,30 @@ class RevolutionGitRepo(GitRepo):
             return
 
         # three things are to be done:
-        # - add (modified/untracked)
         # - remove (deleted if not already staged)
+        # - add (modified/untracked)
         # - commit (with all paths that have been touched, to bypass
         #   potential pre-staged bits)
+
+        # remove first, because removal of a subds would cause a
+        # modification of .gitmodules to be added to the todo list
+        to_remove = [
+            # TODO remove pathobj stringification when delete() can
+            # handle it
+            str(f.relative_to(self.pathobj))
+            for f, props in iteritems(status)
+            if props.get('state', None) == 'deleted' and
+            # staged deletions have a gitshasum reported for them
+            # those should not be processed as git rm will error
+            # due to them being properly gone already
+            not props.get('gitshasum', None)]
+        if to_remove:
+            for r in self.remove(
+                    to_remove,
+                    # we would always see individual files
+                    recursive=False):
+                # TODO normalize result
+                yield r
 
         # TODO this additonal query should not be, base on status as given
         # if anyhow possible, however, when paths are given, status may
@@ -615,24 +635,6 @@ class RevolutionGitRepo(GitRepo):
                     status='ok' if r.get('success', None) else 'error',
                     key=r.get('key', None),
                     logger=lgr)
-
-        to_remove = [
-            # TODO remove pathobj stringification when delete() can
-            # handle it
-            str(f.relative_to(self.pathobj))
-            for f, props in iteritems(status)
-            if props.get('state', None) == 'deleted' and
-            # staged deletions have a gitshasum reported for them
-            # those should not be processed as git rm will error
-            # due to them being properly gone already
-            not props.get('gitshasum', None)]
-        if to_remove:
-            for r in self.remove(
-                    to_remove,
-                    # we would always see individual files
-                    recursive=False):
-                # TODO normalize result
-                yield r
 
         self._save_post(message, status)
         # TODO yield result for commit, prev helper checked hexsha pre
