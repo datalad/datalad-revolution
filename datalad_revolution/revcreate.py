@@ -369,7 +369,20 @@ class RevCreate(Interface):
         tbds.config.add(
             id_var,
             tbds.id if tbds.id is not None else uuid_id,
-            where='dataset')
+            where='dataset',
+            reload=False)
+
+        # make config overrides permanent in the repo config
+        # this is similar to what `annex init` does
+        # we are only doing this for config overrides and do not expose
+        # a dedicated argument, because it is sufficient for the cmdline
+        # and unnecessary for the Python API (there could simply be a
+        # subsequence ds.config.add() call)
+        for k, v in iteritems(tbds.config.overrides):
+            tbds.config.add(k, v, where='local', reload=False)
+
+        # all config manipulation is done -> fll reload
+        tbds.config.reload()
 
         # must use the repo.pathobj as this will have resolved symlinks
         add_to_git[tbds.repo.pathobj / '.datalad'] = {
