@@ -1,3 +1,4 @@
+"""Amendment of the DataLad `AnnexRepo` base class"""
 __docformat__ = 'restructuredtext'
 
 import os

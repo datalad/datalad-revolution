@@ -1,3 +1,4 @@
+"""Amendment of the DataLad `GitRepo` base class"""
 __docformat__ = 'restructuredtext'
 
 
@@ -521,12 +522,12 @@ class RevolutionGitRepo(GitRepo):
           For example, to save only modified content, but no untracked
           content, set `paths` to None and provide a `_status` that has
           no entries for untracked content.
-        **kwargs
+        **kwargs :
           Additional arguments that are passed to underlying Repo methods.
           Supported:
+
           - git : bool (passed to Repo.add()
-          - ignore_submodules : {'no', 'other', 'all'}
-            passed to Repo.status()
+          - ignore_submodules : {'no', 'other', 'all'} passed to Repo.status()
           - untracked : {'no', 'normal', 'all'} - passed to Repo.satus()
         """
         return list(
@@ -539,6 +540,7 @@ class RevolutionGitRepo(GitRepo):
         )
 
     def save_(self, message=None, paths=None, _status=None, **kwargs):
+        """Like `save()` but working as a generator."""
         status = self._save_pre(paths, _status, **kwargs)
         if not status:
             # all clean, nothing todo

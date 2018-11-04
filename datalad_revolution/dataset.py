@@ -1,3 +1,4 @@
+"""Amendment of the DataLad `Dataset` base class"""
 __docformat__ = 'restructuredtext'
 
 import os
@@ -175,6 +176,7 @@ def resolve_path(path, ds=None):
     provided, the current working directory is used.
 
     Parameters
+    ----------
     path : str or PathLike
       Platform-specific path specific path specification.
     ds : Dataset or None

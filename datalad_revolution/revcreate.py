@@ -87,9 +87,9 @@ class YieldDatasets(ResultXFM):
 class RevCreate(Interface):
     """Create a new dataset from scratch.
 
-    This command initializes a new :term:`dataset` at a given location, or the
+    This command initializes a new dataset at a given location, or the
     current directory. The new dataset can optionally be registered in an
-    existing :term:`superdataset` (the new dataset's path needs to be located
+    existing superdataset (the new dataset's path needs to be located
     within the superdataset for that, and the superdataset needs to be given
     explicitly via [PY: `dataset` PY][CMD: --dataset CMD]). It is recommended
     to provide a brief description to label the dataset's nature *and*

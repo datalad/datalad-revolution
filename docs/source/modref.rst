@@ -3,10 +3,33 @@
 
 .. _chap_modref:
 
-***********************
-Python module reference
-***********************
+*************
+API reference
+*************
 
-This module reference extends the manual with a comprehensive overview of the
-available functionality.  Each module in the package is documented by a general
-summary of its purpose and the list of classes and functions it provides.
+This API reference extends the manual with a comprehensive overview of the
+available functionality.  Each component of the extension is documented by
+a general summary of its purpose and the list of classes and functions it
+provides.
+
+High-level API commands
+=======================
+
+.. currentmodule:: datalad.api
+.. autosummary::
+   :toctree: generated
+
+   rev_create
+   rev_save
+   rev_status
+
+Low-level API
+=============
+
+.. currentmodule:: datalad_revolution
+.. autosummary::
+   :toctree: generated
+
+   gitrepo
+   annexrepo
+   dataset
