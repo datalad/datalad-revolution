@@ -1,11 +1,11 @@
 # Revolutionary DataLad extension
 
-[![Travis tests status](https://secure.travis-ci.org/datalad/datalad-revolution.png?branch=master)](https://travis-ci.org/datalad/datalad-revolution) [![Build status](https://ci.appveyor.com/api/projects/status/8jtp2fp3mwr5huyi?svg=true)](https://ci.appveyor.com/project/mih/datalad-revolution) [![codecov.io](https://codecov.io/github/datalad/datalad-revolution/coverage.svg?branch=master)](https://codecov.io/github/datalad/datalad-revolution?branch=master) [![GitHub release](https://img.shields.io/github/release/datalad/datalad-revolution.svg)](https://GitHub.com/datalad/datalad-revolution/releases/) [![PyPI version fury.io](https://badge.fury.io/py/datalad-revolution.svg)](https://pypi.python.org/pypi/datalad-revolution/) [![Documentation](https://readthedocs.org/projects/datalad-revolution/badge/?version=latest)](http://datalad-revolution.rtfd.org)
+[![Travis tests status](https://secure.travis-ci.org/datalad/datalad-revolution.png?branch=master)](https://travis-ci.org/datalad/datalad-revolution) [![Build status](https://ci.appveyor.com/api/projects/status/8jtp2fp3mwr5huyi?svg=true)](https://ci.appveyor.com/project/mih/datalad-revolution) [![codecov.io](https://codecov.io/github/datalad/datalad-revolution/coverage.svg?branch=master)](https://codecov.io/github/datalad/datalad-revolution?branch=master) [![GitHub release](https://img.shields.io/github/release/datalad/datalad-revolution.svg)](https://GitHub.com/datalad/datalad-revolution/releases/) [![PyPI version fury.io](https://badge.fury.io/py/datalad-revolution.svg)](https://pypi.python.org/pypi/datalad-revolution/) [![Documentation](https://readthedocs.org/projects/datalad-revolution/badge/?version=latest)](http://docs.datalad.org/projects/revolution)
 
 This software is a [DataLad](http://datalad.org) extension that equips DataLad
 with alternative and additional core commands that are leaner and written
 specifically with enhanced cross-platform compatibility and speed in mind.
-Please see the [extension documentation](http://datalad-revolution.rtfd.org) for
+Please see the [extension documentation](http://docs.datalad.org/projects/revolution) for
 a description on additional commands and functionality.
 
 **Note:** There is *no support* for [git-annex direct mode
