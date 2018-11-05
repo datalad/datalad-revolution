@@ -570,6 +570,6 @@ def test_partial_unlocked(path):
     # but now a change in the attributes
     ds.unlock('culprit.txt')
     ds.repo.set_gitattributes([
-        ('*', {'annex.largefiles': '(not(mimetype=text/*'})])
+        ('*', {'annex.largefiles': 'nothing'})])
     ds.rev_save()
     assert_repo_status(ds.path)
