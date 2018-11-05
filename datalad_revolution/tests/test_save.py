@@ -549,3 +549,27 @@ def test_remove_subds(path):
     # a single call to save() must fix up the mess
     assert_status('ok', ds.rev_save())
     assert_repo_status(ds.path)
+
+
+@with_tempfile()
+def test_partial_unlocked(path):
+    # https://github.com/datalad/datalad/issues/1651
+    ds = create(path)
+    (ds.pathobj / 'normal.txt').write_text(u'123')
+    ds.rev_save()
+    assert_repo_status(ds.path)
+    ds.unlock('normal.txt')
+    ds.rev_save()
+    # mixed git and git-annex'ed files
+    (ds.pathobj / 'ingit.txt').write_text(u'234')
+    ds.rev_save(to_git=True)
+    (ds.pathobj / 'culprit.txt').write_text(u'345')
+    (ds.pathobj / 'ingit.txt').write_text(u'modified')
+    ds.rev_save()
+    assert_repo_status(ds.path)
+    # but now a change in the attributes
+    ds.unlock('culprit.txt')
+    ds.repo.set_gitattributes([
+        ('*', {'annex.largefiles': '(not(mimetype=text/*'})])
+    ds.rev_save()
+    assert_repo_status(ds.path)
