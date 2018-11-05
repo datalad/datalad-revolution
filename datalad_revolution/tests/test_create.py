@@ -325,3 +325,16 @@ def test_create_fake_dates(path):
 
     eq_(ds.config.obtain("datalad.fake-dates-start") + 1,
         first_commit.committed_date)
+
+
+@with_tempfile(mkdir=True)
+def test_cfg_passthrough(path):
+    runner = Runner()
+    _ = runner.run(
+        ['datalad',
+         '-c', 'annex.tune.objecthash1=true',
+         '-c', 'annex.tune.objecthashlower=true',
+         'rev-create', path])
+    ds = Dataset(path)
+    eq_(ds.config.get('annex.tune.objecthash1', None), 'true')
+    eq_(ds.config.get('annex.tune.objecthashlower', None), 'true')
