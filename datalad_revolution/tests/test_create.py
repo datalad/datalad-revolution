@@ -289,11 +289,8 @@ def test_saving_prior(topdir):
     assert_in('ds2', ds1.subdatasets(result_xfm='relpaths'))
 
 
-@known_failure_windows  # https://github.com/datalad/datalad/issues/2606
 @with_tempfile(mkdir=True)
 def test_create_withprocedure(path):
-    raise SkipTest(
-        'Needs resolution of https://github.com/datalad/datalad/pull/2946')
     # first without
     ds = create(path)
     assert(not op.lexists(op.join(ds.path, 'README.rst')))
