@@ -14,6 +14,7 @@ from datalad.ui import ui
 import datalad_revolution.utils as ut
 
 from datalad.support.annexrepo import AnnexRepo
+from datalad.support.exceptions import CommandError
 
 from datalad_revolution.gitrepo import (
     RevolutionGitRepo,
@@ -212,6 +213,40 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 expected_entries=expected_additions,
                 expect_stderr=True):
             yield r
+
+    def _save_post(self, message, status):
+        # without much inspection, first try what GitRepo would do
+        try:
+            return RevolutionGitRepo._save_post(self, message, status)
+        except CommandError as e:
+            if 'Cannot make a partial commit with unlocked annexed files' \
+                    in e.stderr:
+                # deals with https://github.com/datalad/datalad/issues/1651
+                # re-query the status, check if everything that was submitted
+                # for saving is also the only stuff that is reported
+                if sorted([s for s, props in iteritems(status)
+                           if props.get('state', None) != 'clean']) != \
+                        sorted(self.diff(paths=None, fr='HEAD', to=None)):
+                            # not the same
+                            # TODO better instructions?
+                            raise
+                _datalad_msg = False
+                if not message:
+                    message = 'Recorded changes'
+                    _datalad_msg = True
+                RevolutionGitRepo.commit(
+                    self,
+                    files=None,
+                    msg=message,
+                    _datalad_msg=_datalad_msg,
+                    options=None,
+                    careless=False,
+                )
+                return
+
+            # no idea what went wrong
+            raise
+
 
 
 # remove deprecated methods from API
