@@ -34,10 +34,10 @@ from datalad.tests.utils import (
     assert_raises,
     assert_status,
     assert_in_results,
-    ok_clean_git,
     with_tree,
-    SkipTest,
 )
+
+from datalad_revolution.tests.utils import assert_repo_status
 
 
 _dataset_hierarchy_template = {
@@ -107,13 +107,13 @@ def test_create_curdir(path, path2):
         create()
     ds = Dataset(path)
     ok_(ds.is_installed())
-    ok_clean_git(ds.path, annex=True)
+    assert_repo_status(ds.path, annex=True)
 
     with chpwd(path2, mkdir=True):
         create(no_annex=True)
     ds = Dataset(path2)
     ok_(ds.is_installed())
-    ok_clean_git(ds.path, annex=False)
+    assert_repo_status(ds.path, annex=False)
     ok_(op.exists(op.join(ds.path, '.noannex')))
 
 
@@ -125,7 +125,7 @@ def test_create(path):
         # custom git init option
         initopts=dict(shared='world'))
     ok_(ds.is_installed())
-    ok_clean_git(ds.path, annex=True)
+    assert_repo_status(ds.path, annex=True)
 
     # check default backend
     eq_(ds.config.get("annex.backends"), 'MD5E')
@@ -150,13 +150,13 @@ def test_create_sub(path):
     subds = ds.rev_create("some/what/deeper")
     ok_(isinstance(subds, Dataset))
     ok_(subds.is_installed())
-    ok_clean_git(subds.path, annex=True)
+    assert_repo_status(subds.path, annex=True)
 
     # subdataset is known to superdataset:
     assert_in(op.join("some", "what", "deeper"),
               ds.subdatasets(result_xfm='relpaths'))
     # and was committed:
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
 
     # subds finds superdataset
     ok_(subds.get_superdataset() == ds)
@@ -165,7 +165,7 @@ def test_create_sub(path):
     subds2 = Dataset(op.join(path, "someother")).rev_create()
     ok_(isinstance(subds2, Dataset))
     ok_(subds2.is_installed())
-    ok_clean_git(subds2.path, annex=True)
+    assert_repo_status(subds2.path, annex=True)
 
     # unknown to superdataset:
     assert_not_in("someother", ds.subdatasets(result_xfm='relpaths'))
@@ -174,7 +174,7 @@ def test_create_sub(path):
     subds3 = ds.rev_create("third", no_annex=True)
     ok_(isinstance(subds3, Dataset))
     ok_(subds3.is_installed())
-    ok_clean_git(subds3.path, annex=False)
+    assert_repo_status(subds3.path, annex=False)
     assert_in("third", ds.subdatasets(result_xfm='relpaths'))
 
 
@@ -210,7 +210,7 @@ def test_create_subdataset_hierarchy_from_top(path):
         'file1',
         op.join(subds.path, 'file2'),
         op.join(subsubds.path, 'file3')])
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
     ok_(ds.id != subds.id != subsubds.id)
 
 
@@ -221,7 +221,7 @@ def test_create_subdataset_hierarchy_from_top(path):
 def test_nested_create(path):
     # to document some more organic usage pattern
     ds = Dataset(path).rev_create()
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
     lvl2relpath = op.join('lvl1', 'lvl2')
     lvl2path = op.join(ds.path, lvl2relpath)
     os.makedirs(lvl2path)
@@ -232,11 +232,11 @@ def test_nested_create(path):
     # later create subdataset in a fresh dir
     # WINDOWS FAILURE IS NEXT LINE
     subds1 = ds.rev_create(op.join('lvl1', 'subds'))
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path, untracked=['lvl1/empty'])
     eq_(ds.subdatasets(result_xfm='relpaths'), [op.join('lvl1', 'subds')])
     # later create subdataset in an existing empty dir
     subds2 = ds.rev_create(op.join('lvl1', 'empty'))
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
     # later try to wrap existing content into a new subdataset
     # but that won't work
     assert_in_results(
@@ -302,7 +302,7 @@ def test_create_withprocedure(path):
         # procedure doesn't know what to run on
         dataset=path,
         proc_post=[['cfg_metadatatypes', 'xmp', 'datacite']])
-    ok_clean_git(path)
+    assert_repo_status(path)
     ds.config.reload()
     eq_(ds.config['datalad.metadata.nativetype'], ('xmp', 'datacite'))
 

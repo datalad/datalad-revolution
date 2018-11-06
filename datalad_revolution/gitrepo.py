@@ -469,7 +469,28 @@ class RevolutionGitRepo(GitRepo):
         )
         return status
 
-    def _save_post(self, message, status):
+    def get_staged_paths(self):
+        """Returns a list of any stage repository path(s)
+
+        This is a rather fast call, as it will not depend on what is going on
+        in the worktree.
+        """
+        try:
+            stdout, stderr = self._git_custom_command(
+                None,
+                ['git', 'diff', '--name-only', '--staged'],
+                cwd=self.path,
+                log_stderr=True,
+                log_stdout=True,
+                log_online=False,
+                expect_stderr=False,
+                expect_fail=True)
+        except CommandError as e:
+            lgr.debug(exc_str(e))
+            stdout = ''
+        return [f for f in stdout.split('\n') if f]
+
+    def _save_post(self, message, status, partial_commit):
         # helper to commit changes reported in status
         _datalad_msg = False
         if not message:
@@ -479,8 +500,9 @@ class RevolutionGitRepo(GitRepo):
         # TODO remove pathobj stringification when commit() can
         # handle it
         to_commit = [str(f.relative_to(self.pathobj))
-                     for f, props in iteritems(status)]
-        if to_commit:
+                     for f, props in iteritems(status)] \
+                    if partial_commit else None
+        if not partial_commit or to_commit:
             # we directly call GitRepo.commit() to avoid a whole slew
             # if direct-mode safeguards and workarounds in the AnnexRepo
             # implementation (which also run an additional dry-run commit
@@ -553,6 +575,8 @@ class RevolutionGitRepo(GitRepo):
         # - commit (with all paths that have been touched, to bypass
         #   potential pre-staged bits)
 
+        need_partial_commit = True if self.get_staged_paths() else False
+
         # remove first, because removal of a subds would cause a
         # modification of .gitmodules to be added to the todo list
         to_remove = [
@@ -611,6 +635,35 @@ class RevolutionGitRepo(GitRepo):
                     logger=lgr)
                 continue
             added_submodule = True
+        if not need_partial_commit:
+            # without a partial commit an AnnexRepo would ignore any submodule
+            # path in its add helper, hence `git add` them explicitly
+            to_stage_submodules = {
+                str(f.relative_to(self.pathobj)): props
+                for f, props in iteritems(status)
+                if props.get('state', None) in ('modified', 'untracked')
+                and props.get('type', None) == 'dataset'}
+            if to_stage_submodules:
+                lgr.debug(
+                    '%i submodule path(s) to stage in %r %s',
+                    len(to_stage_submodules), self,
+                    to_stage_submodules
+                    if len(to_stage_submodules) < 10 else '')
+                for r in RevolutionGitRepo._save_add(
+                        self,
+                        to_stage_submodules,
+                        git_opts=None):
+                    # TODO the helper can yield proper dicts right away
+                    yield get_status_dict(
+                        action=r.get('command', 'add'),
+                        refds=self.pathobj,
+                        type='file',
+                        path=(self.pathobj / ut.PurePosixPath(r['file']))
+                        if 'file' in r else None,
+                        status='ok' if r.get('success', None) else 'error',
+                        key=r.get('key', None),
+                        logger=lgr)
+
         if added_submodule or vanished_subds:
             # need to include .gitmodules in what needs saving
             status[self.pathobj.joinpath('.gitmodules')] = dict(
@@ -623,7 +676,7 @@ class RevolutionGitRepo(GitRepo):
             if props.get('state', None) in ('modified', 'untracked')}
         if to_add:
             lgr.debug(
-                '%i paths to add to %r %s',
+                '%i path(s) to add to %r %s',
                 len(to_add), self, to_add if len(to_add) < 10 else '')
             for r in self._save_add(
                     to_add,
@@ -642,7 +695,7 @@ class RevolutionGitRepo(GitRepo):
                     key=r.get('key', None),
                     logger=lgr)
 
-        self._save_post(message, status)
+        self._save_post(message, status, need_partial_commit)
         # TODO yield result for commit, prev helper checked hexsha pre
         # and post...
 
