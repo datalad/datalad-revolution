@@ -214,10 +214,10 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 expect_stderr=True):
             yield r
 
-    def _save_post(self, message, status):
+    def _save_post(self, message, status, partial_commit):
         # without much inspection, first try what GitRepo would do
         try:
-            return RevolutionGitRepo._save_post(self, message, status)
+            return RevolutionGitRepo._save_post(self, message, status, partial_commit)
         except CommandError as e:
             if 'Cannot make a partial commit with unlocked annexed files' \
                     in e.stderr:
