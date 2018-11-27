@@ -34,6 +34,12 @@ command_suite = (
             'rev-status',
             'rev_status'
         ),
+        (
+            'datalad_revolution.revrun',
+            'RevRun',
+            'rev-run',
+            'rev_run'
+        ),
     ]
 )
 
