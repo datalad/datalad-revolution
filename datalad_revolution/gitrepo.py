@@ -721,7 +721,10 @@ class RevolutionGitRepo(GitRepo):
         return len([
             p for p, props in iteritems(self.status(
                 untracked='normal', ignore_submodules='other'))
-            if props.get('state', None) != 'clean']) > 0
+            if props.get('state', None) != 'clean' and
+            # -core ignores empty untracked directories, so shall we
+            not (props.get('state', None) == 'untracked' and
+                 props.get('type', None) == 'directory')]) > 0
 
 
 # remove deprecated methods from API
