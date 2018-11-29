@@ -6,7 +6,7 @@
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
-"""Run arbitrary commands and track how they modify a dataset"""
+"""Thin wrapper around `run` from DataLad core"""
 
 __docformat__ = 'restructuredtext'
 
@@ -42,6 +42,8 @@ def _save_outputs(ds, to_save, msg):
 
 @build_doc
 class RevRun(Run):
+    __doc__ = Run.__doc__
+
     @staticmethod
     @datasetmethod(name='rev_run')
     @eval_results
