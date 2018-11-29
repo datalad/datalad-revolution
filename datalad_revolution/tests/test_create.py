@@ -229,6 +229,7 @@ def test_nested_create(path):
     with open(op.join(lvl2path, 'file'), 'w') as f:
         f.write('some')
     ok_(ds.rev_save())
+    assert_repo_status(ds.path, untracked=['lvl1/empty'])
     # later create subdataset in a fresh dir
     # WINDOWS FAILURE IS NEXT LINE
     subds1 = ds.rev_create(op.join('lvl1', 'subds'))
@@ -253,10 +254,8 @@ def test_nested_create(path):
     #    status='error', action='add')
     # only way to make it work is to unannex the content upfront
     ds.repo._run_annex_command('unannex', annex_options=[op.join(lvl2relpath, 'file')])
-    # nothing to save, git-annex commits the unannex itself
-    assert_status(
-        'ok' if ds.repo.config.getint("annex", "version") == 6 else 'notneeded',
-        ds.save())
+    # nothing to save, git-annex commits the unannex itself, but only on v5
+    ds.repo.commit()
     # still nothing without force
     # "err='lvl1/lvl2' already exists in the index"
     assert_in_results(
@@ -279,7 +278,7 @@ def test_saving_prior(topdir):
     # so we create first top one
     ds1 = create(topdir, force=True)
     # and everything is ok, stuff is not added BUT ds1 will be considered dirty
-    ok_(ds1.repo.dirty)
+    assert_repo_status(ds1.path, untracked=['ds2'])
     # And then we would like to initiate a sub1 subdataset
     ds2 = create('ds2', dataset=ds1, force=True)
     # But what will happen is file1.txt under ds2 would get committed first into

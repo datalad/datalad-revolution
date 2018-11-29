@@ -723,8 +723,7 @@ class RevolutionGitRepo(GitRepo):
                 untracked='normal', ignore_submodules='other'))
             if props.get('state', None) != 'clean' and
             # -core ignores empty untracked directories, so shall we
-            not (props.get('state', None) == 'untracked' and
-                 props.get('type', None) == 'directory')]) > 0
+            not (p.is_dir() and len(list(p.iterdir())) == 0)]) > 0
 
 
 # remove deprecated methods from API
