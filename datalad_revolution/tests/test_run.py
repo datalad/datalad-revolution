@@ -41,7 +41,7 @@ from datalad.api import (
     install,
     rev_run as run,
 )
-from datalad.interface.run import (
+from datalad_revolution.revrun import (
     GlobbedPaths,
     run_command,
 )

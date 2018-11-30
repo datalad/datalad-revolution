@@ -16,7 +16,6 @@ import logging
 # take everything from run, all we want to be is a thin variant
 from datalad.interface.run import (
     Run,
-    run_command,
     build_doc,
     eval_results,
 )
@@ -81,7 +80,6 @@ from datalad.interface.run import (
     json,
     anything2bool,
     _format_cmd_shorty,
-    assure_bytes,
     relpath,
     opj,
     op,
