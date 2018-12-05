@@ -376,11 +376,11 @@ def bytes2human(n, format='%(value).1f %(symbol)sB'):
       >>> bytes2human(1)
       '1.0 B'
       >>> bytes2human(1024)
-      '1.0 K'
+      '1.0 KB'
       >>> bytes2human(1048576)
-      '1.0 M'
+      '1.0 MB'
       >>> bytes2human(1099511627776127398123789121)
-      '909.5 Y'
+      '909.5 YB'
 
       >>> bytes2human(10000, "%(value).1f %(symbol)s/sec")
       '9.8 K/sec'
