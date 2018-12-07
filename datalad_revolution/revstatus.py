@@ -34,7 +34,7 @@ from datalad.interface.common_opts import (
     recursion_flag,
 )
 
-from datalad_revolution.dataset import (
+from .dataset import (
     RevolutionDataset as Dataset,
     EnsureDataset,
     datasetmethod,

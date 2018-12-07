@@ -40,13 +40,13 @@ from datalad.utils import (
 )
 from . import utils as ut
 
-from datalad_revolution.dataset import (
+from .dataset import (
     RevolutionDataset as Dataset,
     EnsureDataset,
     datasetmethod,
     require_dataset,
 )
-from datalad_revolution.revstatus import (
+from .revstatus import (
     RevStatus as Status,
 )
 

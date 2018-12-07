@@ -16,7 +16,7 @@ from . import utils as ut
 from datalad.support.annexrepo import AnnexRepo
 from datalad.support.exceptions import CommandError
 
-from datalad_revolution.gitrepo import (
+from .gitrepo import (
     RevolutionGitRepo,
     obsolete_methods as gitrepo_obsolete_methods,
 )

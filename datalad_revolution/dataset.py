@@ -28,8 +28,8 @@ from datalad.utils import (
     getpwd,
 )
 
-from datalad_revolution.gitrepo import RevolutionGitRepo
-from datalad_revolution.annexrepo import RevolutionAnnexRepo
+from .gitrepo import RevolutionGitRepo
+from .annexrepo import RevolutionAnnexRepo
 
 lgr = logging.getLogger('datalad.revolution.dataset')
 
