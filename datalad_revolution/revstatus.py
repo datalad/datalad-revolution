@@ -331,10 +331,10 @@ class RevStatus(Interface):
 
     @staticmethod
     def custom_result_renderer(res, **kwargs):  # pragma: no cover
-        from datalad.ui import ui
         if not res['status'] == 'ok' or res.get('state', None) == 'clean':
             # logging reported already
             return
+        from datalad.ui import ui
         path=res['path']
         #path = res['path'].relative_to(res['refds']) \
         #    if res.get('refds', None) else res['path']
@@ -348,3 +348,60 @@ class RevStatus(Interface):
             path=path,
             type_=' ({})'.format(
                 ac.color_word(type_, ac.MAGENTA) if type_ else '')))
+
+    @staticmethod
+    def custom_result_summary_renderer(results):  # pragma: no cover
+        # fish out sizes of annexed files. those will only be present
+        # with --annex ...
+        annexed = [
+            int(r['bytesize']) for r in results
+            if r.get('action', None) == 'status'
+            and 'key' in r and 'bytesize' in r]
+        if annexed:
+            from datalad.ui import ui
+            ui.message(
+                "Worktree has {} annex'ed files, "
+                "total size of tracked content: {}".format(
+                    len(annexed),
+                    bytes2human(sum(annexed))))
+
+
+# TODO move to datalad.utils eventually
+def bytes2human(n, format='%(value).1f %(symbol)sB'):
+    """
+    Convert n bytes into a human readable string based on format.
+    symbols can be either "customary", "customary_ext", "iec" or "iec_ext",
+    see: http://goo.gl/kTQMs
+
+      >>> bytes2human(1)
+      '1.0 B'
+      >>> bytes2human(1024)
+      '1.0 KB'
+      >>> bytes2human(1048576)
+      '1.0 MB'
+      >>> bytes2human(1099511627776127398123789121)
+      '909.5 YB'
+
+      >>> bytes2human(10000, "%(value).1f %(symbol)s/sec")
+      '9.8 K/sec'
+
+      >>> # precision can be adjusted by playing with %f operator
+      >>> bytes2human(10000, format="%(value).5f %(symbol)s")
+      '9.76562 K'
+
+    Taken from: http://goo.gl/kTQMs and subsequently simplified
+    Original Author: Giampaolo Rodola' <g.rodola [AT] gmail [DOT] com>
+    License: MIT
+    """
+    n = int(n)
+    if n < 0:
+        raise ValueError("n < 0")
+    symbols = ('', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+    prefix = {}
+    for i, s in enumerate(symbols[1:]):
+        prefix[s] = 1 << (i + 1) * 10
+    for symbol in reversed(symbols[1:]):
+        if n >= prefix[symbol]:
+            value = float(n) / prefix[symbol]
+            return format % locals()
+    return format % dict(symbol=symbols[0], value=n)
