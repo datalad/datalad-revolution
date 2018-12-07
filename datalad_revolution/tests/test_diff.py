@@ -22,7 +22,7 @@ from datalad.tests.utils import (
 )
 
 import datalad_revolution.utils as ut
-from datalad_revolution.dataset import RevolutionDataset as Dataset
+from ..dataset import RevolutionDataset as Dataset
 from datalad.api import (
     rev_save as save,
     rev_create as create,

@@ -12,9 +12,9 @@ from datalad.api import (
     rev_create as create,
 )
 
-from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
-from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
-from datalad_revolution.dataset import RevolutionDataset as Dataset
+from ..gitrepo import RevolutionGitRepo as GitRepo
+from ..annexrepo import RevolutionAnnexRepo as AnnexRepo
+from ..dataset import RevolutionDataset as Dataset
 
 from datalad.tests.utils import (
     assert_is,

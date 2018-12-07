@@ -27,8 +27,8 @@ from datalad.support.exceptions import (
     NoDatasetArgumentFound,
     IncompleteResultsError,
 )
-from datalad_revolution.dataset import RevolutionDataset as Dataset
-from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
+from ..dataset import RevolutionDataset as Dataset
+from ..annexrepo import RevolutionAnnexRepo as AnnexRepo
 from .utils import (
     get_deeply_nested_structure,
     has_symlink_capability,

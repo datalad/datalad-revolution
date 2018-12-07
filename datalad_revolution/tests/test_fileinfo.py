@@ -19,8 +19,8 @@ from datalad.tests.utils import (
     assert_raises,
 )
 
-from datalad_revolution.dataset import RevolutionDataset as Dataset
-from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
+from ..dataset import RevolutionDataset as Dataset
+from ..gitrepo import RevolutionGitRepo as GitRepo
 from .utils import (
     assert_repo_status,
     get_convoluted_situation,

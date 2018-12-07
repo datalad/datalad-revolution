@@ -15,7 +15,7 @@ from datalad.tests.utils import known_failure_windows
 import os
 import os.path as op
 
-from datalad_revolution.dataset import (
+from ..dataset import (
     RevolutionDataset as Dataset
 )
 from datalad.api import rev_create as create

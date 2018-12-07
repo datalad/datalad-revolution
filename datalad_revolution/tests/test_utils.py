@@ -12,7 +12,7 @@ from datalad.tests.utils import (
     on_windows,
 )
 
-from datalad_revolution.dataset import (
+from ..dataset import (
     RevolutionDataset as Dataset,
     resolve_path,
 )
