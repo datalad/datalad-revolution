@@ -15,6 +15,7 @@ __docformat__ = 'restructuredtext'
 from datalad.support.exceptions import CommandError
 
 from datalad.consts import PRE_INIT_COMMIT_SHA
+from datalad.cmd import GitRunner
 
 from datalad.tests.utils import (
     with_tempfile,
@@ -34,14 +35,13 @@ from .utils import (
 )
 
 
-@known_failure_windows
 def test_magic_number():
     # we hard code the magic SHA1 that represents the state of a Git repo
     # prior to the first commit -- used to diff from scratch to a specific
     # commit
     # given the level of dark magic, we better test whether this stays
     # constant across Git versions (it should!)
-    out, err = GitRunner().run('git hash-object -t tree /dev/null')
+    out, err = GitRunner().run('cd ./ | git hash-object --stdin -t tree')
     eq_(out.strip(), PRE_INIT_COMMIT_SHA)
 
 
