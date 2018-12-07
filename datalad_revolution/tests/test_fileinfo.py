@@ -8,7 +8,7 @@
 """Test file info getters"""
 
 import os.path as op
-import datalad_revolution.utils as ut
+from .. import utils as ut
 
 from datalad.tests.utils import (
     with_tempfile,

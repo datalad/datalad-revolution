@@ -17,7 +17,7 @@ from ..dataset import (
     resolve_path,
 )
 
-import datalad_revolution.utils as ut
+from .. import utils as ut
 
 
 @with_tempfile(mkdir=True)

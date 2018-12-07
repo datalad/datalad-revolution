@@ -9,7 +9,7 @@
 
 import os.path as op
 from six import text_type
-import datalad_revolution.utils as ut
+from .. import utils as ut
 
 from datalad.utils import (
     chpwd,

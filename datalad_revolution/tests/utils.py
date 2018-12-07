@@ -23,7 +23,7 @@ from datalad.tests.utils import (
     SkipTest,
 )
 
-import datalad_revolution.utils as ut
+from .. import utils as ut
 
 
 def assert_repo_status(path, annex=None, untracked_mode='normal', **kwargs):
