@@ -51,7 +51,7 @@ from datalad_revolution.revsave import RevSave
 
 from datalad_revolution.gitrepo import RevolutionGitRepo as GitRepo
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
-import datalad_revolution.utils as ut
+from . import utils as ut
 
 
 __docformat__ = 'restructuredtext'

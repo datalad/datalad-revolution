@@ -43,7 +43,7 @@ from datalad_revolution.dataset import (
     path_under_dataset,
     get_dataset_root,
 )
-import datalad_revolution.utils as ut
+from . import utils as ut
 
 from datalad.support.constraints import EnsureNone
 from datalad.support.constraints import EnsureStr

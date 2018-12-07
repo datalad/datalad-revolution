@@ -10,7 +10,7 @@ from six import (
 import wrapt
 from weakref import WeakValueDictionary
 import logging
-import datalad_revolution.utils as ut
+from . import utils as ut
 
 from datalad.distribution.dataset import (
     Dataset as _Dataset,

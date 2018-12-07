@@ -11,7 +11,7 @@ from weakref import WeakValueDictionary
 from datalad.utils import on_windows
 from datalad.ui import ui
 
-import datalad_revolution.utils as ut
+from . import utils as ut
 
 from datalad.support.annexrepo import AnnexRepo
 from datalad.support.exceptions import CommandError
