@@ -17,6 +17,7 @@ from six import (
     iteritems,
     text_type,
 )
+from datalad.dochelpers import exc_str
 from datalad.utils import (
     assure_list,
 )
@@ -107,13 +108,33 @@ class RevDiff(Interface):
         # do this inside the loop to go depth-first
         # https://github.com/datalad/datalad/issues/2161
         repo_path = ds.repo.pathobj
-        for path, props in iteritems(ds.repo.diffstatus(
+        try:
+            diff_state = ds.repo.diffstatus(
                 fr,
                 to,
                 paths=[] if not path else assure_list(path),
                 untracked=untracked,
                 ignore_submodules='other',
-                _cache=content_info_cache)):
+                _cache=content_info_cache)
+        except ValueError as e:
+            msg_tmpl = "reference '{}' invalid"
+            # not looking for a debug repr of the exception, just the message
+            estr = str(e)
+            if msg_tmpl.format(fr) in estr or msg_tmpl.format(to) in estr:
+                yield dict(
+                    path=ds.path,
+                    # report the dataset path rather than the repo path to avoid
+                    # realpath/symlink issues
+                    parentds=ds.path,
+                    # TODO factor out the remaining ones
+                    refds=ds.path,
+                    action='diff',
+                    status='impossible',
+                    message=estr,
+                )
+                return
+
+        for path, props in iteritems(diff_state):
             cpath = ds.pathobj / path.relative_to(repo_path)
             yield dict(
                 props,
