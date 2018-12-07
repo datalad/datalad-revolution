@@ -6,13 +6,15 @@
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
-"""test command datalad save
+"""test dataset diff
 
 """
 
 __docformat__ = 'restructuredtext'
 
 from datalad.support.exceptions import CommandError
+
+from datalad.consts import PRE_INIT_COMMIT_SHA
 
 from datalad.tests.utils import (
     with_tempfile,
@@ -32,9 +34,20 @@ from .utils import (
 )
 
 
+@known_failure_windows
+def test_magic_number():
+    # we hard code the magic SHA1 that represents the state of a Git repo
+    # prior to the first commit -- used to diff from scratch to a specific
+    # commit
+    # given the level of dark magic, we better test whether this stays
+    # constant across Git versions (it should!)
+    out, err = GitRunner().run('git hash-object -t tree /dev/null')
+    eq_(out.strip(), PRE_INIT_COMMIT_SHA)
+
+
 @with_tempfile(mkdir=True)
 @with_tempfile(mkdir=True)
-def test_diff(path, norepo):
+def test_repo_diff(path, norepo):
     ds = Dataset(path).rev_create()
     assert_repo_status(ds.path)
     assert_raises(ValueError, ds.repo.diff, fr='WTF', to='MIKE')
