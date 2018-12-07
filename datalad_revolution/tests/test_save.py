@@ -43,7 +43,7 @@ from datalad.api import (
     install,
 )
 
-from datalad_revolution.tests.utils import (
+from .utils import (
     assert_repo_status,
     skip_wo_symlink_capability,
 )

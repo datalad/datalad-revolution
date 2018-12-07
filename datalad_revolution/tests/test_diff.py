@@ -27,7 +27,7 @@ from datalad.api import (
     rev_save as save,
     rev_create as create,
 )
-from datalad_revolution.tests.utils import (
+from .utils import (
     assert_repo_status,
 )
 

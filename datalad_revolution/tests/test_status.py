@@ -29,7 +29,7 @@ from datalad.support.exceptions import (
 )
 from datalad_revolution.dataset import RevolutionDataset as Dataset
 from datalad_revolution.annexrepo import RevolutionAnnexRepo as AnnexRepo
-from datalad_revolution.tests.utils import (
+from .utils import (
     get_deeply_nested_structure,
     has_symlink_capability,
 )

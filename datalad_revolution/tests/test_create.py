@@ -37,7 +37,7 @@ from datalad.tests.utils import (
     with_tree,
 )
 
-from datalad_revolution.tests.utils import assert_repo_status
+from .utils import assert_repo_status
 
 
 _dataset_hierarchy_template = {

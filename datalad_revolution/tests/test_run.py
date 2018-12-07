@@ -32,7 +32,7 @@ from datalad.utils import (
 )
 
 from datalad_revolution.dataset import RevolutionDataset as Dataset
-from datalad_revolution.tests.utils import assert_repo_status
+from .utils import assert_repo_status
 from datalad.support.exceptions import (
     NoDatasetArgumentFound,
     CommandError,
