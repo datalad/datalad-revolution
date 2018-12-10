@@ -214,12 +214,20 @@ def test_status(_path, linkpath):
 
 
 # https://github.com/datalad/datalad-revolution/issues/64
+# breaks when the tempdir is a symlink
 @with_tempfile(mkdir=True)
 def test_subds_status(path):
     ds = Dataset(path).rev_create()
     subds = ds.rev_create('subds')
+    assert_repo_status(ds.path)
     subds.rev_create('someotherds')
     assert_repo_status(subds.path)
     assert_repo_status(ds.path, modified=['subds'])
-    ds.rev_save('subds')
-    assert_repo_status(ds.path)
+    assert_result_count(
+        ds.rev_status(path='subds'),
+        1,
+        # must be modified, not added (ds was clean after it was added)
+        state='modified',
+        type='dataset',
+        path=subds.path,
+        refds=ds.path)
