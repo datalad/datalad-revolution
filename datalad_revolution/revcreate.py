@@ -288,14 +288,14 @@ class RevCreate(Interface):
         # create and configure desired repository
         if no_annex:
             lgr.info("Creating a new git repo at %s", tbds.path)
-            GitRepo(
+            tbrepo = GitRepo(
                 tbds.path,
                 url=None,
                 create=True,
                 git_opts=initopts,
                 fake_dates=fake_dates)
             # place a .noannex file to indicate annex to leave this repo alone
-            stamp_path = ut.Path(tbds.path) / '.noannex'
+            stamp_path = ut.Path(tbrepo.path) / '.noannex'
             stamp_path.touch()
             add_to_git[stamp_path] = {
                 'type': 'file',
