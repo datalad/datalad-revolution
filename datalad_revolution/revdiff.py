@@ -102,6 +102,14 @@ class RevDiff(Interface):
         # we need to be able to compare with states that are not represented
         # in the worktree (anymore)
 
+        # TODO we might want to move away from the single-pass+immediate-yield
+        # paradigm for this command. If we gather all information first, we
+        # could do post-processing and detect when a file (same gitsha, or same
+        # key) was copied/moved from another dataset. Another command (e.g.
+        # rev-save) could act on this information and also move/copy
+        # availability information or at least enhance the respective commit
+        # message with cross-dataset provenance info
+
         # cache to help avoid duplicate status queries
         content_info_cache = {}
         # TODO loop over results and dive into subdatasets with --recursive
