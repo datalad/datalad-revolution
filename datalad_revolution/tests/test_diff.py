@@ -208,3 +208,53 @@ def test_diff(path, norepo):
         ds.rev_diff(), 1, state='untracked',
         path=op.join(ds.path, 'deep', 'down'),
         type='file')
+
+
+@with_tempfile(mkdir=True)
+@known_failure_direct_mode  #FIXME
+def test_diff_recursive(path):
+    ds = Dataset(path).create()
+    sub = ds.create('sub')
+    # look at the last change, and confirm a dataset was added
+    res = ds.diff(revision='HEAD~1..HEAD')
+    assert_result_count(res, 1, action='diff', state='added', path=sub.path, type='dataset')
+    # now recursive
+    res = ds.diff(recursive=True, revision='HEAD~1..HEAD')
+    # we also get the entire diff of the subdataset from scratch
+    assert_status('ok', res)
+    ok_(len(res) > 3)
+    # one specific test
+    assert_result_count(res, 1, action='diff', state='added', path=opj(sub.path, '.datalad', 'config'))
+
+    # now we add a file to just the parent
+    create_tree(ds.path, {'onefile': 'tobeadded', 'sub': {'twofile': 'tobeadded'}})
+    res = ds.diff(recursive=True, report_untracked='all')
+    assert_result_count(res, 3)
+    assert_result_count(res, 1, action='diff', state='untracked', path=opj(ds.path, 'onefile'), type='file')
+    assert_result_count(res, 1, action='diff', state='modified', path=sub.path, type='dataset')
+    assert_result_count(res, 1, action='diff', state='untracked', path=opj(sub.path, 'twofile'), type='file')
+    # save sub
+    sub.add('.')
+    # save sub in parent
+    ds.save()
+    # save addition in parent
+    ds.add('.')
+    ok_clean_git(ds.path)
+    # look at the last change, only one file was added
+    res = ds.diff(revision='HEAD~1..HEAD')
+    assert_result_count(res, 1)
+    assert_result_count(res, 1, action='diff', state='added', path=opj(ds.path, 'onefile'), type='file')
+
+    # now the exact same thing with recursion, must not be different from the call
+    # above
+    res = ds.diff(recursive=True, revision='HEAD~1..HEAD')
+    assert_result_count(res, 1)
+    # last change in parent
+    assert_result_count(res, 1, action='diff', state='added', path=opj(ds.path, 'onefile'), type='file')
+
+    # one further back brings in the modified subdataset, and the added file within it
+    res = ds.diff(recursive=True, revision='HEAD~2..HEAD')
+    assert_result_count(res, 3)
+    assert_result_count(res, 1, action='diff', state='added', path=opj(ds.path, 'onefile'), type='file')
+    assert_result_count(res, 1, action='diff', state='added', path=opj(sub.path, 'twofile'), type='file')
+    assert_result_count(res, 1, action='diff', state='modified', path=sub.path, type='dataset')
