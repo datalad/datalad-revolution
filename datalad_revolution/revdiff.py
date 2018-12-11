@@ -120,7 +120,7 @@ class RevDiff(Interface):
             diff_state = ds.repo.diffstatus(
                 fr,
                 to,
-                paths=[] if not path else assure_list(path),
+                paths=None if not path else assure_list(path),
                 untracked=untracked,
                 ignore_submodules='other',
                 _cache=content_info_cache)

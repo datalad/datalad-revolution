@@ -217,7 +217,7 @@ def test_diff_recursive(path):
     ds = Dataset(path).rev_create()
     sub = ds.rev_create('sub')
     # look at the last change, and confirm a dataset was added
-    res = ds.diff(revision='HEAD~1..HEAD')
+    res = ds.rev_diff(fr='HEAD~1', to='HEAD')
     assert_result_count(
         res, 1, action='diff', state='added', path=sub.path, type='dataset')
     # now recursive
