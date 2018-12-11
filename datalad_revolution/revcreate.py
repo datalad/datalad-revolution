@@ -244,11 +244,14 @@ class RevCreate(Interface):
         parentds_path = get_dataset_root(
             op.normpath(op.join(str(path), os.pardir)))
         if parentds_path:
+            prepo = GitRepo(parentds_path)
+            parentds_path = ut.Path(parentds_path)
             # we cannot get away with a simple
             # GitRepo.get_content_info(), as we need to detect
             # uninstalled/added subdatasets too
-            subds_status = {k for k, v in iteritems(
-                GitRepo(parentds_path).status(untracked='no'))
+            subds_status = {
+                parentds_path / k.relative_to(prepo.path)
+                for k, v in iteritems(prepo.status(untracked='no'))
                 if v.get('type', None) == 'dataset'}
             check_paths = [ut.Path(path)]
             check_paths.extend(ut.Path(path).parents)
@@ -259,7 +262,7 @@ class RevCreate(Interface):
                     'message': (
                         'collision with %s (dataset) in dataset %s',
                         str(conflict[0]),
-                        parentds_path)})
+                        str(parentds_path))})
                 yield res
                 return
 
