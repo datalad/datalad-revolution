@@ -82,7 +82,6 @@ class YieldDatasets(ResultXFM):
             lgr.debug('rejected by return value configuration: %s', res)
 
 
-
 @build_doc
 class RevCreate(Interface):
     """Create a new dataset from scratch.
@@ -124,8 +123,9 @@ class RevCreate(Interface):
     # result_xfm = 'datasets'
     result_xfm = YieldDatasets()
     # result filter
-    result_filter = EnsureKeyChoice('action', ('create',)) & \
-                    EnsureKeyChoice('status', ('ok', 'notneeded'))
+    result_filter = \
+        EnsureKeyChoice('action', ('create',)) & \
+        EnsureKeyChoice('status', ('ok', 'notneeded'))
 
     _params_ = dict(
         path=Parameter(
@@ -189,7 +189,6 @@ class RevCreate(Interface):
             fake_dates=False
     ):
         refds_path = dataset.path if hasattr(dataset, 'path') else dataset
-        orig_path = path
 
         # two major cases
         # 1. we got a `dataset` -> we either want to create it (path is None),
@@ -419,8 +418,8 @@ class RevCreate(Interface):
     def custom_result_renderer(res, **kwargs):  # pragma: no cover
         from datalad.ui import ui
         if res.get('action', None) == 'create' and \
-               res.get('status', None) == 'ok' and \
-               res.get('type', None) == 'dataset':
+                res.get('status', None) == 'ok' and \
+                res.get('type', None) == 'dataset':
             ui.message("Created dataset at {}.".format(res['path']))
         else:
             ui.message("Nothing was created")
