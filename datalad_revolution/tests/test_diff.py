@@ -15,8 +15,6 @@ __docformat__ = 'restructuredtext'
 import os.path as op
 from datalad.support.exceptions import (
     NoDatasetArgumentFound,
-    CommandError,
-    IncompleteResultsError,
 )
 
 from datalad.consts import PRE_INIT_COMMIT_SHA
@@ -28,7 +26,6 @@ from datalad.tests.utils import (
     eq_,
     assert_raises,
     chpwd,
-    assert_status,
     assert_result_count,
 )
 
@@ -190,7 +187,8 @@ def test_diff(path, norepo):
     res = _dirty_results(ds.rev_diff())
     assert_result_count(res, 1)
     assert_result_count(
-        res, 1, state='untracked', type='directory', path=op.join(ds.path, 'deep'))
+        res, 1, state='untracked', type='directory',
+        path=op.join(ds.path, 'deep'))
     # report of individual files is also possible
     assert_result_count(
         ds.rev_diff(untracked='all'), 2, state='untracked', type='file')
@@ -198,7 +196,8 @@ def test_diff(path, norepo):
     assert_result_count(ds.rev_diff(path='somewhere'), 0)
     # perfect match and anything underneath will do
     assert_result_count(
-        ds.rev_diff(path='deep'), 1, state='untracked', path=op.join(ds.path, 'deep'),
+        ds.rev_diff(path='deep'), 1, state='untracked',
+        path=op.join(ds.path, 'deep'),
         type='directory')
     assert_result_count(
         ds.rev_diff(path='deep'), 1,
@@ -206,5 +205,6 @@ def test_diff(path, norepo):
     ds.repo.add(op.join('deep', 'down2'), git=True)
     # now the remaining file is the only untracked one
     assert_result_count(
-        ds.rev_diff(), 1, state='untracked', path=op.join(ds.path, 'deep', 'down'),
+        ds.rev_diff(), 1, state='untracked',
+        path=op.join(ds.path, 'deep', 'down'),
         type='file')
