@@ -301,6 +301,7 @@ class RevStatus(Interface):
                         "dataset containing given paths is not underneath "
                         "the reference dataset %s: %s",
                         ds, qpaths),
+                    logger=lgr,
                 )
                 continue
             elif qds_inrefds != qdspath:

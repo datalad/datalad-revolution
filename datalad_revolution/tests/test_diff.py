@@ -221,7 +221,7 @@ def test_diff_recursive(path):
     assert_result_count(
         res, 1, action='diff', state='added', path=sub.path, type='dataset')
     # now recursive
-    res = ds.diff(recursive=True, revision='HEAD~1..HEAD')
+    res = ds.rev_diff(recursive=True, fr='HEAD~1', to='HEAD')
     # we also get the entire diff of the subdataset from scratch
     assert_status('ok', res)
     ok_(len(res) > 3)
@@ -234,8 +234,8 @@ def test_diff_recursive(path):
     create_tree(
         ds.path,
         {'onefile': 'tobeadded', 'sub': {'twofile': 'tobeadded'}})
-    res = ds.diff(recursive=True, report_untracked='all')
-    assert_result_count(res, 3)
+    res = ds.rev_diff(recursive=True, untracked='all')
+    assert_result_count(_dirty_results(res), 3)
     assert_result_count(
         res, 1,
         action='diff', state='untracked', path=op.join(ds.path, 'onefile'),
@@ -252,8 +252,8 @@ def test_diff_recursive(path):
     ds.rev_save()
     assert_repo_status(ds.path)
     # look at the last change, only one file was added
-    res = ds.diff(revision='HEAD~1..HEAD')
-    assert_result_count(res, 1)
+    res = ds.rev_diff(fr='HEAD~1', to='HEAD')
+    assert_result_count(_dirty_results(res), 1)
     assert_result_count(
         res, 1,
         action='diff', state='added', path=op.join(ds.path, 'onefile'),
@@ -261,8 +261,8 @@ def test_diff_recursive(path):
 
     # now the exact same thing with recursion, must not be different from the
     # call above
-    res = ds.diff(recursive=True, revision='HEAD~1..HEAD')
-    assert_result_count(res, 1)
+    res = ds.rev_diff(recursive=True, fr='HEAD~1', to='HEAD')
+    assert_result_count(_dirty_results(res), 1)
     # last change in parent
     assert_result_count(
         res, 1, action='diff', state='added', path=op.join(ds.path, 'onefile'),
@@ -270,8 +270,8 @@ def test_diff_recursive(path):
 
     # one further back brings in the modified subdataset, and the added file
     # within it
-    res = ds.diff(recursive=True, revision='HEAD~2..HEAD')
-    assert_result_count(res, 3)
+    res = ds.rev_diff(recursive=True, fr='HEAD~2', to='HEAD')
+    assert_result_count(_dirty_results(res), 3)
     assert_result_count(
         res, 1,
         action='diff', state='added', path=op.join(ds.path, 'onefile'),

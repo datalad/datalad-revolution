@@ -393,8 +393,10 @@ class RevolutionGitRepo(GitRepo):
                     # cases
                     type=to_state_r['type'],
                 )
-            if props['state'] in ('clean', 'added'):
+            if props['state'] in ('clean', 'added', 'modified'):
                 props['gitshasum'] = to_state_r['gitshasum']
+            if props['state'] in ('clean', 'modified', 'deleted'):
+                props['prev_gitshasum'] = from_state[f]['gitshasum']
             status[f] = props
 
         for f, from_state_r in iteritems(from_state):

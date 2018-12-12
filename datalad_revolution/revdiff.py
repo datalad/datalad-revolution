@@ -44,6 +44,7 @@ from datalad_revolution.revstatus import (
 from datalad.support.constraints import EnsureNone
 from datalad.support.constraints import EnsureStr
 from datalad.support.param import Parameter
+from datalad.consts import PRE_INIT_COMMIT_SHA
 
 lgr = logging.getLogger('datalad.revolution.diff')
 
@@ -115,43 +116,79 @@ class RevDiff(Interface):
         # TODO loop over results and dive into subdatasets with --recursive
         # do this inside the loop to go depth-first
         # https://github.com/datalad/datalad/issues/2161
-        repo_path = ds.repo.pathobj
-        try:
-            diff_state = ds.repo.diffstatus(
+        for res in _diff_ds(
+                ds,
                 fr,
                 to,
+                # TODO recode paths to repo path reference
                 paths=None if not path else assure_list(path),
                 untracked=untracked,
-                ignore_submodules='other',
-                _cache=content_info_cache)
-        except ValueError as e:
-            msg_tmpl = "reference '{}' invalid"
-            # not looking for a debug repr of the exception, just the message
-            estr = str(e)
-            if msg_tmpl.format(fr) in estr or msg_tmpl.format(to) in estr:
-                yield dict(
-                    path=ds.path,
-                    # report the dataset path rather than the repo path to avoid
-                    # realpath/symlink issues
-                    parentds=ds.path,
-                    # TODO factor out the remaining ones
-                    refds=ds.path,
-                    action='diff',
-                    status='impossible',
-                    message=estr,
-                )
-                return
-
-        for path, props in iteritems(diff_state):
-            cpath = ds.pathobj / path.relative_to(repo_path)
-            yield dict(
-                props,
-                path=str(cpath),
-                # report the dataset path rather than the repo path to avoid
-                # realpath/symlink issues
-                parentds=ds.path,
-                # TODO factor out the remaining ones
+                cache=content_info_cache):
+            res.update(
                 refds=ds.path,
+                logger=lgr,
                 action='diff',
-                status='ok',
             )
+            yield res
+
+
+def _diff_ds(ds, fr, to, paths, untracked, cache):
+    repo_path = ds.repo.pathobj
+    try:
+        lgr.debug("diff %s from '%s' to '%s'", ds, fr, to)
+        diff_state = ds.repo.diffstatus(
+            fr,
+            to,
+            paths=paths,
+            untracked=untracked,
+            ignore_submodules='other',
+            _cache=cache)
+    except ValueError as e:
+        msg_tmpl = "reference '{}' invalid"
+        # not looking for a debug repr of the exception, just the message
+        estr = str(e)
+        if msg_tmpl.format(fr) in estr or msg_tmpl.format(to) in estr:
+            yield dict(
+                path=ds.path,
+                status='impossible',
+                message=estr,
+            )
+            return
+
+    for path, props in iteritems(diff_state):
+        path = ds.pathobj / path.relative_to(repo_path)
+        yield dict(
+            props,
+            path=str(path),
+            # report the dataset path rather than the repo path to avoid
+            # realpath/symlink issues
+            parentds=ds.path,
+            status='ok',
+        )
+        if props.get('type', None) == 'dataset':
+            subds_state = props.get('state', None)
+            if subds_state in ('clean', 'deleted'):
+                # no need to look into the subdataset
+                continue
+            elif subds_state in ('added', 'modified'):
+                # dive
+                subds = Dataset(str(path))
+                for r in _diff_ds(
+                        subds,
+                        # from before time or from the reported state
+                        # TODO repo.diff() does not report the original state
+                        PRE_INIT_COMMIT_SHA
+                        if subds_state == 'added'
+                        else props['prev_gitshasum'],
+                        # to the last recorded state, or the worktree
+                        None if to is None else props['gitshasum'],
+                        # it should not be necessary to further mangle the path
+                        # TOOD maybe kill those that are not underneath the
+                        # dataset root
+                        paths=paths,
+                        untracked=untracked,
+                        cache=cache):
+                    yield r
+            else:
+                raise RuntimeError(
+                    "Unexpected subdataset state '{}'. That sucks!".format(subds_state))
