@@ -12,6 +12,7 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
+import os
 import os.path as op
 from six import (
     iteritems,
@@ -120,6 +121,9 @@ class RevDiff(Interface):
                 ds,
                 fr,
                 to,
+                recursion_limit
+                if recursion_limit is not None and recursive
+                else -1 if recursive else 0,
                 # TODO recode paths to repo path reference
                 paths=None if not path else assure_list(path),
                 untracked=untracked,
@@ -131,8 +135,42 @@ class RevDiff(Interface):
             )
             yield res
 
+    @staticmethod
+    def custom_result_renderer(res, **kwargs):  # pragma: no cover
+        if not (res['status'] == 'ok' \
+                and res['action'] in ('status', 'diff') \
+                and res.get('state', None) != 'clean'):
+            # logging reported already
+            return
+        from datalad.ui import ui
+        # when to render relative paths:
+        #  1) if a dataset arg was given
+        #  2) if CWD is the refds
+        refds = res.get('refds', None)
+        refds = refds if kwargs.get('dataset', None) is not None \
+            or refds == os.getcwd() else None
+        path = res['path'] if refds is None \
+            else str(ut.Path(res['path']).relative_to(refds))
+        type_ = res.get('type', res.get('type_src', ''))
+        max_len = len('modified (staged)')
+        state = res['state']
+        if state == 'modified' \
+                and kwargs.get('to', None) is None \
+                and 'gitshasum' in res \
+                and 'prev_gitshasum' in res \
+                and res['gitshasum'] != res['prev_gitshasum']:
+            state = 'modified (staged)'
+        ui.message('{fill}{state}: {path}{type_}'.format(
+            fill=' ' * max(0, max_len - len(state)),
+            state=ut.ac.color_word(
+                state,
+                ut.state_color_map.get(res['state'], ut.ac.WHITE)),
+            path=path,
+            type_=' ({})'.format(
+                ut.ac.color_word(type_, ut.ac.MAGENTA) if type_ else '')))
 
-def _diff_ds(ds, fr, to, paths, untracked, cache):
+
+def _diff_ds(ds, fr, to, recursion_level, paths, untracked, cache):
     repo_path = ds.repo.pathobj
     try:
         lgr.debug("diff %s from '%s' to '%s'", ds, fr, to)
@@ -165,7 +203,7 @@ def _diff_ds(ds, fr, to, paths, untracked, cache):
             parentds=ds.path,
             status='ok',
         )
-        if props.get('type', None) == 'dataset':
+        if recursion_level != 0 and props.get('type', None) == 'dataset':
             subds_state = props.get('state', None)
             if subds_state in ('clean', 'deleted'):
                 # no need to look into the subdataset
@@ -182,6 +220,8 @@ def _diff_ds(ds, fr, to, paths, untracked, cache):
                         else props['prev_gitshasum'],
                         # to the last recorded state, or the worktree
                         None if to is None else props['gitshasum'],
+                        # subtract on level on the way down
+                        recursion_level=recursion_level - 1,
                         # it should not be necessary to further mangle the path
                         # TOOD maybe kill those that are not underneath the
                         # dataset root
@@ -191,4 +231,5 @@ def _diff_ds(ds, fr, to, paths, untracked, cache):
                     yield r
             else:
                 raise RuntimeError(
-                    "Unexpected subdataset state '{}'. That sucks!".format(subds_state))
+                    "Unexpected subdataset state '{}'. That sucks!".format(
+                        subds_state))
