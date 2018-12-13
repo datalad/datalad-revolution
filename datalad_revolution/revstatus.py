@@ -19,8 +19,6 @@ from six import (
 )
 from collections import OrderedDict
 
-import datalad.support.ansi_colors as ac
-
 from datalad.utils import (
     assure_list,
 )
@@ -51,13 +49,6 @@ from datalad.support.constraints import EnsureChoice
 from datalad.support.param import Parameter
 
 lgr = logging.getLogger('datalad.revolution.status')
-
-
-state_color_map = {
-    'untracked': ac.RED,
-    'modified': ac.RED,
-    'added': ac.GREEN,
-}
 
 
 def _yield_status(ds, paths, annexinfo, untracked, recursion_limit, queried, cache):
@@ -337,19 +328,19 @@ class RevStatus(Interface):
             # logging reported already
             return
         from datalad.ui import ui
-        path=res['path']
+        path = res['path']
         #path = res['path'].relative_to(res['refds']) \
         #    if res.get('refds', None) else res['path']
         type_ = res.get('type', res.get('type_src', ''))
         max_len = len('untracked(directory)')
         ui.message('{fill}{state}: {path}{type_}'.format(
             fill=' ' * max(0, max_len - len(res['state'])),
-            state=ac.color_word(
+            state=ut.ac.color_word(
                 res['state'],
-                state_color_map.get(res['state'], ac.WHITE)),
+                ut.state_color_map.get(res['state'], ut.ac.WHITE)),
             path=path,
             type_=' ({})'.format(
-                ac.color_word(type_, ac.MAGENTA) if type_ else '')))
+                ut.ac.color_word(type_, ut.ac.MAGENTA) if type_ else '')))
 
     @staticmethod
     def custom_result_summary_renderer(results):  # pragma: no cover
