@@ -12,6 +12,7 @@ __docformat__ = 'restructuredtext'
 
 
 import logging
+import os
 import os.path as op
 from six import (
     iteritems,
@@ -328,13 +329,19 @@ class RevStatus(Interface):
             # logging reported already
             return
         from datalad.ui import ui
-        path = res['path']
-        #path = res['path'].relative_to(res['refds']) \
-        #    if res.get('refds', None) else res['path']
+        # when to render relative paths:
+        #  1) if a dataset arg was given
+        #  2) if CWD is the refds
+        refds = res.get('refds', None)
+        refds = refds if kwargs['dataset'] is not None \
+            or refds == os.getcwd() else None
+        path = res['path'] if refds is None \
+            else str(ut.Path(res['path']).relative_to(refds))
         type_ = res.get('type', res.get('type_src', ''))
         max_len = len('modified (staged)')
         state = res['state']
-        if state == 'modified' and 'gitshasum' in res and 'prev_gitshasum' in res \
+        if state == 'modified' and 'gitshasum' in res \
+                and 'prev_gitshasum' in res \
                 and res['gitshasum'] != res['prev_gitshasum']:
             state = 'modified (staged)'
         ui.message('{fill}{state}: {path}{type_}'.format(
