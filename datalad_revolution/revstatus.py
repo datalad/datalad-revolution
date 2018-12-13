@@ -332,11 +332,15 @@ class RevStatus(Interface):
         #path = res['path'].relative_to(res['refds']) \
         #    if res.get('refds', None) else res['path']
         type_ = res.get('type', res.get('type_src', ''))
-        max_len = len('untracked(directory)')
+        max_len = len('modified (staged)')
+        state = res['state']
+        if state == 'modified' and 'gitshasum' in res and 'prev_gitshasum' in res \
+                and res['gitshasum'] != res['prev_gitshasum']:
+            state = 'modified (staged)'
         ui.message('{fill}{state}: {path}{type_}'.format(
-            fill=' ' * max(0, max_len - len(res['state'])),
+            fill=' ' * max(0, max_len - len(state)),
             state=ut.ac.color_word(
-                res['state'],
+                state,
                 ut.state_color_map.get(res['state'], ut.ac.WHITE)),
             path=path,
             type_=' ({})'.format(
