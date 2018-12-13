@@ -381,8 +381,6 @@ class RevolutionGitRepo(GitRepo):
             else:
                 # change in git record, or on disk
                 props = dict(
-                    # TODO is 'modified' enough, should be report typechange?
-                    # often this will be a pointless detail, though...
                     # TODO we could have a new file that is already staged
                     # but had subsequent modifications done to it that are
                     # unstaged. Such file would presently show up as 'added'
