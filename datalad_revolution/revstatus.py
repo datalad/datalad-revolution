@@ -333,7 +333,7 @@ class RevStatus(Interface):
         #  1) if a dataset arg was given
         #  2) if CWD is the refds
         refds = res.get('refds', None)
-        refds = refds if kwargs['dataset'] is not None \
+        refds = refds if kwargs.get('dataset', None) is not None \
             or refds == os.getcwd() else None
         path = res['path'] if refds is None \
             else str(ut.Path(res['path']).relative_to(refds))
