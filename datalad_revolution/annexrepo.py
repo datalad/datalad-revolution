@@ -70,7 +70,7 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
 
     def get_content_annexinfo(
             self, paths=None, init='git', ref=None, eval_availability=False,
-            **kwargs):
+            key_prefix='', **kwargs):
         """
         Parameters
         ----------
@@ -131,8 +131,12 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             opts = [str(p) for p in paths] if paths else ['--include', '*']
         for j in self._run_annex_command_json(cmd, opts=opts):
             path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
-            rec = info.get(path, {})
-            rec.update({k: j[k] for k in j if k != 'file'})
+            rec = info.get(path, None)
+            if init is not None and rec is None:
+                # init constraint knows nothing about this path -> skip
+                continue
+            rec.update({'{}{}'.format(key_prefix, k): j[k]
+                       for k in j if k != 'file'})
             info[path] = rec
             # TODO make annex availability checks optional and move in here
             if not eval_availability:
