@@ -18,6 +18,7 @@ from six import (
     iteritems,
     text_type,
 )
+from collections import OrderedDict
 from datalad.dochelpers import exc_str
 from datalad.utils import (
     assure_list,
@@ -99,10 +100,39 @@ class RevDiff(Interface):
         if isinstance(to, list):
             to = to[0]
 
-        # TODO we cannot really perform any sorting of paths into subdatasets
+        # we cannot really perform any sorting of paths into subdatasets
         # or rejecting paths based on the state of the filesystem, as
         # we need to be able to compare with states that are not represented
         # in the worktree (anymore)
+        if path:
+            ps = []
+            # sort any path argument into the respective subdatasets
+            for p in sorted(assure_list(path)):
+                # it is important to capture the exact form of the
+                # given path argument, before any normalization happens
+                # distinguish rsync-link syntax to identify
+                # a dataset as whole (e.g. 'ds') vs its
+                # content (e.g. 'ds/')
+                # special case is the root dataset, always report its content
+                # changes
+                orig_path = str(p)
+                resolved_path = resolve_path(p, dataset)
+                p = \
+                    resolved_path, \
+                    orig_path.endswith(op.sep) or resolved_path == ds.pathobj
+                root = get_dataset_root(str(p[0]))
+                if root is None:
+                    # no root, not possibly underneath the refds
+                    yield dict(
+                        action='status',
+                        path=str(p[0]),
+                        refds=ds.path,
+                        status='error',
+                        message='path not underneath this dataset',
+                        logger=lgr)
+                    continue
+                ps.append(p)
+            path = ps
 
         # TODO we might want to move away from the single-pass+immediate-yield
         # paradigm for this command. If we gather all information first, we
@@ -114,9 +144,6 @@ class RevDiff(Interface):
 
         # cache to help avoid duplicate status queries
         content_info_cache = {}
-        # TODO loop over results and dive into subdatasets with --recursive
-        # do this inside the loop to go depth-first
-        # https://github.com/datalad/datalad/issues/2161
         for res in _diff_ds(
                 ds,
                 fr,
@@ -125,7 +152,7 @@ class RevDiff(Interface):
                 if recursion_limit is not None and recursive
                 else -1 if recursive else 0,
                 # TODO recode paths to repo path reference
-                paths=None if not path else assure_list(path),
+                origpaths=None if not path else OrderedDict(path),
                 untracked=untracked,
                 cache=content_info_cache):
             res.update(
@@ -170,14 +197,22 @@ class RevDiff(Interface):
                 ut.ac.color_word(type_, ut.ac.MAGENTA) if type_ else '')))
 
 
-def _diff_ds(ds, fr, to, recursion_level, paths, untracked, cache):
+def _diff_ds(ds, fr, to, recursion_level, origpaths, untracked, cache):
     repo_path = ds.repo.pathobj
+    # filter and normalize paths that match this dataset before passing them
+    # onto the low-level query method
+    paths = None if origpaths is None \
+        else OrderedDict(
+            (repo_path / p.relative_to(ds.pathobj), goinside)
+            for p, goinside in iteritems(origpaths)
+            if ds.pathobj in p.parents or (p == ds.pathobj and goinside)
+        )
     try:
         lgr.debug("diff %s from '%s' to '%s'", ds, fr, to)
         diff_state = ds.repo.diffstatus(
             fr,
             to,
-            paths=paths,
+            paths=None if not paths else [p for p in paths],
             untracked=untracked,
             ignore_submodules='other',
             _cache=cache)
@@ -194,27 +229,29 @@ def _diff_ds(ds, fr, to, recursion_level, paths, untracked, cache):
             return
 
     for path, props in iteritems(diff_state):
-        path = ds.pathobj / path.relative_to(repo_path)
+        pathinds = str(ds.pathobj / path.relative_to(repo_path))
         yield dict(
             props,
-            path=str(path),
+            path=pathinds,
             # report the dataset path rather than the repo path to avoid
             # realpath/symlink issues
             parentds=ds.path,
             status='ok',
         )
-        if recursion_level != 0 and props.get('type', None) == 'dataset':
+        # if a dataset, and given in rsync-style 'ds/' or with sufficient
+        # recursion level left -> dive in
+        if props.get('type', None) == 'dataset' and (
+                (paths and paths.get(path, False)) or recursion_level != 0):
             subds_state = props.get('state', None)
             if subds_state in ('clean', 'deleted'):
                 # no need to look into the subdataset
                 continue
             elif subds_state in ('added', 'modified'):
                 # dive
-                subds = Dataset(str(path))
+                subds = Dataset(pathinds)
                 for r in _diff_ds(
                         subds,
                         # from before time or from the reported state
-                        # TODO repo.diff() does not report the original state
                         PRE_INIT_COMMIT_SHA
                         if subds_state == 'added'
                         else props['prev_gitshasum'],
@@ -222,10 +259,7 @@ def _diff_ds(ds, fr, to, recursion_level, paths, untracked, cache):
                         None if to is None else props['gitshasum'],
                         # subtract on level on the way down
                         recursion_level=recursion_level - 1,
-                        # it should not be necessary to further mangle the path
-                        # TOOD maybe kill those that are not underneath the
-                        # dataset root
-                        paths=paths,
+                        origpaths=origpaths,
                         untracked=untracked,
                         cache=cache):
                     yield r

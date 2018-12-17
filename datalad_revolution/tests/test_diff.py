@@ -12,6 +12,7 @@
 
 __docformat__ = 'restructuredtext'
 
+from six import text_type
 import os.path as op
 from datalad.support.exceptions import (
     NoDatasetArgumentFound,
@@ -19,7 +20,9 @@ from datalad.support.exceptions import (
 
 from datalad.consts import PRE_INIT_COMMIT_SHA
 from datalad.cmd import GitRunner
-
+from datalad.utils import (
+    on_windows,
+)
 from datalad.tests.utils import (
     with_tempfile,
     create_tree,
@@ -27,6 +30,7 @@ from datalad.tests.utils import (
     ok_,
     assert_raises,
     assert_status,
+    assert_in,
     chpwd,
     assert_result_count,
 )
@@ -39,6 +43,8 @@ from datalad.api import (
     rev_diff as diff,
 )
 from .utils import (
+    get_deeply_nested_structure,
+    has_symlink_capability,
     assert_repo_status,
 )
 
@@ -286,3 +292,98 @@ def test_diff_recursive(path):
     assert_result_count(
         res, 1,
         action='diff', state='modified', path=sub.path, type='dataset')
+
+
+@with_tempfile(mkdir=True)
+@with_tempfile()
+def test_path_diff(_path, linkpath):
+    # do the setup on the real path, not the symlink, to have its
+    # bugs not affect this test of status()
+    ds = get_deeply_nested_structure(str(_path))
+    if has_symlink_capability():
+        # make it more complicated by default
+        ut.Path(linkpath).symlink_to(_path, target_is_directory=True)
+        path = linkpath
+    else:
+        path = _path
+
+    ds = Dataset(path)
+    if not on_windows:
+        # TODO test should also be has_symlink_capability(), but
+        # something in the repo base class is not behaving yet
+        # check the premise of this test
+        assert ds.pathobj != ds.repo.pathobj
+
+    plain_recursive = ds.rev_diff(recursive=True)
+    # check integrity of individual reports with a focus on how symlinks
+    # are reported
+    for res in plain_recursive:
+        # anything that is an "intended" symlink should be reported
+        # as such. In contrast, anything that is a symlink for mere
+        # technical reasons (annex using it for something in some mode)
+        # should be reported as the thing it is representing (i.e.
+        # a file)
+        if 'link2' in text_type(res['path']):
+            assert res['type'] == 'symlink', res
+        else:
+            assert res['type'] != 'symlink', res
+        # every item must report its parent dataset
+        assert_in('parentds', res)
+
+    # bunch of smoke tests
+    # query of '.' is same as no path
+    eq_(plain_recursive, ds.rev_diff(path='.', recursive=True))
+    # duplicate paths do not change things
+    eq_(plain_recursive, ds.rev_diff(path=['.', '.'], recursive=True))
+    # neither do nested paths
+    eq_(plain_recursive,
+        ds.rev_diff(path=['.', 'subds_modified'], recursive=True))
+    # when invoked in a subdir of a dataset it still reports on the full thing
+    # just like `git status`, as long as there are no paths specified
+    with chpwd(op.join(path, 'directory_untracked')):
+        plain_recursive = diff(recursive=True)
+    # should be able to take absolute paths and yield the same
+    # output
+    eq_(plain_recursive, ds.rev_diff(path=ds.path, recursive=True))
+
+    # query for a deeply nested path from the top, should just work with a
+    # variety of approaches
+    rpath = op.join('subds_modified', 'subds_lvl1_modified',
+                    'directory_untracked')
+    apathobj = ds.pathobj / rpath
+    apath = str(apathobj)
+    for p in (rpath, apath, None):
+        if p is None:
+            # change into the realpath of the dataset and
+            # query with an explicit path
+            with chpwd(ds.path):
+                res = ds.rev_diff(path=op.join('.', rpath))
+        else:
+            res = ds.rev_diff(path=p)
+        assert_result_count(
+            res,
+            1,
+            state='untracked',
+            type='directory',
+            refds=ds.path,
+            # path always comes out a full path inside the queried dataset
+            path=apath,
+        )
+
+    assert_result_count(
+        ds.rev_diff(
+            recursive=True),
+        1,
+        path=apath)
+    # limiting recursion will exclude this particular path
+    assert_result_count(
+        ds.rev_diff(
+            recursive=True,
+            recursion_limit=1),
+        0,
+        path=apath)
+    # negative limit is unlimited limit
+    eq_(
+        ds.rev_diff(recursive=True, recursion_limit=-1),
+        ds.rev_diff(recursive=True)
+    )
