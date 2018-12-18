@@ -387,3 +387,24 @@ def test_path_diff(_path, linkpath):
         ds.rev_diff(recursive=True, recursion_limit=-1),
         ds.rev_diff(recursive=True)
     )
+
+
+@with_tempfile(mkdir=True)
+@with_tempfile(mkdir=True)
+def test_diff_nods(path, otherpath):
+    ds = Dataset(path).rev_create()
+    assert_result_count(
+        ds.rev_diff(path=otherpath, on_failure='ignore'),
+        1,
+        status='error',
+        message='path not underneath this dataset')
+    otherds = Dataset(otherpath).rev_create()
+    assert_result_count(
+        ds.rev_diff(path=otherpath, on_failure='ignore'),
+        1,
+        path=otherds.path,
+        status='error',
+        message=(
+            'dataset containing given paths is not underneath the '
+            'reference dataset %s: %s', ds, otherds.path)
+    )
