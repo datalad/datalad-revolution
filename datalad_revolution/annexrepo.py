@@ -152,13 +152,13 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
             init=self.get_content_annexinfo(
                 paths=paths,
                 ref='HEAD',
-                eval_availability=False))
+                eval_availability=False,
+                init=self.status(
+                    paths=paths,
+                    ignore_submodules='other')
+            )
+        )
         self._mark_content_availability(info)
-        for f, r in iteritems(self.status(paths=paths)):
-            inf = info.get(f, {})
-            inf.update(r)
-            info[f] = inf
-
         return info
 
     def _save_add(self, files, git=None, git_opts=None):
