@@ -314,7 +314,7 @@ def test_path_diff(_path, linkpath):
         # check the premise of this test
         assert ds.pathobj != ds.repo.pathobj
 
-    plain_recursive = ds.rev_diff(recursive=True)
+    plain_recursive = ds.rev_diff(recursive=True, annex='all')
     # check integrity of individual reports with a focus on how symlinks
     # are reported
     for res in plain_recursive:
@@ -332,19 +332,19 @@ def test_path_diff(_path, linkpath):
 
     # bunch of smoke tests
     # query of '.' is same as no path
-    eq_(plain_recursive, ds.rev_diff(path='.', recursive=True))
+    eq_(plain_recursive, ds.rev_diff(path='.', recursive=True, annex='all'))
     # duplicate paths do not change things
-    eq_(plain_recursive, ds.rev_diff(path=['.', '.'], recursive=True))
+    eq_(plain_recursive, ds.rev_diff(path=['.', '.'], recursive=True, annex='all'))
     # neither do nested paths
     eq_(plain_recursive,
-        ds.rev_diff(path=['.', 'subds_modified'], recursive=True))
+        ds.rev_diff(path=['.', 'subds_modified'], recursive=True, annex='all'))
     # when invoked in a subdir of a dataset it still reports on the full thing
     # just like `git status`, as long as there are no paths specified
     with chpwd(op.join(path, 'directory_untracked')):
-        plain_recursive = diff(recursive=True)
+        plain_recursive = diff(recursive=True, annex='all')
     # should be able to take absolute paths and yield the same
     # output
-    eq_(plain_recursive, ds.rev_diff(path=ds.path, recursive=True))
+    eq_(plain_recursive, ds.rev_diff(path=ds.path, recursive=True, annex='all'))
 
     # query for a deeply nested path from the top, should just work with a
     # variety of approaches
@@ -357,9 +357,9 @@ def test_path_diff(_path, linkpath):
             # change into the realpath of the dataset and
             # query with an explicit path
             with chpwd(ds.path):
-                res = ds.rev_diff(path=op.join('.', rpath))
+                res = ds.rev_diff(path=op.join('.', rpath), annex='all')
         else:
-            res = ds.rev_diff(path=p)
+            res = ds.rev_diff(path=p, annex='all')
         assert_result_count(
             res,
             1,
