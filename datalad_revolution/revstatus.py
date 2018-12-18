@@ -177,6 +177,18 @@ class RevStatus(Interface):
             untracked='normal',
             recursive=False,
             recursion_limit=None):
+        # To the next white knight that comes in to re-implement `status` as a
+        # special case of `diff`. There is one fundamental difference between
+        # the two commands: `status` can always use the worktree as evident on
+        # disk as a contraint (e.g. to figure out which subdataset a path is in)
+        # `diff` cannot do that (everything need to be handled based on a
+        # "virtual" representation of a dataset hierarchy).
+        # MIH concludes that while `status` can be implemented as a special case
+        # of `diff` doing so would complicate and slow down both `diff` and
+        # `status`. So while the apparent almost code-duplication between the
+        # two commands feels wrong, the benefit is speed. Any future RF should
+        # come with evidence that speed does not suffer, and complexity stays
+        # on a manageable level
         ds = require_dataset(
             dataset, check_installed=True, purpose='status reporting')
 
