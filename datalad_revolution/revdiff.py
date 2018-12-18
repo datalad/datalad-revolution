@@ -289,6 +289,11 @@ def _diff_cmd(
 
 def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
              annexinfo, cache):
+    if not ds.repo:
+        # asked to query a subdataset that is not available
+        lgr.debug("Skip diff of unavailable subdataset: %s", ds)
+        return
+
     repo_path = ds.repo.pathobj
     # filter and normalize paths that match this dataset before passing them
     # onto the low-level query method
