@@ -138,6 +138,12 @@ class RevolutionGitRepo(GitRepo):
             '120000': 'symlink',
             '160000': 'dataset',
         }
+        if paths:
+            # path matching will happen against what Git reports
+            # and Git always reports POSIX paths
+            # any incoming path has to be relative already, so we can simply
+            # convert unconditionally
+            paths = [ut.PurePosixPath(p) for p in paths]
 
         # this will not work in direct mode, but everything else should be
         # just fine
