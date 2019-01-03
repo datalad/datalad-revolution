@@ -27,7 +27,11 @@ from datalad.interface.base import (
     build_doc,
 )
 from datalad.interface.utils import eval_results
-
+from datalad.support.param import Parameter
+from datalad.support.constraints import (
+    EnsureNone,
+    EnsureStr,
+)
 from .dataset import (
     RevolutionDataset as Dataset,
     datasetmethod,
@@ -165,7 +169,16 @@ class RevStatus(Interface):
     # does not yield meaningful output for this command
     result_renderer = 'tailored'
 
-    _params_ = _common_diffstatus_params
+    _params_ = dict(
+        _common_diffstatus_params,
+        path=Parameter(
+            args=("path",),
+            metavar="PATH",
+            doc="""path to be evaluated""",
+            nargs="*",
+            constraints=EnsureStr() | EnsureNone()),
+        )
+
 
     @staticmethod
     @datasetmethod(name='rev_status')

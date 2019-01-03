@@ -357,9 +357,15 @@ def test_path_diff(_path, linkpath):
             # change into the realpath of the dataset and
             # query with an explicit path
             with chpwd(ds.path):
-                res = ds.rev_diff(path=op.join('.', rpath), annex='all')
+                res = ds.rev_diff(
+                    path=op.join('.', rpath),
+                    recursive=True,
+                    annex='all')
         else:
-            res = ds.rev_diff(path=p, annex='all')
+            res = ds.rev_diff(
+                path=p,
+                recursive=True,
+                annex='all')
         assert_result_count(
             res,
             1,

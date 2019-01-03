@@ -61,12 +61,6 @@ _common_diffstatus_params = dict(
         no dataset is given, an attempt is made to identify the dataset
         based on the current working directory""",
         constraints=EnsureDataset() | EnsureNone()),
-    path=Parameter(
-        args=("path",),
-        metavar="PATH",
-        doc="""path to be evaluated""",
-        nargs="*",
-        constraints=EnsureStr() | EnsureNone()),
     annex=Parameter(
         args=('--annex',),
         metavar='MODE',
@@ -98,7 +92,21 @@ _common_diffstatus_params = dict(
 
 @build_doc
 class RevDiff(Interface):
-    """
+    """Report differences between two states of a dataset (hierarchy)
+
+    The two to-be-compared states are given via to --from and --to options.
+    These state identifiers are evaluated in the context of the (specified
+    or detected) dataset. In case of a recursive report on a dataset
+    hierarchy corresponding state pairs for any subdataset are determined
+    from the subdataset record in the respective superdataset. Only changes
+    recorded in a subdataset between these two states are reported, and so on.
+
+    Any paths given as additional arguments will be used to constrain the
+    difference report. As with Git's diff, it will not result in an error when
+    a path is specified that does not exist on the filesystem.
+
+    Reports are very similar to those of the `rev-status` command, with the
+    distinguished content types and states being identical.
     """
     # make the custom renderer the default one, as the global default renderer
     # does not yield meaningful output for this command
@@ -106,6 +114,12 @@ class RevDiff(Interface):
 
     _params_ = dict(
         _common_diffstatus_params,
+        path=Parameter(
+            args=("path",),
+            metavar="PATH",
+            doc="""path to contrain the report to""",
+            nargs="*",
+            constraints=EnsureStr() | EnsureNone()),
         fr=Parameter(
             args=("-f", "--from",),
             dest='fr',
