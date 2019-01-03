@@ -175,14 +175,8 @@ class RevDiff(Interface):
         path = res['path'] if refds is None \
             else str(ut.Path(res['path']).relative_to(refds))
         type_ = res.get('type', res.get('type_src', ''))
-        max_len = len('modified (staged)')
+        max_len = len('untracked')
         state = res['state']
-        if state == 'modified' \
-                and kwargs.get('to', None) is None \
-                and 'gitshasum' in res \
-                and 'prev_gitshasum' in res \
-                and res['gitshasum'] != res['prev_gitshasum']:
-            state = 'modified (staged)'
         ui.message('{fill}{state}: {path}{type_}'.format(
             fill=' ' * max(0, max_len - len(state)),
             state=ut.ac.color_word(
