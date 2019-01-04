@@ -73,12 +73,6 @@ def test_get_content_info(path):
             # no duplication with path
             assert_not_in('file', r, f)
 
-    # query a single absolute path
-    res = ds.repo.get_content_info(
-        [op.join(ds.path, 'subdir', 'file_clean')])
-    assert_equal(len(res), 1)
-    assert_in(repopath.joinpath('subdir', 'file_clean'), res)
-
     # query full untracked report
     res = ds.repo.get_content_info()
     assert_in(repopath.joinpath('dir_untracked', 'file_untracked'), res)
@@ -150,13 +144,17 @@ def test_subds_path(path):
     # a dataset with a subdataset with a file, all neatly tracked
     ds = Dataset(path).rev_create()
     subds = ds.rev_create('sub')
+    assert_repo_status(path)
     with (subds.pathobj / 'some.txt').open('w') as f:
         f.write(u'test')
     ds.rev_save(recursive=True)
     assert_repo_status(path)
 
     # querying the toplevel dataset repo for a subdspath should
-    # be quiet (like `git status` would do), and definitely not report the
-    # subdataset as deleted
+    # report the subdataset record in the dataset
+    # (unlike `git status`, which is silent for subdataset paths),
+    # but definitely not report the subdataset as deleted
     # https://github.com/datalad/datalad-revolution/issues/17
-    assert_dict_equal({}, ds.repo.status(paths=[op.join('sub', 'some.txt')]))
+    stat = ds.repo.status(paths=[op.join('sub', 'some.txt')])
+    assert_equal(list(stat.keys()), [subds.repo.pathobj])
+    assert_equal(stat[subds.repo.pathobj]['state'], 'clean')
