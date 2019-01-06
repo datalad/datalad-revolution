@@ -41,7 +41,7 @@ def test_get_content_info(path):
     assert_equal(ds.pathobj, ut.Path(path))
 
     # verify general rules on fused info records that are incrementally
-    # assembled: for git content info, ammended with annex info on 'HEAD'
+    # assembled: for git content info, amended with annex info on 'HEAD'
     # (to get the last commited stage and with it possibly vanished
     # content), and lastly annex info wrt to the present worktree, to
     # also get info on added/staged content
@@ -158,3 +158,45 @@ def test_subds_path(path):
     stat = ds.repo.status(paths=[op.join('sub', 'some.txt')])
     assert_equal(list(stat.keys()), [subds.repo.pathobj])
     assert_equal(stat[subds.repo.pathobj]['state'], 'clean')
+
+
+@with_tempfile
+def test_report_absent_keys(path):
+    ds = Dataset(path).rev_create()
+    # create an annexed file
+    testfile = ds.pathobj / 'dummy'
+    testfile.write_text(u'nothing')
+    ds.rev_save()
+    # present in a full report and in a partial report
+    # based on worktree of HEAD ref
+    for ai in (
+            ds.repo.get_content_annexinfo(eval_availability=True),
+            ds.repo.get_content_annexinfo(
+                paths=['dummy'],
+                eval_availability=True),
+            ds.repo.get_content_annexinfo(
+                ref='HEAD',
+                eval_availability=True),
+            ds.repo.get_content_annexinfo(
+                ref='HEAD',
+                paths=['dummy'],
+                eval_availability=True)):
+        assert_in(testfile, ai)
+        assert_equal(ai[testfile]['has_content'], True)
+    # drop the key, not available anywhere else
+    ds.drop('dummy', check=False)
+    # does not change a thing, except the key is gone
+    for ai in (
+            ds.repo.get_content_annexinfo(eval_availability=True),
+            ds.repo.get_content_annexinfo(
+                paths=['dummy'],
+                eval_availability=True),
+            ds.repo.get_content_annexinfo(
+                ref='HEAD',
+                eval_availability=True),
+            ds.repo.get_content_annexinfo(
+                ref='HEAD',
+                paths=['dummy'],
+                eval_availability=True)):
+        assert_in(testfile, ai)
+        assert_equal(ai[testfile]['has_content'], False)

@@ -122,13 +122,18 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 paths=paths, ref=ref, **kwargs)
         else:
             info = init
+        # use this funny-looking option with both find and findref
+        # it takes care of git-annex reporting on any known key, regardless
+        # of whether or not it actually (did) exist in the local annex
+        opts = ['--copies', '0']
         if ref:
             cmd = 'findref'
-            opts = [ref]
+            opts.append(ref)
         else:
             cmd = 'find'
             # stringify any pathobjs
-            opts = [str(p) for p in paths] if paths else ['--include', '*']
+            opts.extend([str(p) for p in paths]
+                        if paths else ['--include', '*'])
         for j in self._run_annex_command_json(cmd, opts=opts):
             path = self.pathobj.joinpath(ut.PurePosixPath(j['file']))
             rec = info.get(path, None)
