@@ -46,6 +46,7 @@ from datalad_revolution.revdiff import (
     RevDiff,
     _common_diffstatus_params,
 )
+from datalad.dochelpers import single_or_plural
 
 lgr = logging.getLogger('datalad.revolution.status')
 
@@ -312,16 +313,18 @@ class RevStatus(Interface):
         # fish out sizes of annexed files. those will only be present
         # with --annex ...
         annexed = [
-            int(r['bytesize']) for r in results
-            if r.get('action', None) == 'status'
+            (int(r['bytesize']), r.get('has_content', False))
+            for r in results
+            if r.get('action', None) == 'status' \
             and 'key' in r and 'bytesize' in r]
         if annexed:
             from datalad.ui import ui
             ui.message(
-                "Worktree has {} annex'ed files, "
-                "total size of tracked content: {}".format(
+                "{} annex'd {} ({}/{} present/total size)".format(
                     len(annexed),
-                    bytes2human(sum(annexed))))
+                    single_or_plural('file', 'files', len(annexed)),
+                    bytes2human(sum(a[0] for a in annexed if a[1])),
+                    bytes2human(sum(a[0] for a in annexed))))
 
 
 # TODO move to datalad.utils eventually
