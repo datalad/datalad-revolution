@@ -165,7 +165,7 @@ def test_report_absent_keys(path):
     ds = Dataset(path).rev_create()
     # create an annexed file
     testfile = ds.pathobj / 'dummy'
-    testfile.write_text('nothing')
+    testfile.write_text(u'nothing')
     ds.rev_save()
     # present in a full report and in a partial report
     # based on worktree of HEAD ref
