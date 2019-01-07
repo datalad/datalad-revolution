@@ -194,6 +194,8 @@ def resolve_path(path, ds=None):
     -------
     `pathlib.Path` object
     """
+    if ds is not None and not isinstance(ds, _Dataset):
+        ds = require_dataset(ds, check_installed=False, purpose='path resolution')
     if ds is None:
         # CWD is the reference
         path = ut.Path(path)
