@@ -576,3 +576,13 @@ def test_partial_unlocked(path):
         ('*', {'annex.largefiles': 'nothing'})])
     ds.rev_save()
     assert_repo_status(ds.path)
+
+
+@with_tempfile()
+def test_path_arg_call(path):
+    ds = create(path)
+    for testfile in (
+            ds.pathobj / 'abs.txt',
+            ds.pathobj / 'rel.txt'):
+        testfile.write_text(u'123')
+        save(dataset=ds.path, path=[testfile.name], to_git=True)
