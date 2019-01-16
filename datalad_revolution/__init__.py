@@ -41,6 +41,12 @@ command_suite = (
             'rev-aggregate-metadata',
             'rev_aggregate_metadata'
         ),
+        (
+            'datalad_revolution.web_catalog',
+            'ExportWebCatalog',
+            'export-web-catalog',
+            'rev_run'
+        ),
     ]
 )
 
