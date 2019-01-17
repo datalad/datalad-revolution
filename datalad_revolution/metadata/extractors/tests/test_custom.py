@@ -111,8 +111,19 @@ def test_custom(path):
     eq_(sample_jsonld, dsmeta['custom'])
     assert_not_in('@id', dsmeta['custom'])
 
-    # overwrite default source location
+    # overwrite default source location within something non-exiting
+    # extraction does not blow up, but no metadata is reported
     ds.config.add(
+        'datalad.metadata.custom-dataset-source',
+        'nothere',
+        where='dataset')
+    ds.aggregate_metadata()
+    res = ds.metadata(reporton='datasets')
+    assert_result_count(res, 1)
+    assert_not_in('custom', res[0]['metadata'])
+
+    # overwrite default source location within something existing
+    ds.config.set(
         'datalad.metadata.custom-dataset-source',
         # always POSIX!
         'down/customloc',
