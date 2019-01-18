@@ -85,14 +85,13 @@ function assign_metadata_obj(path, target) {
     });
 }
 
-function push_msg(msg, type='error', console_only=false) {
-    console.log(error);
-    if (!console_only) {
-        app.$data.alerts.push({
-            text: msg,
-            type: type
-        })
-    }
+// googlebot does not like JS functions with default args!
+function push_msg(msg, type) {
+    console.log(msg);
+    app.$data.alerts.push({
+        text: msg,
+        type: type
+    })
 }
 
 // request vars as object attributes
@@ -121,7 +120,7 @@ if ('id' in request_vars) {
             assign_metadata_obj(response.data[path], 'dsinfo');
         })
         .catch(function (error) {
-            push_msg("cannot load dataset inventory: [" + error +"]");
+            push_msg("cannot load dataset inventory: [" + error +"]", 'error');
         });
 }
 </script>
