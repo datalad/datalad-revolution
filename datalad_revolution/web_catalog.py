@@ -22,6 +22,8 @@ from hashlib import md5
 from pkg_resources import resource_filename
 import shutil
 
+import xml.etree.ElementTree as ET
+
 from datalad.distribution.get import Get
 
 from datalad.interface.base import (
@@ -198,6 +200,10 @@ class ExportWebCatalog(Interface):
             args=("-d", "--dataset"),
             doc=""""specify the dataset to """,
             constraints=EnsureDataset() | EnsureNone()),
+        baseurl=Parameter(
+            args=("baseurl",),
+            doc="""""",
+            constraints=EnsureStr()),
         destination=Parameter(
             args=("destination",),
             metavar='PATH',
@@ -215,7 +221,8 @@ class ExportWebCatalog(Interface):
     @staticmethod
     @datasetmethod(name='rev_save')
     @eval_results
-    def __call__(destination,
+    def __call__(baseurl,
+                 destination,
                  dataset=None,
                  homogenization='custom',
                  ):
@@ -246,6 +253,16 @@ class ExportWebCatalog(Interface):
             # in multiple versions
             'by_id': {},
         }
+
+        # sitemap
+        sitemap = ET.Element(
+            'urlset',
+            attrib={
+                'xmlns': "http://www.sitemaps.org/schemas/sitemap/0.9",
+                'xmlns:xsi': "http://www.w3.org/2001/XMLSchema-instance",
+                'xsi:schemaLocation': "http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd"
+            }
+        )
 
         for dsname, dsprops in iteritems(aggdb):
             if 'id' not in dsprops or 'refcommit' not in dsprops:
@@ -281,12 +298,23 @@ class ExportWebCatalog(Interface):
             byid = lookups['by_id'].get(dsprops['id'], [])
             byid.append(str(obj_loc))
             lookups['by_id'][dsprops['id']] = byid
+            # sitemap entry
+            url_el = ET.SubElement(sitemap, 'url')
+            loc_el = ET.SubElement(url_el, 'loc')
+            loc_el.text = '{}?p={}'.format(
+                baseurl, rpath)
+
         # dump the lookup dicts
         for lname, lookup in iteritems(lookups):
             jsondump(
                 lookup,
                 str(destination / '{}.json'.format(lname)),
             )
+        # dump the sitemap
+        with open(str(destination / 'sitemap.xml'), 'w') as f:
+            # TODO 'unicode' may need to be 'utf-8' in PY2
+            f.write(ET.tostring(sitemap, encoding='unicode'))
+        # common files
         resource_dir = \
             ut.Path(resource_filename('datalad_revolution', '')) / \
             'resources' / 'web_catalog'
