@@ -219,7 +219,7 @@ class ExportWebCatalog(Interface):
     )
 
     @staticmethod
-    @datasetmethod(name='web_catalog')
+    @datasetmethod(name='export_web_catalog')
     @eval_results
     def __call__(baseurl,
                  destination,

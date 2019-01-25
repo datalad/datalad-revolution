@@ -45,7 +45,7 @@ command_suite = (
             'datalad_revolution.web_catalog',
             'ExportWebCatalog',
             'export-web-catalog',
-            'rev_run'
+            'export_web_catalog'
         ),
     ]
 )
