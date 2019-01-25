@@ -318,8 +318,21 @@ class ExportWebCatalog(Interface):
         resource_dir = \
             ut.Path(resource_filename('datalad_revolution', '')) / \
             'resources' / 'web_catalog'
-        for f in ('catalog.css',
+        for f in (# main styles
+                  'catalog.css',
+                  # essential client-side code
                   'catalog.js',
+                  # candy to make it prettier
+                  'android-chrome-192x192.png',
+                  'android-chrome-512x512.png',
+                  'apple-touch-icon.png',
+                  'browserconfig.xml',
+                  'favicon-16x16.png',
+                  'favicon-32x32.png',
+                  'favicon.ico',
+                  'manifest.json',
+                  'mstile-150x150.png',
+                  'safari-pinned-tab.svg',
                   ):
             shutil.copy(str(resource_dir / f), str(destination)
         )
