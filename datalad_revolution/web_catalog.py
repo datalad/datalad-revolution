@@ -311,19 +311,23 @@ class ExportWebCatalog(Interface):
                 str(destination / '{}.json'.format(lname)),
             )
         # dump the sitemap
-        with open(str(destination / 'sitemap.xml'), 'w') as f:
+        with open(str(destination / 'catalog.xml'), 'w') as f:
             # TODO 'unicode' may need to be 'utf-8' in PY2
             f.write(ET.tostring(sitemap, encoding='unicode'))
         # common files
         resource_dir = \
             ut.Path(resource_filename('datalad_revolution', '')) / \
             'resources' / 'web_catalog'
-        for f in ('dataset.html',
-                  'main.css',
-                  'helpers.js',
+        for f in ('catalog.css',
+                  'catalog.js',
                   ):
             shutil.copy(str(resource_dir / f), str(destination)
         )
+        # embed JS code in catalog page template and add to output
+        (destination / 'dataset.html').write_text(
+            (resource_dir / 'dataset.html').read_text().replace(
+                '<!-- ### INSERT JS CODE HERE ### -->',
+                (resource_dir / 'inject.js').read_text()))
         yield {}
 
 
