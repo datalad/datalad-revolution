@@ -43,7 +43,7 @@ from .dataset import (
     EnsureRevDataset,
     get_dataset_root,
     rev_resolve_path,
-    path_under_dataset,
+    path_under_rev_dataset,
     require_rev_dataset,
 )
 # for bound dataset method
@@ -223,7 +223,7 @@ class RevCreate(Interface):
                 refds_path, check_installed=True,
                 purpose='creating a subdataset')
 
-            path_inrefds = path_under_dataset(refds, path)
+            path_inrefds = path_under_rev_dataset(refds, path)
             if path_inrefds is None:
                 yield dict(
                     res,

@@ -38,7 +38,7 @@ from .dataset import (
     datasetmethod,
     require_rev_dataset,
     rev_resolve_path,
-    path_under_dataset,
+    path_under_rev_dataset,
     get_dataset_root,
 )
 from . import utils as ut
@@ -245,7 +245,7 @@ def _diff_cmd(
                     message='path not underneath this dataset',
                     logger=lgr)
                 continue
-            if path_under_dataset(ds, str_path) is None:
+            if path_under_rev_dataset(ds, str_path) is None:
                 # nothing we support handling any further
                 # there is only a single refds
                 yield dict(

@@ -251,7 +251,7 @@ def rev_resolve_path(path, ds=None):
     return path
 
 
-def path_under_dataset(ds, path):
+def path_under_rev_dataset(ds, path):
     ds_path = ds.pathobj
     try:
         rpath = text_type(ut.Path(path).relative_to(ds_path))

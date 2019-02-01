@@ -37,7 +37,7 @@ from .dataset import (
     datasetmethod,
     require_rev_dataset,
     rev_resolve_path,
-    path_under_dataset,
+    path_under_rev_dataset,
     get_dataset_root,
 )
 from . import utils as ut
@@ -261,7 +261,7 @@ class RevStatus(Interface):
             # dataset
             # the path that it might have been located by could
             # have been a resolved path or another funky thing
-            qds_inrefds = path_under_dataset(ds, qdspath)
+            qds_inrefds = path_under_rev_dataset(ds, qdspath)
             if qds_inrefds is None:
                 # nothing we support handling any further
                 # there is only a single refds
