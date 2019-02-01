@@ -50,6 +50,9 @@ from datalad.interface.utils import (
 )
 from datalad.metadata.metadata import load_ds_aggregate_db
 from . import utils as ut
+from datalad.utils import (
+    assure_list,
+)
 
 lgr = logging.getLogger('datalad.revolution.web_catalog')
 
@@ -285,6 +288,10 @@ class ExportWebCatalog(Interface):
             else:
                 # TODO implement (configurable) homogenization heuristics
                 raise NotImplementedError
+
+            # amend with any stuff that we can tell from state of the dataset
+            _update_dsmeta_from_dsprops(dsname, dsprops, dsmeta)
+
             jsondump(
                 dsmeta,
                 str(obj_destination),
@@ -355,4 +362,72 @@ def jsondump(data, target):
             ensure_ascii=False,
             encoding='utf-8',
         )
+
+
+def _update_dsmeta_from_dsprops(path, props, meta):
+    """Apply a bunch of rules to alter/amend metadata
+
+    Parameters
+    ----------
+    path : str
+      The (virtual) path to a dataset.
+    props : dict
+      Metadata aggregation info dict
+    meta : dict
+      Metadata dict (mutable) that is to be modified.
+    """
+    # TODO we need to check and act on any conflict with an
+    # existing 'schemaVersion' value, but ATM I don't see how
+
+    # fulfill minimum description criteria
+    print("THIS", path, props)
+    if 'name' not in meta:
+        # TODO use `alternateName` if there already is one
+        # directory name should be the best guess, if there is
+        # nothing else
+        meta['name'] = op.basename(path)
+    if 'description' not in meta:
+        meta['description'] = "This is a DataLad dataset"
+    if 'id' in props:
+        identifier = set(assure_list(meta.get('identifier', [])))
+        identifier.add(props['id'])
+        identifier = list(identifier)
+        meta['identifier'] = list(identifier) \
+            if len(identifier) > 1 else identifier[0]
+    # build a version string, unless there is one already
+    version = meta.get('version', '')
+    if not version:
+        version = props['refcommit'] if props.get('refcommit', None) else ''
+        if version:
+            meta['version'] = version
+    if 'citation' not in meta and 'id' in props:
+        # technical, but precise citation ID[@commit]
+        # while a "git describe"-like version might be
+        # nice, it is not guaranteed to be resolveable
+        # when a tag is lost
+        meta['citation'] = 'DataLad dataset {}{}'.format(
+            props['id'],
+            '@{}'.format(version) if version else '')
+    # basic distribution info (append to any existing one)
+    # TODO there could be a detailed one per published remote
+    #distribution = assure_list(meta['distribution']) \
+    #    if 'distribution' in meta else []
+    #distr = {}
+    #distribution.append(distr)
+
+    # TODO implement rules to figure out sensible:
+    # - 'license' info
+    # - 'keywords'
+    # - 'contributor'/'author' (git commit info could give sensible list
+    #   for the former without claiming "authorship")
+    # - 'editor' (is that the same as maintainer, maybe person with most
+    #   commits?)
+    # - 'sameAs' (linkage to other dataset locations/names)
+    # - 'dateCreated' (timestamp of initial commit?)
+    # - 'dateModified' (timestamp of the "refcommit?)
+    # - 'funder'
+    # - 'hasPart' (reference any subdatasets, just give dataset IDs?)
+    # - 'isPartOf' (link to (topmost) superdataset)
+    # - distribution.contentUrl (where a dataset can be obtained from)
+    # - distribution.uploadDate/dateModified
 
