@@ -39,9 +39,9 @@ from datalad.utils import getpwd
 
 from .dataset import (
     RevolutionDataset as Dataset,
-    datasetmethod,
+    rev_datasetmethod,
     EnsureRevDataset,
-    get_dataset_root,
+    rev_get_dataset_root,
     rev_resolve_path,
     path_under_rev_dataset,
     require_rev_dataset,
@@ -177,7 +177,7 @@ class RevCreate(Interface):
     )
 
     @staticmethod
-    @datasetmethod(name='rev_create')
+    @rev_datasetmethod(name='rev_create')
     @eval_results
     def __call__(
             path=None,
@@ -241,7 +241,7 @@ class RevCreate(Interface):
         # a potentially absent/uninstalled subdataset of the parent
         # in this location
         # it will cost some filesystem traversal though...
-        parentds_path = get_dataset_root(
+        parentds_path = rev_get_dataset_root(
             op.normpath(op.join(str(path), os.pardir)))
         if parentds_path:
             prepo = GitRepo(parentds_path)

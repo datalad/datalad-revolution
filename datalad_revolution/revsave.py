@@ -43,7 +43,7 @@ from . import utils as ut
 from .dataset import (
     RevolutionDataset as Dataset,
     EnsureRevDataset,
-    datasetmethod,
+    rev_datasetmethod,
     require_rev_dataset,
 )
 from .revstatus import (
@@ -125,7 +125,7 @@ class RevSave(Interface):
     )
 
     @staticmethod
-    @datasetmethod(name='rev_save')
+    @rev_datasetmethod(name='rev_save')
     @eval_results
     def __call__(path=None, message=None, dataset=None,
                  version_tag=None,

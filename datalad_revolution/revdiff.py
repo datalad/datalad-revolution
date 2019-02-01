@@ -35,11 +35,11 @@ from datalad.interface.common_opts import (
 from .dataset import (
     RevolutionDataset as Dataset,
     EnsureRevDataset,
-    datasetmethod,
+    rev_datasetmethod,
     require_rev_dataset,
     rev_resolve_path,
     path_under_rev_dataset,
-    get_dataset_root,
+    rev_get_dataset_root,
 )
 from . import utils as ut
 
@@ -139,7 +139,7 @@ class RevDiff(Interface):
     )
 
     @staticmethod
-    @datasetmethod(name='rev_diff')
+    @rev_datasetmethod(name='rev_diff')
     @eval_results
     def __call__(
             fr='HEAD',
@@ -234,7 +234,7 @@ def _diff_cmd(
                 resolved_path, \
                 orig_path.endswith(op.sep) or resolved_path == ds.pathobj
             str_path = text_type(p[0])
-            root = get_dataset_root(str_path)
+            root = rev_get_dataset_root(str_path)
             if root is None:
                 # no root, not possibly underneath the refds
                 yield dict(

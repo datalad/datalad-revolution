@@ -34,11 +34,11 @@ from datalad.support.constraints import (
 )
 from .dataset import (
     RevolutionDataset as Dataset,
-    datasetmethod,
+    rev_datasetmethod,
     require_rev_dataset,
     rev_resolve_path,
     path_under_rev_dataset,
-    get_dataset_root,
+    rev_get_dataset_root,
 )
 from . import utils as ut
 
@@ -182,7 +182,7 @@ class RevStatus(Interface):
 
 
     @staticmethod
-    @datasetmethod(name='rev_status')
+    @rev_datasetmethod(name='rev_status')
     @eval_results
     def __call__(
             path=None,
@@ -215,7 +215,7 @@ class RevStatus(Interface):
                 # for further decision logic below
                 orig_path = str(p)
                 p = rev_resolve_path(p, dataset)
-                root = get_dataset_root(str(p))
+                root = rev_get_dataset_root(str(p))
                 if root is None:
                     # no root, not possibly underneath the refds
                     yield dict(
@@ -233,7 +233,7 @@ class RevStatus(Interface):
                         # distinguish rsync-link syntax to identify
                         # the dataset as whole (e.g. 'ds') vs its
                         # content (e.g. 'ds/')
-                        super_root = get_dataset_root(op.dirname(root))
+                        super_root = rev_get_dataset_root(op.dirname(root))
                         if super_root:
                             # the dataset identified by the path argument
                             # is contained in a superdataset, and no
