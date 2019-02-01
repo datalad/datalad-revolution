@@ -44,7 +44,7 @@ from .dataset import (
     get_dataset_root,
     resolve_path,
     path_under_dataset,
-    require_dataset,
+    require_rev_dataset,
 )
 # for bound dataset method
 from .revsave import RevSave
@@ -219,7 +219,7 @@ class RevCreate(Interface):
 
         refds = None
         if refds_path and refds_path != path:
-            refds = require_dataset(
+            refds = require_rev_dataset(
                 refds_path, check_installed=True,
                 purpose='creating a subdataset')
 

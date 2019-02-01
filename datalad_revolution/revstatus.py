@@ -35,7 +35,7 @@ from datalad.support.constraints import (
 from .dataset import (
     RevolutionDataset as Dataset,
     datasetmethod,
-    require_dataset,
+    require_rev_dataset,
     resolve_path,
     path_under_dataset,
     get_dataset_root,
@@ -203,7 +203,7 @@ class RevStatus(Interface):
         # two commands feels wrong, the benefit is speed. Any future RF should
         # come with evidence that speed does not suffer, and complexity stays
         # on a manageable level
-        ds = require_dataset(
+        ds = require_rev_dataset(
             dataset, check_installed=True, purpose='status reporting')
 
         paths_by_ds = OrderedDict()

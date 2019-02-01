@@ -36,7 +36,7 @@ from .dataset import (
     RevolutionDataset as Dataset,
     EnsureRevDataset,
     datasetmethod,
-    require_dataset,
+    require_rev_dataset,
     resolve_path,
     path_under_dataset,
     get_dataset_root,
@@ -150,7 +150,7 @@ class RevDiff(Interface):
             untracked='normal',
             recursive=False,
             recursion_limit=None):
-        ds = require_dataset(
+        ds = require_rev_dataset(
             dataset, check_installed=True, purpose='difference reporting')
 
         # convert cmdline args into plain labels

@@ -158,7 +158,7 @@ class EnsureRevDataset(_EnsureDataset):
 
 
 # minimal wrapper to ensure a revolution dataset is coming out
-def require_dataset(dataset, check_installed=True, purpose=None):
+def require_rev_dataset(dataset, check_installed=True, purpose=None):
     return RevolutionDataset(_require_dataset(
         dataset,
         check_installed,

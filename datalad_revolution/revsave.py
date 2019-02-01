@@ -44,7 +44,7 @@ from .dataset import (
     RevolutionDataset as Dataset,
     EnsureRevDataset,
     datasetmethod,
-    require_dataset,
+    require_rev_dataset,
 )
 from .revstatus import (
     RevStatus as Status,
@@ -174,7 +174,7 @@ class RevSave(Interface):
         #   This avoids complex annotation loops and hierarchy tracking.
         # - any modification upwards from the root dataset
 
-        ds = require_dataset(dataset, check_installed=True, purpose='saving')
+        ds = require_rev_dataset(dataset, check_installed=True, purpose='saving')
 
         # use status() to do all discovery and annotation of paths
         paths_by_ds = {}
