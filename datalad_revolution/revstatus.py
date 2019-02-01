@@ -36,7 +36,7 @@ from .dataset import (
     RevolutionDataset as Dataset,
     datasetmethod,
     require_rev_dataset,
-    resolve_path,
+    rev_resolve_path,
     path_under_dataset,
     get_dataset_root,
 )
@@ -214,7 +214,7 @@ class RevStatus(Interface):
                 # given path argument, before any normalization happens
                 # for further decision logic below
                 orig_path = str(p)
-                p = resolve_path(p, dataset)
+                p = rev_resolve_path(p, dataset)
                 root = get_dataset_root(str(p))
                 if root is None:
                     # no root, not possibly underneath the refds

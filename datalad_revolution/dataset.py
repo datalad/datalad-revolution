@@ -165,7 +165,7 @@ def require_rev_dataset(dataset, check_installed=True, purpose=None):
         purpose).path)
 
 
-def resolve_path(path, ds=None):
+def rev_resolve_path(path, ds=None):
     """Resolve a path specification (against a Dataset location)
 
     Any explicit path (absolute or relative) is returned as an absolute path.
@@ -195,7 +195,7 @@ def resolve_path(path, ds=None):
     `pathlib.Path` object
     """
     if ds is not None and not isinstance(ds, _Dataset):
-        ds = require_dataset(ds, check_installed=False, purpose='path resolution')
+        ds = require_rev_dataset(ds, check_installed=False, purpose='path resolution')
     if ds is None:
         # CWD is the reference
         path = ut.Path(path)

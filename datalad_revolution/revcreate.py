@@ -42,7 +42,7 @@ from .dataset import (
     datasetmethod,
     EnsureRevDataset,
     get_dataset_root,
-    resolve_path,
+    rev_resolve_path,
     path_under_dataset,
     require_rev_dataset,
 )
@@ -204,7 +204,7 @@ class RevCreate(Interface):
                                  "no annex repo.")
 
         if path:
-            path = resolve_path(path, dataset)
+            path = rev_resolve_path(path, dataset)
 
         path = path if path \
             else getpwd() if dataset is None \

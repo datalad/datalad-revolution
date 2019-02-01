@@ -37,7 +37,7 @@ from .dataset import (
     EnsureRevDataset,
     datasetmethod,
     require_rev_dataset,
-    resolve_path,
+    rev_resolve_path,
     path_under_dataset,
     get_dataset_root,
 )
@@ -229,7 +229,7 @@ def _diff_cmd(
             # special case is the root dataset, always report its content
             # changes
             orig_path = str(p)
-            resolved_path = resolve_path(p, dataset)
+            resolved_path = rev_resolve_path(p, dataset)
             p = \
                 resolved_path, \
                 orig_path.endswith(op.sep) or resolved_path == ds.pathobj
