@@ -151,10 +151,10 @@ def datasetmethod(f, name=None, dataset_argname='dataset'):
 
 
 # minimal wrapper to ensure a revolution dataset is coming out
-class EnsureDataset(_EnsureDataset):
+class EnsureRevDataset(_EnsureDataset):
     def __call__(self, value):
         return RevolutionDataset(
-            super(EnsureDataset, self).__call__(value).path)
+            super(_EnsureDataset, self).__call__(value).path)
 
 
 # minimal wrapper to ensure a revolution dataset is coming out

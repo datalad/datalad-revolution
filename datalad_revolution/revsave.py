@@ -42,7 +42,7 @@ from . import utils as ut
 
 from .dataset import (
     RevolutionDataset as Dataset,
-    EnsureDataset,
+    EnsureRevDataset,
     datasetmethod,
     require_dataset,
 )
@@ -84,7 +84,7 @@ class RevSave(Interface):
         dataset=Parameter(
             args=("-d", "--dataset"),
             doc=""""specify the dataset to save""",
-            constraints=EnsureDataset() | EnsureNone()),
+            constraints=EnsureRevDataset() | EnsureNone()),
         path=Parameter(
             args=("path",),
             metavar='PATH',

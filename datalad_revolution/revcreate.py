@@ -40,7 +40,7 @@ from datalad.utils import getpwd
 from .dataset import (
     RevolutionDataset as Dataset,
     datasetmethod,
-    EnsureDataset,
+    EnsureRevDataset,
     get_dataset_root,
     resolve_path,
     path_under_dataset,
@@ -138,7 +138,7 @@ class RevCreate(Interface):
             command will error if the target directory is not empty.
             Use `force` to create a dataset in a non-empty directory.""",
             # put dataset 2nd to avoid useless conversion
-            constraints=EnsureStr() | EnsureDataset() | EnsureNone()),
+            constraints=EnsureStr() | EnsureRevDataset() | EnsureNone()),
         initopts=Parameter(
             args=("initopts",),
             metavar='INIT OPTIONS',
@@ -155,7 +155,7 @@ class RevCreate(Interface):
             metavar='DATASET',
             doc="""specify the dataset to perform the create operation on. If
             a dataset is given, a new subdataset will be created in it.""",
-            constraints=EnsureDataset() | EnsureNone()),
+            constraints=EnsureRevDataset() | EnsureNone()),
         force=Parameter(
             args=("-f", "--force",),
             doc="""enforce creation of a dataset in a non-empty directory""",

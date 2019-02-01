@@ -34,7 +34,7 @@ from datalad.interface.common_opts import (
 
 from .dataset import (
     RevolutionDataset as Dataset,
-    EnsureDataset,
+    EnsureRevDataset,
     datasetmethod,
     require_dataset,
     resolve_path,
@@ -60,7 +60,7 @@ _common_diffstatus_params = dict(
         doc="""specify the dataset to query.  If
         no dataset is given, an attempt is made to identify the dataset
         based on the current working directory""",
-        constraints=EnsureDataset() | EnsureNone()),
+        constraints=EnsureRevDataset() | EnsureNone()),
     annex=Parameter(
         args=('--annex',),
         metavar='MODE',
