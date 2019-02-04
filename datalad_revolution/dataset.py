@@ -154,7 +154,7 @@ def rev_datasetmethod(f, name=None, dataset_argname='dataset'):
 class EnsureRevDataset(_EnsureDataset):
     def __call__(self, value):
         return RevolutionDataset(
-            super(_EnsureDataset, self).__call__(value).path)
+            super(EnsureRevDataset, self).__call__(value).path)
 
 
 # minimal wrapper to ensure a revolution dataset is coming out
