@@ -21,6 +21,10 @@ from datalad.dochelpers import exc_str
 from datalad.support.gitrepo import (
     InvalidGitRepositoryError,
     NoSuchPathError,
+    GitRepo as _GitRepo,
+)
+from datalad.support.annexrepo import (
+    AnnexRepo as _AnnexRepo,
 )
 
 from datalad.utils import (
@@ -50,46 +54,30 @@ class RevolutionDataset(_Dataset):
     @property
     def repo(self):
         """Get an instance of the version control system/repo for this dataset,
-        or None if there is none yet.
+        or None if there is none yet (or none anymore).
 
-        If creating an instance of GitRepo is guaranteed to be really cheap
-        this could also serve as a test whether a repo is present.
+        If testing the validity of an instance of GitRepo is guaranteed to be
+        really cheap this could also serve as a test whether a repo is present.
+
+        Note, that this property is evaluated every time it is used. If used
+        multiple times within a function it's probably a good idea to store its
+        value in a local variable and use this variable instead.
 
         Returns
         -------
-        GitRepo
+        GitRepo or AnnexRepo
         """
 
-        # Note: lazy loading was disabled, since this is provided by the
-        # flyweight pattern already and a possible invalidation of an existing
-        # instance has to be done therein.
-        # TODO: Still this is somewhat problematic. We can't invalidate strong
-        # references
-
-        for cls, ckw, kw in (
-                # TODO: Do we really want to allow_noninitialized=True here?
-                # And if so, leave a proper comment!
-                (RevolutionAnnexRepo, {'allow_noninitialized': True}, {'init': False}),
-                (RevolutionGitRepo, {}, {})
-        ):
-            if cls.is_valid_repo(self._path, **ckw):
-                try:
-                    lgr.log(5, "Detected %s at %s", cls, self._path)
-                    self._repo = cls(self._path, create=False, **kw)
-                    break
-                except (InvalidGitRepositoryError, NoSuchPathError) as exc:
-                    lgr.log(5,
-                            "Oops -- guess on repo type was wrong?: %s",
-                            exc_str(exc))
-                    pass
-                # version problems come as RuntimeError: DO NOT CATCH!
-        if self._repo is None:
-            # Often .repo is requested to 'sense' if anything is installed
-            # under, and if so -- to proceed forward. Thus log here only
-            # at DEBUG level and if necessary "complaint upstairs"
-            lgr.log(5, "Failed to detect a valid repo at %s", self.path)
-
-        return self._repo
+        orig_repo = super(RevolutionDataset, self).repo
+        if orig_repo is None:
+            return None
+        elif isinstance(orig_repo, _GitRepo):
+            return RevolutionGitRepo(orig_repo.path)
+        elif isinstance(orig_repo, _AnnexRepo):
+            return RevolutionAnnexRepo(orig_repo.path)
+        else:
+            raise RuntimeError("Got unexpected type from Dataset.repo: "
+                               "%s" % type(orig_repo))
 
 
 # remove deprecated method from API
