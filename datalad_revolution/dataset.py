@@ -21,10 +21,10 @@ from datalad.dochelpers import exc_str
 from datalad.support.gitrepo import (
     InvalidGitRepositoryError,
     NoSuchPathError,
-    GitRepo as _GitRepo,
 )
-from datalad.support.annexrepo import (
-    AnnexRepo as _AnnexRepo,
+
+from datalad.support.exceptions import (
+    InvalidAnnexRepositoryError
 )
 
 from datalad.utils import (
@@ -68,16 +68,81 @@ class RevolutionDataset(_Dataset):
         GitRepo or AnnexRepo
         """
 
-        orig_repo = super(RevolutionDataset, self).repo
-        if orig_repo is None:
-            return None
-        elif isinstance(orig_repo, _AnnexRepo):
-            return RevolutionAnnexRepo(orig_repo.path)
-        elif isinstance(orig_repo, _GitRepo):
-            return RevolutionGitRepo(orig_repo.path)
-        else:
-            raise RuntimeError("Got unexpected type from Dataset.repo: "
-                               "%s" % type(orig_repo))
+        # NOTE: This is a copy from datalad.distribution.Dataset
+        # See github https://github.com/datalad/datalad-revolution/issues/79
+        # for why this is needed.
+
+        # If we already got a *Repo instance, check whether it's still valid;
+        # Note, that this basically does part of the testing that would
+        # (implicitly) be done in the loop below again. So, there's still
+        # potential to speed up when we actually need to get a new instance
+        # (or none). But it's still faster for the vast majority of cases.
+        #
+        # TODO: Dig deeper into it and melt with new instance guessing. This
+        # should also involve to reduce redundancy of testing such things from
+        # within Flyweight.__call__, AnnexRepo.__init__ and GitRepo.__init__!
+        #
+        # Also note, that this could be forged into a single big condition, but
+        # that is hard to read and we should be well aware of the actual
+        # criteria here:
+        if self._repo is not None and op.realpath(self.path) == self._repo.path:
+            # we got a repo and path references still match
+            if isinstance(self._repo, RevolutionAnnexRepo):
+                # it's supposed to be an annex
+                if self._repo is RevolutionAnnexRepo._unique_instances.get(
+                        self._repo.path, None) and \
+                        RevolutionAnnexRepo.is_valid_repo(self._repo.path,
+                                                allow_noninitialized=True):
+                    # it's still the object registered as flyweight and it's a
+                    # valid annex repo
+                    return self._repo
+            elif isinstance(self._repo, RevolutionGitRepo):
+                # it's supposed to be a plain git
+                if self._repo is RevolutionGitRepo._unique_instances.get(
+                        self._repo.path, None) and \
+                        RevolutionGitRepo.is_valid_repo(self._repo.path) and not \
+                        self._repo.is_with_annex():
+                    # it's still the object registered as flyweight, it's a
+                    # valid git repo and it hasn't turned into an annex
+                    return self._repo
+
+        # Note: Although it looks like the "self._repo = None" assignments
+        # could be used instead of variable "valid", that's a big difference!
+        # The *Repo instances are flyweights, not singletons. self._repo might
+        # be the last reference, which would lead to those objects being
+        # destroyed and therefore the constructor call would result in an
+        # actually new instance. This is unnecessarily costly.
+        valid = False
+        for cls, ckw, kw in (
+                # TODO: Do we really want to allow_noninitialized=True here?
+                # And if so, leave a proper comment!
+                (RevolutionAnnexRepo,
+                 {'allow_noninitialized': True},
+                 {'init': False}),
+                (RevolutionGitRepo, {}, {})
+        ):
+            if cls.is_valid_repo(self._path, **ckw):
+                try:
+                    lgr.log(5, "Detected %s at %s", cls, self._path)
+                    self._repo = cls(self._path, create=False, **kw)
+                    valid = True
+                    break
+                except (InvalidGitRepositoryError, NoSuchPathError,
+                        InvalidAnnexRepositoryError) as exc:
+                    lgr.log(5,
+                            "Oops -- guess on repo type was wrong?: %s",
+                            exc_str(exc))
+
+        if not valid:
+            self._repo = None
+
+        if self._repo is None:
+            # Often .repo is requested to 'sense' if anything is installed
+            # under, and if so -- to proceed forward. Thus log here only
+            # at DEBUG level and if necessary "complaint upstairs"
+            lgr.log(5, "Failed to detect a valid repo at %s", self.path)
+
+        return self._repo
 
 
 # remove deprecated method from API
