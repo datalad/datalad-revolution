@@ -71,10 +71,10 @@ class RevolutionDataset(_Dataset):
         orig_repo = super(RevolutionDataset, self).repo
         if orig_repo is None:
             return None
-        elif isinstance(orig_repo, _GitRepo):
-            return RevolutionGitRepo(orig_repo.path)
         elif isinstance(orig_repo, _AnnexRepo):
             return RevolutionAnnexRepo(orig_repo.path)
+        elif isinstance(orig_repo, _GitRepo):
+            return RevolutionGitRepo(orig_repo.path)
         else:
             raise RuntimeError("Got unexpected type from Dataset.repo: "
                                "%s" % type(orig_repo))
