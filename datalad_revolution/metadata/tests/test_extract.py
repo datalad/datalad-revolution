@@ -23,6 +23,7 @@ from datalad.tests.utils import with_tempfile
 from datalad.tests.utils import assert_raises
 from datalad.tests.utils import assert_result_count
 from datalad.tests.utils import assert_in
+from datalad.tests.utils import eq_
 
 from datalad.support.exceptions import IncompleteResultsError
 
@@ -34,7 +35,7 @@ testpath = opj(dirname(dirname(dirname(__file__))), 'metadata', 'tests', 'data',
 def test_error(path):
     # go into virgin dir to avoid detection of any dataset
     with chpwd(path):
-        assert_raises(ValueError, extract_metadata, types=['bogus__'], files=[testpath])
+        assert_raises(ValueError, extract_metadata, sources=['bogus__'], path=[testpath])
 
 
 @with_tempfile(mkdir=True)
@@ -50,11 +51,18 @@ def test_ds_extraction(path):
     ds.add('.')
     ok_clean_git(ds.path)
 
+    # by default we get core and annex reports
+    res = extract_metadata(dataset=ds)
+    assert_result_count(res, 2)
+    for k in ('datalad_core', 'annex'):
+        assert(all(k in r['metadata'] for r in res))
+
+    # now for specific extractor request
     res = extract_metadata(
-        types=['xmp'],
+        sources=['xmp'],
         dataset=ds,
         # artificially disable extraction from any file in the dataset
-        files=[])
+        path=[])
     assert_result_count(
         res, 1,
         type='dataset', status='ok', action='metadata', path=path, refds=ds.path)
@@ -62,7 +70,7 @@ def test_ds_extraction(path):
 
     # now the more useful case: getting everthing for xmp from a dataset
     res = extract_metadata(
-        types=['xmp'],
+        sources=['xmp'],
         dataset=ds)
     assert_result_count(res, 2)
     assert_result_count(
@@ -74,6 +82,15 @@ def test_ds_extraction(path):
         parentds=ds.path)
     for r in res:
         assert_in('xmp', r['metadata'])
+    # we have a unique value report
+    eq_(
+        res[0]['metadata']["datalad_unique_content_properties"]['xmp']["dc:description"],
+        ["dlsubject"]
+    )
+    # and lastly, if we disable extraction via config, we get nothing
+    ds.config.add('datalad.metadata.extract-dataset-xmp', 'no', where='dataset')
+    ds.config.add('datalad.metadata.extract-content-xmp', 'no', where='dataset')
+    assert_result_count(extract_metadata(sources=['xmp'], dataset=ds), 0)
 
 
 @with_tempfile(mkdir=True)
@@ -87,7 +104,7 @@ def test_file_extraction(path):
     # go into virgin dir to avoid detection of any dataset
     with chpwd(path):
         res = extract_metadata(
-            types=['xmp'],
-            files=[testpath])
+            sources=['xmp'],
+            path=[testpath])
         assert_result_count(res, 1, type='file', status='ok', action='metadata', path=testpath)
         assert_in('xmp', res[0]['metadata'])
