@@ -31,10 +31,10 @@ from datalad.interface.results import (
     success_status_map,
 )
 from datalad.interface.utils import eval_results
-from datalad.distribution.dataset import (
-    datasetmethod,
-    EnsureDataset,
-    require_dataset,
+from datalad_revolution.dataset import (
+    rev_datasetmethod as datasetmethod,
+    EnsureRevDataset as EnsureDataset,
+    require_rev_dataset as require_dataset,
 )
 from datalad.support.annexrepo import AnnexRepo
 from datalad.support.param import Parameter
@@ -55,6 +55,7 @@ from datalad.utils import (
 )
 from datalad.dochelpers import exc_str
 from datalad.log import log_progress
+from ..dataset import rev_datasetmethod
 
 # API commands needed
 from datalad.distribution.subdatasets import Subdatasets
@@ -63,7 +64,7 @@ lgr = logging.getLogger('datalad.metadata.metadata')
 
 
 @build_doc
-class ExtractMetadata(Interface):
+class RevExtractMetadata(Interface):
     """Run one or more of DataLad's metadata extractors on a dataset or file.
 
     The result(s) are structured like the metadata DataLad would extract
@@ -113,7 +114,7 @@ class ExtractMetadata(Interface):
     )
 
     @staticmethod
-    @datasetmethod(name='extract_metadata')
+    @datasetmethod(name='rev_extract_metadata')
     @eval_results
     def __call__(dataset=None, path=None, sources=None, reporton=None):
         # TODO verify that we need this ds vs dataset distinction

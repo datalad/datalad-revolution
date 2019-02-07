@@ -51,7 +51,6 @@ from datalad.interface.results import (
     get_status_dict,
     success_status_map,
 )
-from datalad.distribution.dataset import Dataset
 from datalad.metadata.metadata import (
     get_ds_aggregate_db_locations,
     load_ds_aggregate_db,
@@ -62,10 +61,11 @@ from datalad.metadata.metadata import (
     _get_containingds_from_agginfo,
     location_keys,
 )
-from datalad.distribution.dataset import (
-    datasetmethod,
-    EnsureDataset,
-    require_dataset,
+from datalad_revolution.dataset import (
+    RevolutionDataset as Dataset,
+    rev_datasetmethod as datasetmethod,
+    EnsureRevDataset as EnsureDataset,
+    require_rev_dataset as require_dataset,
 )
 from datalad.support.param import Parameter
 from datalad.support.constraints import (
@@ -464,7 +464,7 @@ def _extract_metadata(agginto_ds, aggfrom_ds, db, to_save, objid, metasources,
     # TODO get rid of this anacronism
     errored = False
     # perform the actual extraction
-    for res in aggfrom_ds.extract_metadata(
+    for res in aggfrom_ds.rev_extract_metadata(
             path=relevant_paths,
             # None indicates to honor a datasets per-extractor configuration and to be
             # on by default
@@ -810,7 +810,7 @@ def _store_agginfo_db(ds, db):
 
 
 @build_doc
-class AggregateMetaData(Interface):
+class RevAggregateMetadata(Interface):
     """Aggregate metadata of one or more datasets for later query.
 
     Metadata aggregation refers to a procedure that extracts metadata present
@@ -943,7 +943,7 @@ class AggregateMetaData(Interface):
     )
 
     @staticmethod
-    @datasetmethod(name='aggregate_metadata')
+    @datasetmethod(name='rev_aggregate_metadata')
     @eval_results
     def __call__(
             path=None,
