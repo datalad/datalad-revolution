@@ -14,8 +14,8 @@ from os.path import dirname
 
 from shutil import copy
 
-from datalad.coreapi import Dataset
-from datalad.api import extract_metadata
+from datalad_revolution.dataset import RevolutionDataset as Dataset
+from datalad.api import rev_extract_metadata as extract_metadata
 from datalad.utils import chpwd
 
 from datalad.tests.utils import ok_clean_git
@@ -46,7 +46,7 @@ def test_ds_extraction(path):
     except ImportError:
         raise SkipTest
 
-    ds = Dataset(path).create()
+    ds = Dataset(path).rev_create()
     copy(testpath, path)
     ds.add('.')
     ok_clean_git(ds.path)

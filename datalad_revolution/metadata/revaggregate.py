@@ -30,7 +30,7 @@ from datalad.distribution.get import Get
 from datalad.distribution.remove import Remove
 from datalad.distribution.subdatasets import Subdatasets
 from datalad.interface.unlock import Unlock
-from datalad.metadata.extract import ExtractMetadata
+from datalad_revolution.metadata.revextract import RevExtractMetadata
 
 import datalad
 from datalad.dochelpers import exc_str

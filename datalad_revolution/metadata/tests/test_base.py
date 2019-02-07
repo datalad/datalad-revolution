@@ -16,8 +16,9 @@ from os.path import join as opj
 from os.path import relpath
 import os.path as op
 
-from datalad.api import Dataset
-from datalad.api import aggregate_metadata
+from datalad_revolution.dataset import RevolutionDataset as Dataset
+from datalad.api import rev_create
+from datalad.api import rev_aggregate_metadata as aggregate_metadata
 from datalad.api import install
 from datalad.api import search
 from datalad.api import metadata
@@ -106,7 +107,7 @@ def test_aggregation(path):
     with chpwd(path):
         assert_raises(InsufficientArgumentsError, aggregate_metadata, None)
     # a hierarchy of three (super/sub)datasets, each with some native metadata
-    ds = Dataset(opj(path, 'origin')).create(force=True)
+    ds = Dataset(opj(path, 'origin')).rev_create(force=True)
     # before anything aggregated we would get nothing and only a log warning
     with swallow_logs(new_level=logging.WARNING) as cml:
         assert_equal(list(query_aggregated_metadata('all', ds, [])), [])
@@ -123,7 +124,7 @@ def test_aggregation(path):
     ok_clean_git(ds.path)
     # aggregate metadata from all subdatasets into any superdataset, including
     # intermediate ones
-    res = ds.aggregate_metadata(recursive=True, update_mode='all')
+    res = ds.rev_aggregate_metadata(recursive=True, update_mode='all')
     # we get success report for both subdatasets and the superdataset,
     # and they get saved
     assert_result_count(res, 6)
