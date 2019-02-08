@@ -31,7 +31,7 @@ from datalad.interface.results import (
     success_status_map,
 )
 from datalad.interface.utils import eval_results
-from datalad_revolution.dataset import (
+from ..dataset import (
     rev_datasetmethod as datasetmethod,
     EnsureRevDataset as EnsureDataset,
     require_rev_dataset as require_dataset,
@@ -58,7 +58,7 @@ from datalad.log import log_progress
 
 # API commands needed
 from datalad.distribution.subdatasets import Subdatasets
-import datalad_revolution.revstatus
+from .. import revstatus
 
 lgr = logging.getLogger('datalad.metadata.metadata')
 

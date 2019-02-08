@@ -30,7 +30,7 @@ from datalad.distribution.get import Get
 from datalad.distribution.remove import Remove
 from datalad.distribution.subdatasets import Subdatasets
 from datalad.interface.unlock import Unlock
-from datalad_revolution.metadata.revextract import RevExtractMetadata
+from .revextract import RevExtractMetadata
 
 import datalad
 from datalad.dochelpers import exc_str
@@ -61,7 +61,7 @@ from datalad.metadata.metadata import (
     _get_containingds_from_agginfo,
     location_keys,
 )
-from datalad_revolution.dataset import (
+from ..dataset import (
     RevolutionDataset as Dataset,
     rev_datasetmethod as datasetmethod,
     EnsureRevDataset as EnsureDataset,

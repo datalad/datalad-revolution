@@ -16,7 +16,7 @@ from os.path import join as opj
 from os.path import relpath
 import os.path as op
 
-from datalad_revolution.dataset import RevolutionDataset as Dataset
+from ...dataset import RevolutionDataset as Dataset
 from datalad.api import rev_create
 from datalad.api import rev_aggregate_metadata as aggregate_metadata
 from datalad.api import install

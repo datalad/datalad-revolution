@@ -17,7 +17,7 @@ from datalad.api import metadata
 from datalad.api import install
 from datalad.api import rev_create
 from datalad.api import rev_aggregate_metadata
-from datalad_revolution.dataset import RevolutionDataset as Dataset
+from ...dataset import RevolutionDataset as Dataset
 
 
 from datalad.tests.utils import skip_ssh

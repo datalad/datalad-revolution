@@ -14,7 +14,7 @@ from os.path import dirname
 
 from shutil import copy
 
-from datalad_revolution.dataset import RevolutionDataset as Dataset
+from ...dataset import RevolutionDataset as Dataset
 from datalad.api import rev_extract_metadata as extract_metadata
 from datalad.utils import chpwd
 
