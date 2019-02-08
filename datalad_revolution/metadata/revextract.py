@@ -45,7 +45,7 @@ from datalad.support.constraints import (
     EnsureBool,
 )
 from datalad.metadata.metadata import (
-    _get_metadatarelevant_paths,
+    exclude_from_metadata,
     get_metadata_type,
 )
 from datalad.metadata.definitions import version as vocabulary_version
@@ -55,10 +55,10 @@ from datalad.utils import (
 )
 from datalad.dochelpers import exc_str
 from datalad.log import log_progress
-from ..dataset import rev_datasetmethod
 
 # API commands needed
 from datalad.distribution.subdatasets import Subdatasets
+import datalad_revolution.revstatus
 
 lgr = logging.getLogger('datalad.metadata.metadata')
 
@@ -138,25 +138,61 @@ class RevExtractMetadata(Interface):
                     'Enabled metadata extractor %s not available'.format(msrc),
                 )
 
-        if not path:
-            ds = require_dataset(dataset, check_installed=True)
-            subds = ds.subdatasets(recursive=False, result_xfm='relpaths')
-            # TODO make it possible to pass a path-generator to help
-            # with looong lists
-            paths = list(_get_metadatarelevant_paths(ds, subds))
-        else:
-            paths = assure_list(path)
-
         res_props = dict(
             action='metadata',
-            refds=dataset.path,
         )
+
+        # build a representation of the dataset's content (incl subds
+        # records)
+        # go through a high-level command (not just the repo methods) to
+        # get all the checks and sanitization of input arguments
+        # this call is relatively expensive, but already anticipates
+        # demand for information by our core extractors that always run
+        # unconditionally, hence no real slowdown here
+        # TODO this could be a dict, but MIH cannot think of an access
+        # pattern that does not involve iteration over all items
+        status = []
+        if ds.is_installed():
+            # we can make use of status
+            res_props.update(refds=dataset.path)
+
+            for r in ds.rev_status(
+                    # let status sort out all path arg handling
+                    # but this will likely make it impossible to use this
+                    # command to just process an individual file independent
+                    # of a dataset
+                    path=path,
+                    # it is safe to ask for annex info even when a dataset is
+                    # plain Git
+                    annex='availability',
+                    # TODO we never want to aggregate metadata from untracked
+                    # content, but we might just want to see what we can get
+                    # from a file
+                    untracked='no',
+                    # this command cannot and will not work recursively
+                    recursive=False,
+                    result_renderer='disabled'):
+                # path reports are always absolute and anchored on the dataset
+                # (no repo) path
+                if any(r['path'].startswith(str(ds.pathobj / e) + op.sep)
+                       for e in exclude_from_metadata):
+                    # this needs to be ignore for any further processing
+                    continue
+                # strip useless context information
+                status.append(
+                    {k: v for k, v in iteritems(r)
+                     if (k not in ('refds', 'parentds', 'action', 'status')
+                         and not k.startswith('prev_'))})
+        else:
+            # no dataset at hand, take path arg at face value and hope
+            # for the best
+            status = [dict(path=p, type='file') for p in assure_list(path)]
 
         try:
             for res in _proc(
                     ds,
                     sources,
-                    paths,
+                    status,
                     extractors,
                     reporton):
                 res.update(**res_props)
@@ -172,18 +208,16 @@ class RevExtractMetadata(Interface):
                 ds.repo.precommit()
 
 
-def _proc(ds, sources, paths, extractors, reporton):
+def _proc(ds, sources, status, extractors, reporton):
     dsmeta = dict()
     contentmeta = {}
 
     # TODO this whole path vs fullpathlist is awkward and probably broken
     # TODO possibly delay all this and move into the pre2019 code adapter
-    fullpathlist = paths
-    if paths and isinstance(ds.repo, AnnexRepo):
-        # Ugly? Jep: #2055
-        content_info = zip(paths, ds.repo.file_has_content(paths), ds.repo.is_under_annex(paths))
-        paths = [p for p, c, a in content_info if not a or c]
-        nocontent = len(fullpathlist) - len(paths)
+    fullstatus = status
+    if status and isinstance(ds.repo, AnnexRepo):
+        status = [p for p in status if p.get('has_content', True)]
+        nocontent = len(fullstatus) - len(status)
         if nocontent:
             # TODO better fail, or support incremental and label this file as no present
             lgr.warn(
@@ -191,7 +225,9 @@ def _proc(ds, sources, paths, extractors, reporton):
                 'some extractors will not operate on {}'.format(
                     nocontent,
                     'them' if nocontent > 10
-                           else [p for p, c, a in content_info if not c and a])
+                    else [
+                        p['path'] for p in fullstatus
+                        if not p.get('has_content', True)])
             )
 
     # pull out potential metadata field blacklist config settings
@@ -243,7 +279,7 @@ def _proc(ds, sources, paths, extractors, reporton):
                 extractor_cls,
                 msrc,
                 ds,
-                paths if extractor_cls.NEEDS_CONTENT else fullpathlist,
+                status if extractor_cls.NEEDS_CONTENT else fullstatus,
                 reporton):
             # the following two conditionals are untested, as a test would require
             # a metadata extractor to yield broken metadata, and in order to have
@@ -332,18 +368,21 @@ def _proc(ds, sources, paths, extractors, reporton):
 
     for p in contentmeta:
         res = get_status_dict(
-            path=op.join(ds.path, p) if ds else p,
+            # TODO avoid is_installed() call
+            path=op.join(ds.path, p) if ds.is_installed() else p,
             metadata=contentmeta[p],
             type='file',
             # any errors will have been reported before
             status='ok',
         )
-        if ds:
+        # TODO avoid is_installed() call, check if such info is
+        # useful and accurate at all
+        if ds.is_installed():
             res['parentds'] = ds.path
         yield res
 
 
-def _run_extractor(extractor_cls, name, ds, paths, reporton):
+def _run_extractor(extractor_cls, name, ds, status, reporton):
     """Helper to control extractor using the right API
 
     Central switch to deal with alternative/future APIs is inside
@@ -356,7 +395,12 @@ def _run_extractor(extractor_cls, name, ds, paths, reporton):
                     name,
                     extractor_cls,
                     reporton,
-                    paths):
+                    # old extractors only take a list of relative paths
+                    # and cannot benefit from outside knowledge
+                    # TODO avoid is_installed() call
+                    [op.relpath(p['path'], start=ds.path) if ds.is_installed()
+                     else p['path']
+                     for p in status]):
                 yield res
         else:
             raise RuntimeError(
