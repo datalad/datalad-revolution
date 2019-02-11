@@ -36,6 +36,8 @@ from ..dataset import (
     EnsureRevDataset as EnsureDataset,
     require_rev_dataset as require_dataset,
 )
+from .extractors.base import MetadataExtractor
+
 from datalad.support.annexrepo import AnnexRepo
 from datalad.support.param import Parameter
 from datalad.support.constraints import (
@@ -389,7 +391,16 @@ def _run_extractor(extractor_cls, name, ds, status, reporton):
     """
     try:
         # detect supported API and interface as needed
-        if hasattr(extractor_cls, 'get_metadata'):
+        if issubclass(extractor_cls, MetadataExtractor):
+            # new-style, command-like extractors
+            extractor = extractor_cls()
+            for r in extractor(
+                    dataset=ds,
+                    status=status,
+                    reporton=reporton):
+                yield r
+        elif hasattr(extractor_cls, 'get_metadata'):
+            # old-style
             for res in _yield_res_from_pre2019_extractor(
                     ds,
                     name,

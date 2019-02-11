@@ -9,6 +9,12 @@
 """Metadata extractor base class"""
 
 
+class MetadataExtractor(object):
+    # ATM this doesn't do anything, but inheritance from this class enables
+    # detection of new-style extractor API
+    pass
+
+
 class BaseMetadataExtractor(object):
 
     NEEDS_CONTENT = True   # majority of the extractors need data content
