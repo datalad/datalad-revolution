@@ -220,7 +220,7 @@ def _proc(ds, sources, status, extractors, reporton):
     if status and isinstance(ds.repo, AnnexRepo):
         status = [p for p in status if p.get('has_content', True)]
         nocontent = len(fullstatus) - len(status)
-        if nocontent:
+        if nocontent and reporton in ('content', 'all'):
             # TODO better fail, or support incremental and label this file as no present
             lgr.warn(
                 '{} files have no content present, '
