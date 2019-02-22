@@ -281,7 +281,7 @@ def _proc(ds, sources, status, extractors, reporton):
                 extractor_cls,
                 msrc,
                 ds,
-                status if extractor_cls.NEEDS_CONTENT else fullstatus,
+                status if getattr(extractor_cls, 'NEEDS_CONTENT', False) else fullstatus,
                 reporton):
             # the following two conditionals are untested, as a test would require
             # a metadata extractor to yield broken metadata, and in order to have

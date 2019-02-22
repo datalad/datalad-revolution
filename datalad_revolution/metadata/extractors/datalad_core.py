@@ -8,7 +8,7 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Metadata extractor for Datalad's own core storage"""
 
-from datalad.metadata.extractors.base import BaseMetadataExtractor
+from .base import MetadataExtractor
 
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
@@ -25,25 +25,20 @@ from datalad.coreapi import subdatasets
 from datalad.metadata.definitions import version as vocabulary_version
 
 
-class MetadataExtractor(BaseMetadataExtractor):
+class DataladCoreExtractor(MetadataExtractor):
     _dataset_metadata_filename = opj('.datalad', 'metadata', 'dataset.json')
     _unique_exclude = {"url"}
 
-    def _get_dataset_metadata(self):
-        """
-        Returns
-        -------
-        dict
-          keys are homogenized datalad metadata keys, values are arbitrary
-        """
-        fpath = opj(self.ds.path, self._dataset_metadata_filename)
+    def __call__(self, dataset, reporton, status):
+        ds = dataset
+        fpath = opj(ds.path, self._dataset_metadata_filename)
         obj = {}
         if exists(fpath):
             obj = jsonload(fpath, fixup=True)
         if 'definition' in obj:
             obj['@context'] = obj['definition']
             del obj['definition']
-        obj['@id'] = self.ds.id
+        obj['@id'] = ds.id
         subdsinfo = [{
             # this version would change anytime we aggregate metadata, let's not
             # do this for now
@@ -52,23 +47,28 @@ class MetadataExtractor(BaseMetadataExtractor):
             'name': sds['gitmodule_name'],
         }
             for sds in subdatasets(
-                dataset=self.ds,
+                dataset=ds,
                 recursive=False,
                 return_type='generator',
                 result_renderer='disabled')
         ]
         if subdsinfo:
             obj['haspart'] = subdsinfo
-        superds = self.ds.get_superdataset(registered_only=True, topmost=False)
+        superds = ds.get_superdataset(registered_only=True, topmost=False)
         if superds:
             obj['ispartof'] = {
                 '@id': superds.id,
                 'type': 'dataset',
             }
+        yield dict(
+            metadata=obj,
+            type='dataset',
+            status='ok',
+        )
 
         return obj
 
-    def _get_content_metadata(self):
+    def _get_content_metadata(self, ds):
         """Get ALL metadata for all dataset content.
 
         Returns
@@ -78,12 +78,12 @@ class MetadataExtractor(BaseMetadataExtractor):
         log_progress(
             lgr.info,
             'extractordataladcore',
-            'Start core metadata extraction from %s', self.ds,
+            'Start core metadata extraction from %s', ds,
             total=len(self.paths),
             label='Core metadata extraction',
             unit=' Files',
         )
-        if not isinstance(self.ds.repo, AnnexRepo):
+        if not isinstance(ds.repo, AnnexRepo):
             for p in self.paths:
                 # this extractor does give a response for ANY file as it serves
                 # an an indicator of file presence (i.e. a file list) in the
@@ -93,14 +93,14 @@ class MetadataExtractor(BaseMetadataExtractor):
             log_progress(
                 lgr.info,
                 'extractordataladcore',
-                'Finished core metadata extraction from %s', self.ds
+                'Finished core metadata extraction from %s', ds
             )
             return
         valid_paths = None
         if self.paths and sum(len(i) for i in self.paths) > 500000:
             valid_paths = set(self.paths)
         # Availability information
-        for file, whereis in self.ds.repo.whereis(
+        for file, whereis in ds.repo.whereis(
                 self.paths if self.paths and valid_paths is None else '.',
                 output='full').items():
             if file.startswith('.datalad') or valid_paths and file not in valid_paths:
@@ -123,5 +123,5 @@ class MetadataExtractor(BaseMetadataExtractor):
         log_progress(
             lgr.info,
             'extractordataladcore',
-            'Finished core metadata extraction from %s', self.ds
+            'Finished core metadata extraction from %s', ds
         )
