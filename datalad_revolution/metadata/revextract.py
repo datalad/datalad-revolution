@@ -263,9 +263,9 @@ def _proc(ds, sources, status, extractors, reporton):
             extractor_cls = extractors[msrc].load()
         except Exception as e:  # pragma: no cover
             msg = ('Failed %s metadata extraction from %s: %s',
-                   msrc, ds, exc_str)
+                   msrc, ds, exc_str(e))
             log_progress(lgr.error, 'metadataextractors', *msg)
-            raise ValueError(msg[0] % msg[1])
+            raise ValueError(msg[0] % msg[1:])
 
         # desired setup for generation of unique metadata values
         want_unique = ds.config.obtain(
@@ -276,7 +276,7 @@ def _proc(ds, sources, status, extractors, reporton):
         unique_cm = {}
         extractor_unique_exclude = getattr(extractor_cls, "_unique_exclude", set())
 
-        # actual pull the metadata records out of the extractor
+        # actually pull the metadata records out of the extractor
         for res in _run_extractor(
                 extractor_cls,
                 msrc,
