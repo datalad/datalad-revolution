@@ -57,7 +57,6 @@ from datalad.metadata.metadata import (
 )
 from datalad.metadata.metadata import (
     exclude_from_metadata,
-    _get_metadatarelevant_paths,
     _get_containingds_from_agginfo,
     location_keys,
 )
@@ -387,8 +386,6 @@ def _dump_extracted_metadata(agginto_ds, aggfrom_ds, db, to_save, force_extracti
             to_save,
             objid,
             metasources,
-            refcommit,
-            subds_relpaths,
             agg_base_path)
 
     # we did not actually run an extraction, so we need to
@@ -448,7 +445,7 @@ def _dump_extracted_metadata(agginto_ds, aggfrom_ds, db, to_save, force_extracti
 
 
 def _extract_metadata(agginto_ds, aggfrom_ds, db, to_save, objid, metasources,
-                      refcommit, subds_relpaths, agg_base_path):
+                      agg_base_path):
     lgr.debug('Performing metadata extraction from %s', aggfrom_ds)
     # we will replace any conflicting info on this dataset with fresh stuff
     agginfo = db.get(aggfrom_ds.path, {})
@@ -506,14 +503,6 @@ def _extract_metadata(agginto_ds, aggfrom_ds, db, to_save, objid, metasources,
     agginfo['datalad_version'] = datalad.__version__
     # instead of reporting what was enabled, report what was actually retrieved
     agginfo['extractors'] = list(extracted_metadata_sources)
-    # inject the info which commmit we are describing into the core metadata
-    # this is done here in order to avoid feeding it all the way down
-    coremeta = meta['ds'].get('datalad_core', {})
-    version = aggfrom_ds.repo.describe(commitish=refcommit)
-    if version:
-        coremeta['version'] = version
-    coremeta['refcommit'] = refcommit
-    meta['ds']['datalad_core'] = coremeta
 
     # for both types of metadata
     for label, props in metasources.items():
