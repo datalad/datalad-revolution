@@ -12,11 +12,8 @@ __docformat__ = 'restructuredtext'
 
 from os import curdir
 import os.path as op
-import re
 import logging
 from six import (
-    binary_type,
-    string_types,
     iteritems,
 )
 from collections import (
@@ -74,10 +71,10 @@ class RevExtractMetadata(Interface):
 
     Examples:
 
-      Extract metadata with two extractors from a dataset in the current directory
-      and also from all its files::
+      Extract metadata with two extractors from a dataset in the current
+      directory and also from all its files::
 
-        $ datalad extract-metadata -d . --source frictionless_datapackage --source datalad_core
+        $ datalad extract-metadata -d . --source xmp --source datalad_core
 
       Extract XMP metadata from a single PDF that is not part of any dataset::
 
@@ -134,10 +131,13 @@ class RevExtractMetadata(Interface):
                 + assure_list(get_metadata_type(dataset))
         # keep local, who knows what some extractors might pull in
         from pkg_resources import iter_entry_points  # delayed heavy import
-        extractors = {ep.name: ep for ep in iter_entry_points('datalad.metadata.extractors')}
+        extractors = {
+            ep.name: ep
+            for ep in iter_entry_points('datalad.metadata.extractors')}
         for msrc in sources:
             if msrc not in extractors:
-                # we said that we want to fail, rather then just moan about less metadata
+                # we said that we want to fail, rather then just moan about
+                # less metadata
                 raise ValueError(
                     'Enabled metadata extractor %s not available'.format(msrc),
                 )
@@ -219,14 +219,17 @@ def _proc(ds, sources, status, extractors, process_type):
     dsmeta = dict()
     contentmeta = {}
 
-    # TODO this whole path vs fullpathlist is awkward and probably broken
-    # TODO possibly delay all this and move into the pre2019 code adapter
+    # this block can be removed when we stop supporting partial
+    # extraction from datasets with some unavailable content
+    # using old-style extractors that cannot report errors
+    # properly
     fullstatus = status
     if status and isinstance(ds.repo, AnnexRepo):
         status = [p for p in status if p.get('has_content', True)]
         nocontent = len(fullstatus) - len(status)
         if nocontent and process_type in ('content', 'all'):
-            # TODO better fail, or support incremental and label this file as no present
+            # TODO better fail, or support incremental and label this file as
+            # no present
             lgr.warn(
                 '{} files have no content present, '
                 'some extractors will not operate on {}'.format(
@@ -270,34 +273,40 @@ def _proc(ds, sources, status, extractors, process_type):
             default=True,
             valtype=EnsureBool())
         unique_cm = {}
-        extractor_unique_exclude = getattr(extractor_cls, "_unique_exclude", set())
+        extractor_unique_exclude = getattr(
+            extractor_cls,
+            "_unique_exclude",
+            set())
 
         # actually pull the metadata records out of the extractor
         for res in _run_extractor(
                 extractor_cls,
                 msrc,
                 ds,
-                status if getattr(extractor_cls, 'NEEDS_CONTENT', False) else fullstatus,
+                status
+                if getattr(extractor_cls, 'NEEDS_CONTENT', False)
+                else fullstatus,
                 process_type):
             # always have a path
-            # TODO add check the make sure that any 'file' report already has a path 
+            # TODO add check the make sure that any 'file' report already
+            # has a path
             res.update(
                 path=op.join(ds.path, res['path'])
                 if 'path' in res else ds.path,
             )
-            # the following two conditionals are untested, as a test would require
-            # a metadata extractor to yield broken metadata, and in order to have
-            # such one, we need a mechanism to have the test inject one on the fly
-            # MIH thinks that the code neeeded to do that is more chances to be broken
-            # then the code it would test
-            # TODO verify that is has worked once by manually breaking an extractor
+
+            # the following two conditionals are untested, as a test would
+            # require a metadata extractor to yield broken metadata, and in
+            # order to have such one, we need a mechanism to have the test
+            # inject one on the fly MIH thinks that the code neeeded to do that
+            # is more chances to be broken then the code it would test
+            # TODO verify that is has worked once by manually breaking an
+            # extractor
             if success_status_map.get(res['status'], False) != 'success':  # pragma: no cover
-                print("EXIT HERE", res)
                 yield res
                 # no further processing of broken stuff
                 continue
             if success_status_map.get(res['status'], False) == 'success':  # pragma: no cover
-
                 # if the extractor was happy check the result
                 if not _ok_metadata(res, msrc, ds, None):
                     res.update(
@@ -309,28 +318,27 @@ def _proc(ds, sources, status, extractors, process_type):
                     yield res
                     continue
 
-            # we also want to store info that there was no metadata(e.g. to get a list of
-            # files that have no metadata)
-            # if there is an issue that a extractor needlessly produces empty records, the
-            # extractor should be fixed and not a general switch. For example the datalad_core
-            # issues empty records to document the presence of a file
+            # we also want to report info that there was no metadata if there
+            # is an issue that a extractor needlessly produces empty records,
+            # the extractor should be fixed and not a general switch.
             #if not res['metadata']:
             #    # after checks and filters nothing is left, nothing to report
             #    continue
 
             if res['type'] == 'dataset':
-                # TODO warn if two dataset records are generated by the same extractor
+                # TODO warn if two dataset records are generated by the same
+                # extractor
                 dsmeta[msrc_key] = res['metadata']
             else:
                 # this is file metadata, _ok_metadata() checks unknown types
-                # assign
-                # only ask each metadata extractor once, hence no conflict possible
+                # assign only ask each metadata extractor once, hence no
+                # conflict possible
                 loc_dict = contentmeta.get(res['path'], {})
                 loc_dict[msrc_key] = res['metadata']
                 contentmeta[res['path']] = loc_dict
                 if want_unique:
-                    # go through content metadata and inject report of unique keys
-                    # and values into `unique_cm`
+                    # go through content metadata and inject report of
+                    # unique keys and values into `unique_cm`
                     _update_unique_cm(
                         unique_cm,
                         msrc_key,
@@ -429,17 +437,18 @@ def _run_extractor(extractor_cls, name, ds, status, process_type):
         )
 
 
-def _yield_res_from_pre2019_extractor(ds, name, extractor_cls, process_type, paths):
+def _yield_res_from_pre2019_extractor(
+        ds, name, extractor_cls, process_type, paths):
     """This implements dealing with our first extractor class concept"""
 
-    want_dataset_meta = process_type in ('all', 'dataset') if process_type else \
-        ds.config.obtain(
+    want_dataset_meta = process_type in ('all', 'dataset') \
+        if process_type else ds.config.obtain(
             'datalad.metadata.extract-dataset-{}'.format(
                 name.replace('_', '-')),
             default=True,
             valtype=EnsureBool())
-    want_content_meta = process_type in ('all', 'content') if process_type else \
-        ds.config.obtain(
+    want_content_meta = process_type in ('all', 'content') \
+        if process_type else ds.config.obtain(
             'datalad.metadata.extract-content-{}'.format(
                 name.replace('_', '-')),
             default=True,
@@ -449,7 +458,8 @@ def _yield_res_from_pre2019_extractor(ds, name, extractor_cls, process_type, pat
         log_progress(
             lgr.info,
             'metadataextractors',
-            'Skipping %s metadata extraction from %s, disabled by configuration',
+            'Skipping %s metadata extraction from %s, '
+            'disabled by configuration',
             name, ds,
         )
         return
@@ -530,8 +540,8 @@ def _update_unique_cm(unique_cm, msrc_key, dsmeta, cnmeta, exclude_keys):
             #
             # the extractor thinks this key is worthless for the purpose
             # of discovering whole datasets
-            # we keep the key (so we know that some file is providing this key),
-            # but ignore any value it came with
+            # we keep the key (so we know that some file is providing this
+            # key), but ignore any value it came with
             unique_cm[k] = None
             continue
         vset = unique_cm.get(k, set())
@@ -584,7 +594,8 @@ def _finalize_unique_cm(unique_cm, msrc_key, dsmeta):
         # otherwise we only want actual values, and also no single-item-lists
         # of a non-value
         # those contribute no information, but bloat the operation
-        # (inflated number of keys, inflated storage, inflated search index, ...)
+        # (inflated number of keys, inflated storage, inflated search index,
+        # ...)
         if v is None or (v and not v == {''})}
     dsmeta['datalad_unique_content_properties'] = ucp
 
@@ -617,7 +628,8 @@ def _unique_value_key(x):
               if isinstance(x[k], ReadOnlyDict) else x[k])
              for k in sorted(x)]
     # we need to force str, because sorted in PY3 refuses to compare
-    # any heterogeneous type combinations, such as str/int, tuple(int)/tuple(str)
+    # any heterogeneous type combinations, such as str/int,
+    # tuple(int)/tuple(str)
     return as_unicode(x)
 
 
