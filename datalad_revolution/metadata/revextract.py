@@ -95,12 +95,14 @@ class RevExtractMetadata(Interface):
             plus any extractors enabled in a dataset's configuration
             and invoked.
             [CMD: This option can be given more than once CMD]"""),
-        reporton=Parameter(
-            args=("--reporton",),
-            doc="""dataset component type to report metadata on. If 'all',
-            metadata will be reported for the entire dataset and its content.
+        process_type=Parameter(
+            args=("--process-type",),
+            doc="""dataset component type to process. If 'all',
+            metadata will be extracted for the entire dataset and its content.
             If not specified, the dataset's configuration will determine
-            the selection, and will default to 'all'.""",
+            the selection, and will default to 'all'. Note that not processing
+            content can influence the dataset metadata content (e.g. report
+            of total size).""",
             constraints=EnsureChoice(None, 'all', 'dataset', 'content')),
         path=Parameter(
             args=("path",),
@@ -118,7 +120,7 @@ class RevExtractMetadata(Interface):
     @staticmethod
     @datasetmethod(name='rev_extract_metadata')
     @eval_results
-    def __call__(dataset=None, path=None, sources=None, reporton=None):
+    def __call__(dataset=None, path=None, sources=None, process_type=None):
         # TODO verify that we need this ds vs dataset distinction
         ds = dataset = require_dataset(
             dataset or curdir,
@@ -142,6 +144,7 @@ class RevExtractMetadata(Interface):
 
         res_props = dict(
             action='metadata',
+            logger=lgr,
         )
 
         # build a representation of the dataset's content (incl subds
@@ -188,6 +191,8 @@ class RevExtractMetadata(Interface):
         else:
             # no dataset at hand, take path arg at face value and hope
             # for the best
+            # TODO we have to resolve the given path to make it match what
+            # status is giving (abspath with ds (not repo) anchor)
             status = [dict(path=p, type='file') for p in assure_list(path)]
 
         try:
@@ -196,7 +201,7 @@ class RevExtractMetadata(Interface):
                     sources,
                     status,
                     extractors,
-                    reporton):
+                    process_type):
                 res.update(**res_props)
                 yield res
         finally:
@@ -210,7 +215,7 @@ class RevExtractMetadata(Interface):
                 ds.repo.precommit()
 
 
-def _proc(ds, sources, status, extractors, reporton):
+def _proc(ds, sources, status, extractors, process_type):
     dsmeta = dict()
     contentmeta = {}
 
@@ -220,7 +225,7 @@ def _proc(ds, sources, status, extractors, reporton):
     if status and isinstance(ds.repo, AnnexRepo):
         status = [p for p in status if p.get('has_content', True)]
         nocontent = len(fullstatus) - len(status)
-        if nocontent and reporton in ('content', 'all'):
+        if nocontent and process_type in ('content', 'all'):
             # TODO better fail, or support incremental and label this file as no present
             lgr.warn(
                 '{} files have no content present, '
@@ -282,13 +287,24 @@ def _proc(ds, sources, status, extractors, reporton):
                 msrc,
                 ds,
                 status if getattr(extractor_cls, 'NEEDS_CONTENT', False) else fullstatus,
-                reporton):
+                process_type):
+            # always have a path
+            # TODO add check the make sure that any 'file' report already has a path 
+            res.update(
+                path=op.join(ds.path, res['path'])
+                if 'path' in res else ds.path,
+            )
             # the following two conditionals are untested, as a test would require
             # a metadata extractor to yield broken metadata, and in order to have
             # such one, we need a mechanism to have the test inject one on the fly
             # MIH thinks that the code neeeded to do that is more chances to be broken
             # then the code it would test
             # TODO verify that is has worked once by manually breaking an extractor
+            if success_status_map.get(res['status'], False) != 'success':  # pragma: no cover
+                print("EXIT HERE", res)
+                yield res
+                # no further processing of broken stuff
+                continue
             if success_status_map.get(res['status'], False) == 'success':  # pragma: no cover
 
                 # if the extractor was happy check the result
@@ -299,16 +315,8 @@ def _proc(ds, sources, status, extractors, reporton):
                         # TODO have _ok_metadata report the real error
                         message=('Invalid metadata (%s)', msrc),
                     )
-            if success_status_map.get(res['status'], False) != 'success':  # pragma: no cover
-
-                res.update(
-                    path=op.join(ds.path, res['path'])
-                    if 'path' in res else ds.path,
-                )
-                yield res
-                # no further processing of broken stuff
-                continue
-
+                    yield res
+                    continue
             # strip by applying size and type filters
             res['metadata'] = _filter_metadata_fields(
                 res['metadata'],
@@ -360,7 +368,8 @@ def _proc(ds, sources, status, extractors, reporton):
             '@vocab': 'http://docs.datalad.org/schema_v{}.json'.format(
                 vocabulary_version)}
 
-    if dsmeta and ds is not None and ds.is_installed():
+    if process_type in ('all', 'dataset') and \
+            dsmeta and ds is not None and ds.is_installed():
         yield get_status_dict(
             ds=ds,
             metadata=dsmeta,
@@ -384,7 +393,7 @@ def _proc(ds, sources, status, extractors, reporton):
         yield res
 
 
-def _run_extractor(extractor_cls, name, ds, status, reporton):
+def _run_extractor(extractor_cls, name, ds, status, process_type):
     """Helper to control extractor using the right API
 
     Central switch to deal with alternative/future APIs is inside
@@ -397,7 +406,7 @@ def _run_extractor(extractor_cls, name, ds, status, reporton):
             for r in extractor(
                     dataset=ds,
                     status=status,
-                    reporton=reporton):
+                    process_type=process_type):
                 yield r
         elif hasattr(extractor_cls, 'get_metadata'):
             # old-style
@@ -405,7 +414,7 @@ def _run_extractor(extractor_cls, name, ds, status, reporton):
                     ds,
                     name,
                     extractor_cls,
-                    reporton,
+                    process_type,
                     # old extractors only take a list of relative paths
                     # and cannot benefit from outside knowledge
                     # TODO avoid is_installed() call
@@ -434,16 +443,16 @@ def _run_extractor(extractor_cls, name, ds, status, reporton):
         )
 
 
-def _yield_res_from_pre2019_extractor(ds, name, extractor_cls, reporton, paths):
+def _yield_res_from_pre2019_extractor(ds, name, extractor_cls, process_type, paths):
     """This implements dealing with our first extractor class concept"""
 
-    want_dataset_meta = reporton in ('all', 'dataset') if reporton else \
+    want_dataset_meta = process_type in ('all', 'dataset') if process_type else \
         ds.config.obtain(
             'datalad.metadata.extract-dataset-{}'.format(
                 name.replace('_', '-')),
             default=True,
             valtype=EnsureBool())
-    want_content_meta = reporton in ('all', 'content') if reporton else \
+    want_content_meta = process_type in ('all', 'content') if process_type else \
         ds.config.obtain(
             'datalad.metadata.extract-content-{}'.format(
                 name.replace('_', '-')),
