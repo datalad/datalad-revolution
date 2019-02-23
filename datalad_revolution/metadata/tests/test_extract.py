@@ -65,7 +65,7 @@ def test_ds_extraction(path):
         path=[])
     assert_result_count(
         res, 1,
-        type='dataset', status='ok', action='metadata', path=path, refds=ds.path)
+        type='dataset', status='ok', action='extract_metadata', path=path, refds=ds.path)
     assert_in('xmp', res[0]['metadata'])
 
     # now the more useful case: getting everthing for xmp from a dataset
@@ -75,10 +75,10 @@ def test_ds_extraction(path):
     assert_result_count(res, 2)
     assert_result_count(
         res, 1,
-        type='dataset', status='ok', action='metadata', path=path, refds=ds.path)
+        type='dataset', status='ok', action='extract_metadata', path=path, refds=ds.path)
     assert_result_count(
         res, 1,
-        type='file', status='ok', action='metadata', path=opj(path, 'xmp.pdf'),
+        type='file', status='ok', action='extract_metadata', path=opj(path, 'xmp.pdf'),
         parentds=ds.path)
     for r in res:
         assert_in('xmp', r['metadata'])
@@ -88,9 +88,8 @@ def test_ds_extraction(path):
         ["dlsubject"]
     )
     # and lastly, if we disable extraction via config, we get nothing
-    ds.config.add('datalad.metadata.extract-dataset-xmp', 'no', where='dataset')
-    ds.config.add('datalad.metadata.extract-content-xmp', 'no', where='dataset')
-    assert_result_count(extract_metadata(sources=['xmp'], dataset=ds), 0)
+    ds.config.add('datalad.metadata.extract-from-xmp', 'dataset', where='dataset')
+    assert_result_count(extract_metadata(sources=['xmp'], dataset=ds), 1)
 
 
 @with_tempfile(mkdir=True)
@@ -106,5 +105,5 @@ def test_file_extraction(path):
         res = extract_metadata(
             sources=['xmp'],
             path=[testpath])
-        assert_result_count(res, 1, type='file', status='ok', action='metadata', path=testpath)
+        assert_result_count(res, 1, type='file', status='ok', action='extract_metadata', path=testpath)
         assert_in('xmp', res[0]['metadata'])

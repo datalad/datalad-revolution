@@ -259,7 +259,7 @@ def _proc(ds, sources, status, extractors, process_type):
 
         extractor_process_type = process_type if process_type \
             else ds.config.obtain(
-                'datalad.metadata.extract-with-{}'.format(
+                'datalad.metadata.extract-from-{}'.format(
                     msrc_key.replace('_', '-')),
                 default='all')
         # load the extractor class, no instantiation yet
