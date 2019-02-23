@@ -237,15 +237,6 @@ def _proc(ds, sources, status, extractors, process_type):
                         if not p.get('has_content', True)])
             )
 
-    # pull out potential metadata field blacklist config settings
-    # TODO this is pointless, as the blacklisting is not per extractor
-    # there will be no magic field name congruence...
-    blacklist = [re.compile(bl) for bl in assure_list(ds.config.obtain(
-        'datalad.metadata.aggregate-ignore-fields',
-        default=[]))]
-    # enforce size limits
-    max_fieldsize = ds.config.obtain('datalad.metadata.maxfieldsize')
-
     log_progress(
         lgr.info,
         'metadataextractors',
@@ -317,11 +308,6 @@ def _proc(ds, sources, status, extractors, process_type):
                     )
                     yield res
                     continue
-            # strip by applying size and type filters
-            res['metadata'] = _filter_metadata_fields(
-                res['metadata'],
-                maxsize=max_fieldsize,
-                blacklist=blacklist)
 
             # we also want to store info that there was no metadata(e.g. to get a list of
             # files that have no metadata)
@@ -633,26 +619,6 @@ def _unique_value_key(x):
     # we need to force str, because sorted in PY3 refuses to compare
     # any heterogeneous type combinations, such as str/int, tuple(int)/tuple(str)
     return as_unicode(x)
-
-
-def _filter_metadata_fields(d, maxsize=None, blacklist=None):
-    lgr.log(5, "Analyzing metadata fields for maxsize=%s with blacklist=%s on "
-            "input with %d entries",
-            maxsize, blacklist, len(d))
-    orig_keys = set(d.keys())
-    if blacklist:
-        d = {k: v for k, v in iteritems(d)
-             if k.startswith('@') or not any(bl.match(k) for bl in blacklist)}
-    if maxsize:
-        d = {k: v for k, v in iteritems(d)
-             if k.startswith('@') or (len(str(v)
-                                      if not isinstance(v, string_types + (binary_type,))
-                                      else v) <= maxsize)}
-    if len(d) != len(orig_keys):
-        lgr.info(
-            'Removed metadata field(s) due to blacklisting and max size settings: %s',
-            orig_keys.difference(d.keys()))
-    return d
 
 
 def _ok_metadata(res, msrc, ds, loc):
