@@ -452,8 +452,6 @@ def _extract_metadata(agginto_ds, aggfrom_ds, db, to_save, objid, metasources,
     lgr.debug('Performing metadata extraction from %s', aggfrom_ds)
     # we will replace any conflicting info on this dataset with fresh stuff
     agginfo = db.get(aggfrom_ds.path, {})
-    # paths to extract from
-    relevant_paths = sorted(_get_metadatarelevant_paths(aggfrom_ds, subds_relpaths))
 
     meta = {
         'ds': None,
@@ -465,10 +463,11 @@ def _extract_metadata(agginto_ds, aggfrom_ds, db, to_save, objid, metasources,
     errored = False
     # perform the actual extraction
     for res in aggfrom_ds.rev_extract_metadata(
-            path=relevant_paths,
+            # just let it do its thing
+            path=None,
             # None indicates to honor a datasets per-extractor configuration and to be
             # on by default
-            reporton=None):
+            process_type=None):
         # TODO proper error condition handling
         if success_status_map.get(res['status'], False) != 'success':
             lgr.warn(

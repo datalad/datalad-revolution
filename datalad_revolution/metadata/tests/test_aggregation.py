@@ -29,7 +29,6 @@ from datalad.tests.utils import assert_dict_equal
 from datalad.tests.utils import assert_not_in
 from datalad.tests.utils import eq_
 from datalad.tests.utils import ok_clean_git
-from datalad.tests.utils import known_failure_direct_mode
 from datalad.tests.utils import skip_if_on_windows
 
 
@@ -59,7 +58,6 @@ _dataset_hierarchy_template = {
 
 
 @with_tree(tree=_dataset_hierarchy_template)
-@known_failure_direct_mode  #FIXME
 def test_basic_aggregate(path):
     # TODO give datasets some more metadata to actually aggregate stuff
     base = Dataset(opj(path, 'origin')).rev_create(force=True)
@@ -149,7 +147,6 @@ def test_aggregate_query(path):
 
 # this is for gh-1971
 @with_tree(tree=_dataset_hierarchy_template)
-@known_failure_direct_mode  #FIXME
 def test_reaggregate_with_unavailable_objects(path):
     base = Dataset(opj(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -184,7 +181,6 @@ def test_reaggregate_with_unavailable_objects(path):
 
 @with_tree(tree=_dataset_hierarchy_template)
 @with_tempfile(mkdir=True)
-@known_failure_direct_mode  #FIXME
 def test_aggregate_with_unavailable_objects_from_subds(path, target):
     base = Dataset(opj(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -220,7 +216,6 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
 @skip_if_on_windows  # create_sibling incompatible with win servers
 @skip_ssh
 @with_tree(tree=_dataset_hierarchy_template)
-@known_failure_direct_mode  #FIXME
 def test_publish_aggregated(path):
     base = Dataset(opj(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -267,7 +262,6 @@ def _get_referenced_objs(ds):
 
 
 @with_tree(tree=_dataset_hierarchy_template)
-@known_failure_direct_mode  #FIXME
 def test_aggregate_removal(path):
     base = Dataset(opj(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -303,7 +297,6 @@ def test_aggregate_removal(path):
 
 
 @with_tree(tree=_dataset_hierarchy_template)
-@known_failure_direct_mode  #FIXME
 def test_update_strategy(path):
     base = Dataset(opj(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -358,8 +351,6 @@ def test_update_strategy(path):
     eq_(target_meta, base.metadata(return_type='list'))
 
 
-# needs two subdatasets, no possible in direct mode
-@known_failure_direct_mode  #FIXME
 @with_tree({
     'this': 'that',
     'sub1': {'here': 'there'},
