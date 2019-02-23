@@ -227,7 +227,7 @@ def _proc(ds, sources, status, extractors, process_type):
     if status and isinstance(ds.repo, AnnexRepo):
         status = [p for p in status if p.get('has_content', True)]
         nocontent = len(fullstatus) - len(status)
-        if nocontent and process_type in ('content', 'all'):
+        if nocontent and process_type in (None, 'content', 'all'):
             # TODO better fail, or support incremental and label this file as
             # no present
             lgr.warn(
@@ -257,6 +257,11 @@ def _proc(ds, sources, status, extractors, process_type):
             update=1,
             increment=True)
 
+        extractor_process_type = process_type if process_type \
+            else ds.config.obtain(
+                'datalad.metadata.extract-with-{}'.format(
+                    msrc_key.replace('_', '-')),
+                default='all')
         # load the extractor class, no instantiation yet
         try:
             extractor_cls = extractors[msrc].load()
@@ -266,6 +271,7 @@ def _proc(ds, sources, status, extractors, process_type):
             log_progress(lgr.error, 'metadataextractors', *msg)
             raise ValueError(msg[0] % msg[1:])
 
+        # TODO consider moving the entire unique procedure into aggregation
         # desired setup for generation of unique metadata values
         want_unique = ds.config.obtain(
             'datalad.metadata.generate-unique-{}'.format(
@@ -286,7 +292,7 @@ def _proc(ds, sources, status, extractors, process_type):
                 status
                 if getattr(extractor_cls, 'NEEDS_CONTENT', False)
                 else fullstatus,
-                process_type):
+                extractor_process_type):
             # always have a path
             # TODO add check the make sure that any 'file' report already
             # has a path
@@ -362,7 +368,7 @@ def _proc(ds, sources, status, extractors, process_type):
             '@vocab': 'http://docs.datalad.org/schema_v{}.json'.format(
                 vocabulary_version)}
 
-    if process_type in ('all', 'dataset') and \
+    if process_type in (None, 'all', 'dataset') and \
             dsmeta and ds is not None and ds.is_installed():
         yield get_status_dict(
             ds=ds,
