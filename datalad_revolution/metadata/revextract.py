@@ -143,7 +143,7 @@ class RevExtractMetadata(Interface):
                 )
 
         res_props = dict(
-            action='metadata',
+            action='extract_metadata',
             logger=lgr,
         )
 
