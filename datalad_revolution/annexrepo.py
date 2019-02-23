@@ -142,6 +142,10 @@ class RevolutionAnnexRepo(AnnexRepo, RevolutionGitRepo):
                 continue
             rec.update({'{}{}'.format(key_prefix, k): j[k]
                        for k in j if k != 'file'})
+            if 'bytesize' in rec:
+                # it makes sense to make this an int that one can calculate with
+                # with
+                rec['bytesize'] = int(rec['bytesize'])
             info[path] = rec
             # TODO make annex availability checks optional and move in here
             if not eval_availability:
