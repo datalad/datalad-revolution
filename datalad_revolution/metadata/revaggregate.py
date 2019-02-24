@@ -556,6 +556,7 @@ def _adj2subtrees(base, adj, subs):
     return subtrees
 
 
+# TODO kill this
 def _get_latest_refcommit(ds, subds_relpaths):
     """Find the latest commit that changed any real content
 
