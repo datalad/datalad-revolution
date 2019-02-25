@@ -618,9 +618,12 @@ def test_surprise_subds(path):
     # because it content is still untracked) the subrepo
     # cannot be added (it has no commit)
     # worse: its untracked file add been added to the superdataset
-    assert_repo_status(ds.path, modified=['d2/subds'])
-    assert_in(ds.repo.pathobj / 'd1' / 'subrepo' / 'subfile',
-              ds.repo.get_content_info())
+    # XXX the next conditional really says: if the subrepo is not in an
+    # adjusted branch: #datalad/3178 (that would have a commit)
+    if not on_windows:
+        assert_repo_status(ds.path, modified=['d2/subds'])
+        assert_in(ds.repo.pathobj / 'd1' / 'subrepo' / 'subfile',
+                  ds.repo.get_content_info())
     # with proper subdatasets, all evil is gone
     assert_not_in(ds.repo.pathobj / 'd2' / 'subds' / 'subfile',
                   ds.repo.get_content_info())
