@@ -414,3 +414,25 @@ def test_diff_nods(path, otherpath):
             'dataset containing given paths is not underneath the '
             'reference dataset %s: %s', ds, otherds.path)
     )
+
+
+@with_tempfile(mkdir=True)
+def test_diff_rsync_syntax(path):
+    # three nested datasets
+    ds = Dataset(path).rev_create()
+    subds = ds.rev_create('sub')
+    subsubds = subds.rev_create('deep')
+    justtop = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, path='sub')
+    # we only get a single result, the subdataset in question
+    assert_result_count(justtop, 1)
+    assert_result_count(justtop, 1, type='dataset', path=subds.path)
+    # now with "peak inside the dataset" syntax
+    inside = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, path='sub/')
+    # we get both subdatasets, but nothing else inside the nested one
+    assert_result_count(inside, 2, type='dataset')
+    assert_result_count(inside, 1, type='dataset', path=subds.path)
+    assert_result_count(inside, 1, type='dataset', path=subsubds.path)
+    assert_result_count(inside, 0, type='file', parentds=subsubds.path)
+    # just for completeness, we get more when going full recursive
+    rec = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, recursive=True, path='sub/')
+    assert(len(inside) < len(rec))
