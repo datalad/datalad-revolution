@@ -13,6 +13,7 @@
 __docformat__ = 'restructuredtext'
 
 from six import text_type
+import os
 import os.path as op
 from datalad.support.exceptions import (
     NoDatasetArgumentFound,
@@ -427,12 +428,12 @@ def test_diff_rsync_syntax(path):
     assert_result_count(justtop, 1)
     assert_result_count(justtop, 1, type='dataset', path=subds.path)
     # now with "peak inside the dataset" syntax
-    inside = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, path='sub/')
+    inside = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, path='sub' + os.sep)
     # we get both subdatasets, but nothing else inside the nested one
     assert_result_count(inside, 2, type='dataset')
     assert_result_count(inside, 1, type='dataset', path=subds.path)
     assert_result_count(inside, 1, type='dataset', path=subsubds.path)
     assert_result_count(inside, 0, type='file', parentds=subsubds.path)
     # just for completeness, we get more when going full recursive
-    rec = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, recursive=True, path='sub/')
+    rec = ds.rev_diff(fr=PRE_INIT_COMMIT_SHA, recursive=True, path='sub' + os.sep)
     assert(len(inside) < len(rec))
