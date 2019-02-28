@@ -380,8 +380,10 @@ def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
                         else to if constant_refs
                         else props['gitshasum'],
                         constant_refs,
-                        # subtract on level on the way down
-                        recursion_level=recursion_level - 1,
+                        # subtract on level on the way down, unless the path
+                        # args instructed to go inside this subdataset
+                        recursion_level=recursion_level
+                        if paths and paths.get(path, False) else recursion_level - 1,
                         origpaths=origpaths,
                         untracked=untracked,
                         annexinfo=annexinfo,
