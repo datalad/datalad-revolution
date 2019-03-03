@@ -59,29 +59,6 @@ __docformat__ = 'restructuredtext'
 lgr = logging.getLogger('datalad.revolution.create')
 
 
-# TODO for now carry a copy of this one, until datalad-core returns
-# next-gen RevolutionDataset instances
-class YieldDatasets(ResultXFM):
-    """Result transformer to return a Dataset instance from matching result.
-
-    If the `success_only` flag is given only dataset with 'ok' or 'notneeded'
-    status are returned'.
-
-    `None` is returned for any other result.
-    """
-    def __init__(self, success_only=False):
-        self.success_only = success_only
-
-    def __call__(self, res):
-        if res.get('type', None) == 'dataset':
-            if not self.success_only or \
-                    res.get('status', None) in ('ok', 'notneeded'):
-                ds = Dataset(res['path'])
-                return ds
-        else:
-            lgr.debug('rejected by return value configuration: %s', res)
-
-
 @build_doc
 class RevCreate(Interface):
     """Create a new dataset from scratch.
@@ -119,9 +96,7 @@ class RevCreate(Interface):
     # in general this command will yield exactly one result
     return_type = 'item-or-list'
     # in general users expect to get an instance of the created dataset
-    # TODO switch back
-    # result_xfm = 'datasets'
-    result_xfm = YieldDatasets()
+    result_xfm = 'datasets'
     # result filter
     result_filter = \
         EnsureKeyChoice('action', ('create',)) & \
