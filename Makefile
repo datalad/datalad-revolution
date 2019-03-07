@@ -40,7 +40,7 @@ code-analysis:
 #	pandoc -t rst CHANGELOG.md >> docs/source/changelog.rst
 
 #release-pypi: update-changelog
-release-pypi:
+release-pypi: clean
 	# better safe than sorry
 	test ! -e dist
 	python setup.py sdist
