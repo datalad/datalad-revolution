@@ -80,9 +80,9 @@ def test_create_raises(path, outside_path):
     assert_in_results(
         ds.rev_create('sub', **raw),
         status='error',
-        message=('collision with %s (dataset) in dataset %s',
-                 str(ds.pathobj / 'sub'),
-                 ds.path)
+        message=('collision with content in parent dataset at %s: %s',
+                 ds.path,
+                 [str(ds.pathobj / 'sub')]),
     )
 
     # now deinstall the sub and fail trying to create a new one at the
@@ -90,14 +90,31 @@ def test_create_raises(path, outside_path):
     ds.uninstall('sub', check=False)
     assert_in('sub', ds.subdatasets(fulfilled=False, result_xfm='relpaths'))
     # and now should fail to also create inplace or under
-    for s in 'sub', _path_('sub/subsub'):
-        assert_in_results(
-            ds.rev_create(s, **raw),
-            status='error',
-            message=('collision with %s (dataset) in dataset %s',
-                     str(ds.pathobj / 'sub'),
-                     ds.path)
-        )
+    assert_in_results(
+        ds.rev_create('sub', **raw),
+        status='error',
+        message=('collision with content in parent dataset at %s: %s',
+                 ds.path,
+                 [str(ds.pathobj / 'sub')]),
+    )
+    assert_in_results(
+        ds.rev_create(_path_('sub/subsub'), **raw),
+        status='error',
+        message=('collision with %s (dataset) in dataset %s',
+                 str(ds.pathobj / 'sub'),
+                 ds.path)
+    )
+    os.makedirs(op.join(ds.path, 'down'))
+    with open(op.join(ds.path, 'down', "someotherfile.tst"), 'w') as f:
+        f.write("someother")
+    ds.rev_save()
+    assert_in_results(
+        ds.rev_create('down', **raw),
+        status='error',
+        message=('collision with content in parent dataset at %s: %s',
+                 ds.path,
+                 [str(ds.pathobj / 'down' / 'someotherfile.tst')]),
+    )
 
 
 @with_tempfile
@@ -243,7 +260,9 @@ def test_nested_create(path):
     assert_in_results(
         ds.rev_create(lvl2relpath, **raw),
         status='error',
-        message='will not create a dataset in a non-empty directory, use `force` option to ignore')
+        message=(
+            'collision with content in parent dataset at %s: %s',
+            ds.path, [op.join(lvl2path, 'file')]))
     # even with force, as to do this properly complicated surgery would need to
     # take place
     # MIH disable shaky test till proper dedicated upfront check is in-place in `create`

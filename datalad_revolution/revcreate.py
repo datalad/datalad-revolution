@@ -224,12 +224,32 @@ class RevCreate(Interface):
             # we cannot get away with a simple
             # GitRepo.get_content_info(), as we need to detect
             # uninstalled/added subdatasets too
+            check_path = ut.Path(path)
+            pstatus = prepo.status(untracked='no')
+            if any(
+                    check_path == p or check_path in p.parents
+                    for p in pstatus):
+                # redo the check in a slower fashion, it is already broken
+                # let's take our time for a proper error message
+                conflict = [
+                    p for p in pstatus
+                    if check_path == p or check_path in p.parents]
+                res.update({
+                    'status': 'error',
+                    'message': (
+                        'collision with content in parent dataset at %s: %s',
+                        str(parentds_path),
+                        [str(c) for c in conflict])})
+                yield res
+                return
+            # another set of check to see whether the target path is pointing
+            # into a known subdataset that is not around ATM
             subds_status = {
                 parentds_path / k.relative_to(prepo.path)
-                for k, v in iteritems(prepo.status(untracked='no'))
+                for k, v in iteritems(pstatus)
                 if v.get('type', None) == 'dataset'}
-            check_paths = [ut.Path(path)]
-            check_paths.extend(ut.Path(path).parents)
+            check_paths = [check_path]
+            check_paths.extend(check_path.parents)
             if any(p in subds_status for p in check_paths):
                 conflict = [p for p in check_paths if p in subds_status]
                 res.update({
