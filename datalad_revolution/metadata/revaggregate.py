@@ -12,43 +12,37 @@
 __docformat__ = 'restructuredtext'
 
 import logging
-import os
-from six.moves import (
-    filter,
-    map,
+import tempfile
+from six import (
+    iteritems,
+    text_type,
 )
+from collections import OrderedDict
 
-from os import makedirs
-from os import listdir
 import os.path as op
 
-from hashlib import md5
 import shutil
 
 # API commands we need
-from datalad.distribution.get import Get
-from datalad.distribution.remove import Remove
-from datalad.distribution.subdatasets import Subdatasets
-from datalad.interface.unlock import Unlock
 from .revextract import RevExtractMetadata
+from ..revstatus import RevStatus as Status
+from ..revsave import RevSave as Save
+from ..revdiff import (
+    RevDiff as Diff,
+    PRE_INIT_COMMIT_SHA,
+)
 
 import datalad
-from datalad.dochelpers import exc_str
-from datalad.interface.annotate_paths import AnnotatePaths
 from datalad.interface.base import Interface
 from datalad.interface.utils import (
     eval_results,
-    discover_dataset_trace_to_targets,
 )
-from datalad.interface.save import Save
 from datalad.interface.base import build_doc
 from datalad.interface.common_opts import (
     recursion_limit,
     recursion_flag,
-    nosave_opt,
 )
 from datalad.interface.results import (
-    get_status_dict,
     success_status_map,
 )
 from datalad.metadata.metadata import (
@@ -57,7 +51,6 @@ from datalad.metadata.metadata import (
 )
 from datalad.metadata.metadata import (
     exclude_from_metadata,
-    _get_containingds_from_agginfo,
     location_keys,
 )
 from ..dataset import (
@@ -65,737 +58,23 @@ from ..dataset import (
     rev_datasetmethod as datasetmethod,
     EnsureRevDataset as EnsureDataset,
     require_rev_dataset as require_dataset,
+    sort_paths_by_datasets,
 )
+from .. import utils as ut
 from datalad.support.param import Parameter
 from datalad.support.constraints import (
     EnsureStr,
     EnsureNone,
-    EnsureBool,
 )
 from datalad.support.constraints import EnsureChoice
-from datalad.support.gitrepo import GitRepo
-from datalad.support.annexrepo import AnnexRepo
 from datalad.support import json_py
-from datalad.support.path import split_ext
+from datalad.support.digests import Digester
 from datalad.utils import (
-    path_is_subpath,
-    all_same,
     assure_list,
+    rmtree,
 )
 
 lgr = logging.getLogger('datalad.metadata.aggregate')
-
-
-def _get_dsinfo_from_aggmetadata(ds_path, path, recursive, db):
-    """Grab info on aggregated metadata for a path from a given dataset.
-
-    The actual info is stored in a `db` dict under the absolute path
-    of the dataset that contains the query path, plus any subdataset
-    in case of recursion (with their own DB entries).
-
-    Parameters
-    ----------
-    ds : Dataset
-      source dataset
-    path : str
-      absolute path for which to obtain metadata
-    recursive : bool
-
-    Returns
-    -------
-    str or list
-      A string/tuple is an error message, a list contains all absolute paths
-      for all datasets on which info was put into the DB.
-    """
-    # TODO cache these
-    agginfos = load_ds_aggregate_db(Dataset(ds_path), abspath=True)
-
-    seed_ds = _get_containingds_from_agginfo(agginfos, path)
-    if seed_ds is None:
-        # nothing found
-        # this will be the message in the result for the query path
-        # and could be a tuple
-        return ("No matching aggregated metadata for path '%s' in Dataset at %s",
-                op.relpath(path, start=ds_path), ds_path)
-
-    # easy peasy
-    db[seed_ds] = agginfos[seed_ds]
-    hits = [seed_ds]
-
-    if not recursive:
-        return hits
-
-    # a little more complicated: we need to loop over all subdataset
-    # records and pick the ones that are underneath the seed
-    for agginfo_path in agginfos:
-        if path_is_subpath(agginfo_path, seed_ds):
-            db[agginfo_path] = agginfos[agginfo_path]
-            hits.append(agginfo_path)
-    # TODO we must keep the info on these recursively discovered datasets
-    # somewhere, because we cannot rediscover them on the filesystem
-    # when updating the datasets later on
-    return hits
-
-
-def _the_same_across_datasets(relpath, *dss):
-    """Check if the file (present content or not) is identical across two datasets
-
-    Compares files by content if under git, or by checksum if under annex
-
-    Parameters
-    ----------
-    *ds: Datasets
-    relpath: str
-        path within datasets
-
-    Returns
-    -------
-    bool or None
-      True if identical, False if not, None if cannot be decided
-      (e.g. different git-annex backend used)
-    """
-    from datalad.utils import md5sum, unique
-    from datalad.support.exceptions import FileInGitError
-    from datalad.support.digests import Digester
-
-    paths = [op.join(ds.path, relpath) for ds in dss]
-    # The simplest check first -- exist in both and content is the same.
-    # Even if content is just a symlink file on windows, the same content
-    # condition would be correct
-    if all(map(op.exists, paths)) and all_same(map(md5sum, paths)):
-        return True
-
-    # We first need to find problematic ones which are annexed and
-    # have no content locally, and take their
-    keys = []
-    backends = []
-    presents = []
-    for ds in dss:
-        repo = ds.repo
-        key = None
-        present = True
-        if isinstance(repo, AnnexRepo):
-            try:
-                key = repo.get_file_key(relpath)
-            except FileInGitError:
-                continue
-            if not key:
-                raise ValueError(
-                    "Must have got a key, unexpectedly got %r for %s within %s"
-                    % (key, relpath, ds)
-                )
-            # For now the rest (e.g. not tracked) remains an error
-            if not repo.file_has_content(relpath):
-                present = False
-                backends.append(repo.get_key_backend(key))
-        keys.append(key)
-        presents.append(present)
-
-    if all(presents):
-        return all_same(map(md5sum, paths))
-
-    backends = unique(backends)
-    assert backends, "Since not all present - some must be under annex, and thus must have a backend!"
-    # so some files are missing!
-    assert not all(presents)
-    NeedContentError = RuntimeError
-    if len(backends) > 1:
-        # TODO: or signal otherwise somehow that we just need to get at least some
-        # of those files to do the check!...
-        raise NeedContentError(
-            "Following paths are missing conent and have different annex "
-            "backends: %s. Cannot determine here if the same or not!"
-            % ", ".join(p for (p, b) in zip(paths, presents) if not b)
-        )
-    backend = backends[0].lower()
-    if backend.endswith('E'):
-        backend = backend[':-1']
-
-    if backend not in Digester.DEFAULT_DIGESTS:
-        raise NeedContentError(
-            "Do not know how to figure out content check for backend %s" % backend
-        )
-
-    checksums = [
-        split_ext(key).split('--', 1)[1] if key else key
-        for key in keys
-    ]
-    thechecksum = set(
-        checksum
-        for present, checksum in zip(presents, checksums)
-        if present
-    )
-    if len(thechecksum) > 1:
-        # Different checksum (with the same backend)
-        return False
-    elif not thechecksum:
-        raise RuntimeError("We must have had at least one key since prior logic"
-                           " showed that not all files have content here")
-    thechecksum = thechecksum[0]
-    if any(presents):
-        # We do need to extract checksum from the key and check the present
-        # files' content to match
-        digester = Digester([backend])
-        for present, path in zip(presents, paths):
-            if present and digester(path)[backend] != thechecksum:
-                return False
-        return True
-    return False
-
-
-def _dump_extracted_metadata(agginto_ds, aggfrom_ds, db, to_save, force_extraction, agg_base_path):
-    """Dump metadata from a dataset into object in the metadata store of another
-
-    Info on the metadata objects is placed into a DB dict under the
-    absolute path of the dataset whose metadata was aggregated.
-
-    Parameters
-    ----------
-    agginto_ds : Dataset
-    aggfrom_ds : Dataset
-    db : dict
-    """
-    subds_relpaths = aggfrom_ds.subdatasets(result_xfm='relpaths', return_type='list')
-    # figure out a "state" of the dataset wrt its metadata that we are describing
-    # 1. the latest commit that changed any file for which we could have native metadata
-    refcommit = _get_latest_refcommit(aggfrom_ds, subds_relpaths)
-    objid = refcommit if refcommit else ''
-    # 2, our own dataset-global metadata and the dataset config
-    for tfile in (
-            op.join(aggfrom_ds.path, '.datalad', 'metadata', 'dataset.json'),
-            op.join(aggfrom_ds.path, '.datalad', 'config')):
-        if op.exists(tfile):
-            objid += md5(open(tfile, 'r').read().encode()).hexdigest()
-    # 3. potential annex-based metadata
-    # XXX TODO shouldn't this be the annex extractor?
-    if isinstance(aggfrom_ds, AnnexRepo) and \
-            aggfrom_ds.config.obtain(
-                'datalad.metadata.aggregate-content-datalad-core',
-                default=True,
-                valtype=EnsureBool()):
-        # if there is no annex metadata, this will come out empty,
-        # hence hash would be same as for a plain GitRepo
-        # and no, we cannot use the shasum of the annex branch,
-        # because this will change even when no metadata has changed
-        timestamps, _ = aggfrom_ds.repo._run_annex_command(
-            'metadata',
-            '.',
-            '-g', 'lastchanged')
-        objid += timestamps.strip()
-
-    if not objid:
-        lgr.debug('%s has no metadata-relevant content', aggfrom_ds)
-    else:
-        lgr.debug(
-            'Dump metadata of %s into %s',
-            aggfrom_ds, agginto_ds)
-
-    # check if we already have in store what we are about to create
-    old_agginfo = db.get(aggfrom_ds.path, {})
-
-    agginfo = {}
-    # dataset global
-    if aggfrom_ds.id:
-        agginfo['id'] = aggfrom_ds.id
-    agginfo['refcommit'] = refcommit
-    # put in DB
-    db[aggfrom_ds.path] = agginfo
-
-    if not objid:
-        # this is no error, there is simply no metadata whatsoever
-        return False
-
-    # shorten to MD5sum
-    objid = md5(objid.encode()).hexdigest()
-
-    # assemble info on the metadata extraction and storage
-    #               label  type      targetds    storage method
-    metasources = {'ds': {'type': 'dataset', 'targetds': agginto_ds, 'dumper': json_py.dump}}
-    # do not store content metadata if either the source or the target dataset
-    # do not want it
-    # TODO this AND was an OR before (wrong), misses a test
-    if aggfrom_ds.config.obtain(
-            'datalad.metadata.store-aggregate-content',
-            default=True,
-            valtype=EnsureBool()) and \
-            agginto_ds.config.obtain(
-                'datalad.metadata.store-aggregate-content',
-                default=True,
-                valtype=EnsureBool()):
-            metasources['cn'] = {
-                'type': 'content',
-                'targetds': agginto_ds,
-                'dumper': json_py.dump2xzstream}
-
-    # check if we have the extracted metadata for this state already
-    # either in the source or in the destination dataset
-    # The situation is trickier!  Extracted metadata could change for the same
-    # state (commit etc), e.g. if extractors changed.
-    # The "correct" thing would be either
-    # - to inspect git history either there were changes
-    #   within aggfrom_ds since agginto_ds got the metadata committed OR
-    # - check by content - if file is under git - compute checksum,
-    #   if under annex -- take checksum from the key without asking for the
-    #   content
-    metafound = {}
-    uptodatemeta = []  # record which meta not only found but matching in content
-    # TODO: current fixes might break logic for when fromds is not installed
-    #       when I guess we just need to skip it?
-    if not force_extraction:
-        for s, sprop in metasources.items():
-            objloc = op.join(agg_base_path,
-                             _get_obj_location(objid, s, sprop['dumper']))
-            smetafound = [
-                # important to test for lexists() as we do not need to
-                # or want to `get()` metadata files for this test.
-                # Info on identity is NOT sufficient - later compare content if
-                # multiple found
-                objloc if op.lexists(op.join(d.path, objloc)) else None
-                # Order of dss matters later
-                for d in (aggfrom_ds, agginto_ds)
-            ]
-            if all(smetafound):
-                # both have it
-                metafound[s] = smetafound
-                # but are they the same?
-                try:
-                    if _the_same_across_datasets(objloc, aggfrom_ds, agginto_ds):
-                        uptodatemeta.append(s)
-                except RuntimeError as exc:
-                    # TODO: dedicated test - when meta content changes
-                    lgr.debug("For now will just do re-extraction since caught %s",
-                              exc_str(exc))
-            # source one has it, so we might be able to copy it
-            # TODO: dedicated test - when it is sufficient to copy we do not re-extract
-
-    if len(metafound) != len(metasources):
-        # found some (either ds or cn) metadata missing entirely in both
-        # from and into datasets
-        lgr.debug(
-            "Incomplete or absent metadata while aggregating %s <- %s: %s",
-              agginto_ds, aggfrom_ds, metafound
-        )
-        # no metadata found -> extract
-        # this places metadata dump files into the configured
-        # target dataset and lists them in `to_save`, as well
-        # as updates the `db` record for `aggfrom_ds`
-        return _extract_metadata(
-            agginto_ds,
-            aggfrom_ds,
-            db,
-            to_save,
-            objid,
-            metasources,
-            agg_base_path)
-
-    # we did not actually run an extraction, so we need to
-    # assemble an aggregation record from the existing pieces
-    # that we found
-    # simple case: the target dataset has all the records already and they are up to date:
-    if len(uptodatemeta) == len(metasources):
-        lgr.debug('Sticking with up-to-date metadata for %s', aggfrom_ds)
-        # no change, use old record from the target dataset
-        db[aggfrom_ds.path] = old_agginfo
-        # no error
-        return False
-    else:
-        lgr.debug('Reusing previously extracted metadata for %s', aggfrom_ds)
-        # we need to move the metadata dump(s) into the target dataset
-        objrelpaths = {
-            label: next(filter(bool, smetafound))
-            for label, smetafound in metafound.items()
-        }
-        # make sure all the to-be-moved metadata records are present
-        # locally
-        aggfrom_ds.get(
-            # prep annotated path records to speed up the call
-            path=[dict(path=op.join(aggfrom_ds.path, p),
-                       parentds=aggfrom_ds.path,
-                       type='file')
-                  for p in objrelpaths.values()],
-            result_renderer='disabled')
-
-        # actually copy dump files
-        for objrelpath in objrelpaths.values():
-            objpath = op.join(agginto_ds.path, objrelpath)
-            objdir = op.dirname(objpath)
-            if not op.exists(objdir):
-                makedirs(objdir)
-            if op.lexists(objpath):
-                os.unlink(objpath)  # remove previous version first
-                # was a wild thought as a workaround for 
-                # http://git-annex.branchable.com/bugs/cannot_commit___34__annex_add__34__ed_modified_file_which_switched_its_largefile_status_to_be_committed_to_git_now/#comment-bf70dd0071de1bfdae9fd4f736fd1ec1
-                # agginto_ds.repo.remove(objpath)
-            # XXX TODO once we have a command that can copy/move files
-            # from one dataset to another including file availability
-            # info, this should be used here
-            shutil.copyfile(
-                op.join(aggfrom_ds.path, objrelpath),
-                objpath)
-            # mark for saving
-            to_save.append(dict(
-                path=objpath,
-                parentds=agginto_ds.path,
-                type='file'))
-
-        # lastly get 'self' aggregation record from source dataset and
-        # use in target dataset
-        db[aggfrom_ds.path] = load_ds_aggregate_db(aggfrom_ds, abspath=True)[aggfrom_ds.path]
-        return False
-
-
-def _extract_metadata(agginto_ds, aggfrom_ds, db, to_save, objid, metasources,
-                      agg_base_path):
-    lgr.debug('Performing metadata extraction from %s', aggfrom_ds)
-    # we will replace any conflicting info on this dataset with fresh stuff
-    agginfo = db.get(aggfrom_ds.path, {})
-
-    meta = {
-        'ds': None,
-        'cn': [],
-    }
-
-    extracted_metadata_sources = set()
-    # TODO get rid of this anacronism
-    errored = False
-    # perform the actual extraction
-    for res in aggfrom_ds.rev_extract_metadata(
-            # just let it do its thing
-            path=None,
-            # None indicates to honor a datasets per-extractor configuration and to be
-            # on by default
-            process_type=None):
-        # TODO proper error condition handling
-        if success_status_map.get(res['status'], False) != 'success':
-            lgr.warn(
-                'Unsuccessful metadata extraction from %s, ignored',
-                aggfrom_ds)
-            errored = True
-            continue
-        restype = res.get('type', None)
-        extracted_metadata_sources = extracted_metadata_sources.union(
-            # assumes that any non-JSONLD-internal key is a metadata
-            # extractor, which should be valid
-            (k for k in res.get('metadata', {}) if not k.startswith('@')))
-        if restype == 'dataset':
-            if meta['ds'] is not None:
-                lgr.warn(
-                    'Metadata extraction from %s yielded second dataset '
-                    'metadata set, ignored',
-                    aggfrom_ds)
-                continue
-            meta['ds'] = res['metadata']
-        elif restype == 'file':
-            meta['cn'].append(
-                dict(
-                    res['metadata'],
-                    path=op.relpath(res['path'], start=aggfrom_ds.path)
-                )
-            )
-            pass
-        else:
-            lgr.warn(
-                'Metadata extraction from %s yielded unexpected '
-                'result type (%s), ignored record',
-                aggfrom_ds, restype)
-
-    # store esssential extraction config in dataset record
-    agginfo['datalad_version'] = datalad.__version__
-    # instead of reporting what was enabled, report what was actually retrieved
-    agginfo['extractors'] = list(extracted_metadata_sources)
-
-    # for both types of metadata
-    for label, props in metasources.items():
-        dest = props['targetds']
-        if not meta[label]:
-            continue
-        # only write to disk if there is something
-        objrelpath = _get_obj_location(objid, label, props['dumper'])
-        # place metadata object into the source dataset
-        objpath = op.join(dest.path, agg_base_path, objrelpath)
-
-        # write obj files
-        if op.exists(objpath):
-            dest.unlock(objpath)
-        elif op.lexists(objpath):
-            # if it gets here, we have a symlink that is pointing nowhere
-            # kill it, to be replaced with the newly aggregated content
-            dest.repo.remove(objpath)
-        # TODO actually dump a compressed file when annexing is possible
-        # to speed up on-demand access
-        props['dumper'](meta[label], objpath)
-        # stage for dataset.save()
-        to_save.append(dict(path=objpath, type='file'))
-
-        # important to use abspath here, needs to be rewritten relative to
-        # all receiving datasets
-        agginfo['{}_info'.format(props['type'])] = objpath
-
-    # overwrite existing info with stuff from just finished extraction
-    db[aggfrom_ds.path] = agginfo
-
-    return errored
-
-
-def _adj2subtrees(base, adj, subs):
-    # given a set of parent-child mapping, compute a mapping of each parent
-    # to all its (grand)children of any depth level
-    subtrees = dict(adj)
-    subs = set(subs)
-    # from bottom up
-    for ds in sorted(adj, reverse=True):
-        subtree = []
-        for sub in subtrees[ds]:
-            subtree.append(sub)
-            subtree.extend(subtrees.get(sub, []))
-        subtrees[ds] = subtree
-    # give each leaf dataset an entry too
-    for sub in subs:
-        if sub not in subtrees and GitRepo.is_valid_repo(sub):
-            subtrees[sub] = []
-    return subtrees
-
-
-# TODO kill this
-def _get_latest_refcommit(ds, subds_relpaths):
-    """Find the latest commit that changed any real content
-
-    This will ignore anything at or underneath:
-
-    - .git
-    - .datalad
-    - .gitmodules
-    - .gitattributes
-    - any submodule
-
-    Returns
-    -------
-    str or None
-      None is return if no commit can be found, or no relevant content
-      files were found at all. Otherwise the full commit hash if the
-      last commit that touch any relevant content is returned.
-    """
-
-    def _filterpaths(basepath, paths, exclude):
-        final_paths = []
-        for rp in [op.join(basepath, p) if basepath else p for p in paths]:
-            if rp in exclude:
-                continue
-            elif any(path_is_subpath(ep, rp) for ep in exclude):
-                final_paths.extend(
-                    _filterpaths(rp, listdir(op.join(ds.path, rp)), exclude))
-                pass
-            else:
-                final_paths.append(rp)
-        return final_paths
-
-    relevant_paths = _filterpaths(
-        '',
-        listdir(ds.path),
-        # NOTE: this will also ignore datalad's native dataset-global metadata
-        # rationale: the metadata still describes the dataset content, so
-        # even if it changes, the description changes, but not the content
-        # it is describing -> ref commit should be unaffected
-        list(exclude_from_metadata) + subds_relpaths)
-
-    if not relevant_paths:
-        return None
-
-    return ds.repo.get_last_commit_hash(relevant_paths)
-
-
-def _get_obj_location(hash_str, ref_type, dumper):
-    objrelpath = op.join(
-        'objects',
-        hash_str[:2],
-        '{}-{}'.format(
-            ref_type,
-            hash_str[2:]))
-
-    if dumper is json_py.dump2xzstream:
-        objrelpath += '.xz'
-
-    return objrelpath
-
-
-def _update_ds_agginfo(refds_path, ds_path, subds_paths, incremental, agginfo_db, to_save):
-    """Perform metadata aggregation for ds and a given list of subdataset paths
-
-    Parameters
-    ----------
-    refds_path : str
-      Absolute path to the reference dataset that aggregate_metadata() was
-      called on.
-    ds_path : str
-      Absolute path to the dataset to have its aggregate info updates
-    subds_paths : list(str)
-      Sequence of absolute paths of subdatasets of the to-be-updated dataset,
-      whose agginfo shall be updated within the to-be-updated dataset.
-      Any subdataset that is not listed here is assumed to be gone (i.e. no longer
-      a subdataset at all, not just not locally installed)
-    incremental : bool
-      If set, the update will not remove any information on datasets not listed in
-      subds_paths
-    agginfo_db : dict
-      Dictionary with all information on aggregate metadata on all datasets.
-      Keys are absolute paths of datasets.
-    to_save : list
-      List of paths to save eventually. This function will add new paths as
-      necessary.
-    """
-    ds = Dataset(ds_path)
-    # load existing aggregate info dict
-    # makes sure all file/dataset paths become absolute
-    # TODO take from cache, once used in _get_dsinfo_from_aggmetadata()
-    agginfo_fpath, agg_base_path = get_ds_aggregate_db_locations(ds)
-    ds_agginfos = load_ds_aggregate_db(ds, abspath=True)
-    # object locations referenced initially
-    objlocs_was = set(ai[k]
-                      for ai in ds_agginfos.values()
-                      for k in location_keys
-                      if k in ai)
-    # track which objects need to be copied (each item is a from/to tuple
-    objs2copy = []
-    # for each subdataset (any depth level)
-    procds_paths = [ds.path] + subds_paths
-    for dpath in procds_paths:
-        ds_dbinfo = agginfo_db.get(dpath, {}).copy()
-        # relative path of the currect dataset within the dataset we are updating
-        drelpath = op.relpath(dpath, start=ds.path)
-        for loclabel in location_keys:
-            # TODO filepath_info is obsolete
-            if loclabel == 'filepath_info' and drelpath == op.curdir:
-                # do not write a file list into the dataset it is from
-                if 'filepath_info' in ds_dbinfo:
-                    del ds_dbinfo['filepath_info']
-                continue
-            # abspath to object
-            objloc = ds_dbinfo.get(loclabel, None)
-            if objloc is None:
-                continue
-            # XXX needs to change when layout of object store is changed
-            # current is ./datalad/metadata/objects/{hash}/{hash}
-            target_objpath = op.join(agg_base_path, *objloc.split(os.sep)[-3:])
-            # make sure we copy the file from its current location to where it is
-            # needed in this dataset
-            objs2copy.append((
-                # this needs to turn into an absolute path
-                # `dpath` will be relative to the reference dataset
-                #op.normpath(op.join(ds.path, dpath, op.dirname(agginfo_relpath), objloc)),
-                objloc,
-                target_objpath))
-            # now build needed local relpath
-            ds_dbinfo[loclabel] = target_objpath
-        # (re)assign in case record is new
-        ds_agginfos[dpath] = ds_dbinfo
-    # remove all entries for which we did not (no longer) have a corresponding
-    # subdataset to take care of
-    if not incremental:
-        ds_agginfos = {k: v
-                       for k, v in ds_agginfos.items()
-                       if k in procds_paths}
-    # set of metadata objects now referenced
-    objlocs_is = set(
-        ai[k]
-        for sdsrpath, ai in ds_agginfos.items()
-        for k in location_keys
-        if k in ai)
-    objs2add = objlocs_is
-
-    # yoh: we appanretly do need to filter the ones to remove - I did
-    #      "git reset --hard HEAD^" and
-    #      aggregate-metadata failed upon next run trying to remove
-    #      an unknown to git file. I am yet to figure out why that
-    #      mattered (hopefully not that reflog is used somehow)
-    objs2remove = []
-    for obj in objlocs_was.difference(objlocs_is):
-        if op.lexists(obj):
-            objs2remove.append(obj)
-        else:
-            # not really a warning, we don't need it anymore, it is already gone
-            lgr.debug(
-                "To-be-deleted metadata object not found, skip deletion (%s)",
-                obj
-            )
-
-    # secretly remove obsolete object files, not really a result from a
-    # user's perspective
-    if not incremental and objs2remove:
-        ds.remove(
-            objs2remove,
-            # Don't use the misleading default commit message of `remove`:
-            message='[DATALAD] Remove obsolete metadata object files',
-            # we do not want to drop these files by default, because we would
-            # loose them for other branches, and earlier tags
-            # TODO evaluate whether this should be exposed as a switch
-            # to run an explicit force-drop prior to calling remove()
-            check=False,
-            result_renderer=None, return_type=list)
-        if not objs2add and not refds_path == ds_path:
-            # this is not the base dataset, make sure to save removal in the
-            # parentds -- not needed when objects get added, as removal itself
-            # is already committed
-            to_save.append(dict(path=ds_path, type='dataset', staged=True))
-
-    objs2copy = [(f, t) for f, t in objs2copy if f != t]
-    # must copy object files to local target destination
-    # make sure those objects are present
-    # use the reference dataset to resolve paths, as they might point to
-    # any location in the dataset tree
-    Dataset(refds_path).get(
-        [f for f, t in objs2copy],
-        result_renderer='disabled')
-    for copy_from, copy_to in objs2copy:
-        copy_from = op.join(agg_base_path, copy_from)
-        copy_to = op.join(agg_base_path, copy_to)
-        target_dir = op.dirname(copy_to)
-        if not op.exists(target_dir):
-            makedirs(target_dir)
-        # TODO we could be more clever (later) and maybe `addurl` (or similar)
-        # the file from another dataset
-        if op.lexists(copy_to):
-            # no need to unlock, just wipe out and replace
-            os.remove(copy_to)
-        shutil.copy(copy_from, copy_to)
-    to_save.append(
-        dict(path=agginfo_fpath, type='file', staged=True))
-
-    if objs2add:
-        # they are added standard way, depending on the repo type
-        ds.add(
-            [op.join(agg_base_path, p) for p in objs2add],
-            save=False, result_renderer=None, return_type=list)
-        # queue for save, and mark as staged
-        to_save.extend(
-            [dict(path=op.join(agg_base_path, p), type='file', staged=True)
-             for p in objs2add])
-    # write aggregate info file
-    if not ds_agginfos:
-        return
-
-    _store_agginfo_db(ds, ds_agginfos)
-    ds.add(agginfo_fpath, save=False, to_git=True,
-           result_renderer=None, return_type=list)
-    # queue for save, and mark as staged
-    to_save.append(
-        dict(path=agginfo_fpath, type='file', staged=True))
-
-    # FIXME look for empty object dirs and remove them
-
-
-def _store_agginfo_db(ds, db):
-    # base path in which aggregate.json and objects is located
-    agginfo_path, agg_base_path = get_ds_aggregate_db_locations(ds)
-    # make DB paths on disk always relative
-    json_py.dump(
-        {
-            op.relpath(p, start=ds.path):
-            {k: op.relpath(v, start=agg_base_path) if k in location_keys else v
-             for k, v in props.items()}
-            for p, props in db.items()
-        },
-        agginfo_path
-    )
 
 
 @build_doc
@@ -910,25 +189,17 @@ class RevAggregateMetadata(Interface):
         recursion_limit=recursion_limit,
         update_mode=Parameter(
             args=('--update-mode',),
-            constraints=EnsureChoice('all', 'target'),
+            constraints=EnsureChoice('target'),
             doc="""which datasets to update with newly aggregated metadata:
             all datasets from any leaf dataset to the top-level target dataset
             including all intermediate datasets (all), or just the top-level
             target dataset (target)."""),
-        incremental=Parameter(
-            args=('--incremental',),
-            action='store_true',
-            doc="""If set, all information on metadata records of subdatasets
-            that have not been (re-)aggregated in this run will be kept unchanged.
-            This is useful when (re-)aggregation only a subset of a dataset hierarchy,
-            for example, because not all subdatasets are locally available."""),
         force_extraction=Parameter(
             args=('--force-extraction',),
             action='store_true',
             doc="""If set, all enabled extractors will be engaged regardless of
             whether change detection indicates that metadata has already been
             extracted for a given dataset state."""),
-        save=nosave_opt,
     )
 
     @staticmethod
@@ -940,168 +211,490 @@ class RevAggregateMetadata(Interface):
             recursive=False,
             recursion_limit=None,
             update_mode='target',
-            incremental=False,
-            force_extraction=False,
-            save=True):
-        refds_path = Interface.get_refds_path(dataset)
+            force_extraction=False):
 
-        # it really doesn't work without a dataset
         ds = require_dataset(
             dataset, check_installed=True, purpose='metadata aggregation')
-        path = assure_list(path)
-        if not path:
-            # then current/reference dataset is "aggregated"
-            # We should not add ds.path always since then --recursive would
-            # also recurse current even if paths are given
-            path.append(ds.path)
+        # path args could be
+        # - installed datasets
+        # - names of pre-aggregated dataset that are not around
+        # - -like rev-status they should match anything underneath them
 
-        agginfo_db_location, agg_base_path = get_ds_aggregate_db_locations(ds)
-        agginfo_db = load_ds_aggregate_db(ds, abspath=True)
-
-        to_save = []
-        to_aggregate = set()
-        for ap in AnnotatePaths.__call__(
-                dataset=refds_path,
-                path=path,
-                recursive=recursive,
-                recursion_limit=recursion_limit,
-                action='aggregate_metadata',
-                # uninstalled subdatasets could be queried via aggregated metadata
-                # -> no 'error'
-                unavailable_path_status='',
-                nondataset_path_status='error',
-                return_type='generator',
-                on_failure='ignore'):
-            if ap.get('status', None):
-                # this is done
-                yield ap
-                continue
-            ap_type = ap.get('type', None)
-            ap_state = ap.get('state', None)
-            assert('parentds' in ap or ap_type == 'dataset')
-            if ap_type == 'dataset' and ap_state != 'absent':
-                # a present dataset, we can take directly from it
-                aggsrc = ap['path']
-                lgr.info('Aggregate metadata for dataset %s', aggsrc)
-            else:
-                # everything else needs to come from the parent
-                aggsrc = ap['parentds']
-                if ap_state == 'absent':
-                    lgr.info(
-                        'Attempt to use pre-aggregate metadata for absent %s from dataset at %s',
-                        ap['path'],
-                        aggsrc)
-                else:
-                    lgr.info(
-                        'Aggregate metadata for %s from dataset at %s',
-                        ap['path'],
-                        aggsrc)
-
-            to_aggregate.add(aggsrc)
-
-            if ap_state == 'absent':
-                # key thought: recursive is done by path annotation, hence
-                # once we hit an absent dataset, we are 100% certain that
-                # there is nothing to recurse into on the file system
-                # hence we only have to look into the aggregated metadata
-                # of the last available dataset in the dataset tree edge
-                #
-                # if there is nothing at this path, we need to look into the
-                # parentds and check if we know anything about this path
-                # if we do, we need to grab all the info and objects
-                # if not, we need to error
-                res = _get_dsinfo_from_aggmetadata(
-                    aggsrc, ap['path'], recursive, agginfo_db)
-                if not isinstance(res, list):
-                    yield get_status_dict(
-                        status='impossible',
-                        message=res,
-                        action='aggregate_metadata',
-                        path=ap['path'],
-                        logger=lgr)
-                    continue
-                # cue for aggregation
-                to_aggregate.update(res)
-            else:
-                # actually aggregate metadata for this dataset, immediately place
-                # generated objects into the aggregated or reference dataset,
-                # and put info into DB to get the distributed to all datasets
-                # that need to be updated
-                errored = _dump_extracted_metadata(
-                    ds,
-                    Dataset(aggsrc),
-                    agginfo_db,
-                    to_save,
-                    force_extraction,
-                    agg_base_path)
-                if errored:
-                    yield get_status_dict(
-                        status='error',
-                        message='Metadata extraction failed (see previous error message, set datalad.runtime.raiseonerror=yes to fail immediately)',
-                        action='aggregate_metadata',
-                        path=aggsrc,
-                        logger=lgr)
-
-        # at this point we have dumped all aggregated metadata into object files
-        # somewhere, we know what needs saving, but having saved anything, and
-        # we know about the states of all aggregated dataset in the DB
-        # what remains to do is to update all dataset, so they have there own copy
-        # of aggregated metadata and update their respective aggregate.json with
-        # info on what states we just aggregated from
-
-        # first, let's figure out what dataset need updating at all
-        # get adjencency info of the dataset tree spanning the base to all leaf dataset
-        # associated with the path arguments
-        if update_mode == 'all':
-            ds_adj = {}
-            discover_dataset_trace_to_targets(
-                ds.path, to_aggregate, [], ds_adj,
-                # we know that to_aggregate only lists datasets, existing and
-                # absent ones -- we want to aggregate all of them, either from
-                # just extracted metadata, or from previously aggregated metadata
-                # of the closest superdataset
-                includeds=to_aggregate)
-            # TODO we need to work in the info about dataset that we only got from
-            # aggregated metadata, that had no trace on the file system in here!!
-            subtrees = _adj2subtrees(ds.path, ds_adj, to_aggregate)
-        elif update_mode == 'target':
-            subtrees = {ds.path: list(agginfo_db.keys())}
+        # Step 1: figure out which available dataset is closest to a given path
+        if path:
+            extract_from_ds, errors = sort_paths_by_datasets(
+                dataset, assure_list(path))
+            for e in errors:
+                e.update(
+                    logger=lgr,
+                    refds=ds.path,
+                )
+                yield e
         else:
-            raise ValueError(
-                "unknown `update_mode` '%s' for metadata aggregation", update_mode)
+            extract_from_ds = OrderedDict({ds.pathobj: []})
 
-        # go over datasets in bottom-up fashion
-        for parentds_path in sorted(subtrees, reverse=True):
-            lgr.info('Update aggregate metadata in dataset at: %s', parentds_path)
+        # convert the values into sets to ease processing below
+        extract_from_ds = {
+            Dataset(k): set(assure_list(v))
+            for k, v in iteritems(extract_from_ds)
+        }
 
-            _update_ds_agginfo(
-                ds.path,
-                parentds_path,
-                subtrees[parentds_path],
-                incremental,
-                agginfo_db,
-                to_save)
-            # update complete
-            res = get_status_dict(
-                status='ok',
-                action='aggregate_metadata',
-                path=parentds_path,
-                type='dataset',
-                logger=lgr)
-            res.update(agginfo_db.get(parentds_path, {}))
-            yield res
         #
-        # save potential modifications to dataset global metadata
+        # Step 1: figure out which available dataset need to be processed
         #
-        if not to_save:
-            return
-        lgr.info('Attempting to save %i files/datasets', len(to_save))
-        for res in Save.__call__(
-                path=to_save,
-                dataset=refds_path,
-                message='[DATALAD] Dataset aggregate metadata update',
-                return_type='generator',
-                result_xfm=None,
-                result_filter=None,
-                on_failure='ignore'):
+        ds_with_pending_changes = set()
+        # note that depending on the recursion settings, we may not
+        # actually get a report on each dataset in question
+        # TODO implement an alternative detector that uses rev-diff to
+        # find datasets that have changes since the last recorded refcommit
+        detector = Status()(
+            # pass arg in as-is to get proper argument semantics
+            dataset=dataset,
+            # query on all paths to get desired result with recursion
+            # enables
+            path=path,
+            # never act on anything untracked, we cannot record its identity
+            untracked='no',
+            recursive=recursive,
+            recursion_limit=recursion_limit,
+            result_renderer='disabled',
+            return_type='generator',
+            # let the top-level caller handle failure
+            on_failure='ignore')
+        for s in detector:
+            # TODO act on generator errors?
+
+            # path reports are always absolute and anchored on the dataset
+            # (no repo) path
+            ds_candidate = Dataset(s['parentds'])
+
+            # ignore anything that isn't all clean, other wise we have no
+            # reliable record of an ID
+            if s['state'] != 'clean':
+                if ds_candidate not in ds_with_pending_changes:
+                    yield dict(
+                        action='aggregate_metadata',
+                        path=ds_candidate.path,
+                        logger=lgr,
+                        status='impossible',
+                        message='dataset has pending changes',
+                    )
+                    ds_with_pending_changes.add(ds_candidate)
+                continue
+
+            # we always know that the parent was modified too
+            fromds = extract_from_ds.get(ds_candidate, set())
+            if s['type'] == 'dataset':
+                # record that this dataset could have info on this subdataset
+                # TODO at the moment this unconditional inclusion makes it
+                # impossible to just pick a single unavailable dataset from the
+                # aggregated metadata in an available dataset, it will always
+                # include all of them as candidates. We likely need at least
+                # some further testing below which metadata aggregates are
+                # better then those already present in the aggregation target
+                # related issue: when no subdataset is present, but a path to
+                # an unavailable subsub...dataset is given, the most top-level
+                # subdataset and the identified subdataset that is contained by
+                # the top-level sub will have a record and their metadata will
+                # be aggregated. This likely is not an actual issue, though...
+                fromds.add(Dataset(s['path']))
+            else:
+                # extract from this available dataset information on
+                # itself
+                fromds.add(ds_candidate)
+            extract_from_ds[ds_candidate] = fromds
+
+        # shed all records of datasets with pending changes, those have either
+        # led to warning and depending on the user's desired might have stopped
+        # the aggregation machinery
+        extract_from_ds = {
+            # remove all aggregation subjects for datasets that are actually
+            # available
+            k: [i for i in v if i not in extract_from_ds]
+            for k, v in iteritems(extract_from_ds)
+            # remove all datasets that have been found to have pending
+            # modifications
+            if k not in ds_with_pending_changes}
+
+        # at this point extract_from_ds is a dict where the keys are
+        # locally available datasets (as Dataset() instances), and
+        # values are lists of dataset for which to extract aggregated
+        # metadata. The key/source dataset is not listed and always
+        # implied. Values can be Dataset() instances, which identified
+        # registered (possibly unavailable) subdatasets. Values can also
+        # be Path object that correspond to input arguments that have to
+        # be matched against path of dataset on which there is aggregated
+        # metadata in the source/key dataset. Such Paths are always assigned
+        # to the closest containing available dataset
+
+        # XXX keep in mind that recursion can
+        # - traverse the file system
+        # - additionally end up recursion into pre-aggregated metadata
+
+        # this will assemble all aggregation records
+        agginfo_db = {}
+        # TODO this for loop does the heavy lifting (extraction/aggregation)
+        # wrap in progress bar
+        for aggsrc, aggsubjs in iteritems(extract_from_ds):
+            # load the info that we have on this dataset's aggregated metadata
+            src_agginfo_db = load_ds_aggregate_db(
+                aggsrc, abspath=True, warn_absent=False)
+            # check extraction is actually needed, by running a diff on the
+            # dataset against the last known refcommit, to see whether it had
+            # any metadata relevant changes
+            last_refcommit = src_agginfo_db.get('.', {}).get('refcommit', None)
+            have_diff = False
+            # TODO should we fall back on the PRE_COMMIT_SHA in case there is
+            # no recorded refcommit. This might turn out to be more efficient,
+            # as it could avoid working with dataset that have no
+            # metadata-relevant content
+            if last_refcommit:
+                for res in aggsrc.rev_diff(
+                        fr=last_refcommit,
+                        to='HEAD',
+                        # query on all paths to get desired result with
+                        # recursion enables
+                        path=None,
+                        # not possible here, but turn off detection anyways
+                        untracked='no',
+                        recursive=False,
+                        result_renderer='disabled',
+                        return_type='generator',
+                        # let the top-level caller handle failure
+                        on_failure='ignore'):
+                    if not any(
+                            res['path'].startswith(
+                                op.join(res['parentds'], e) + op.sep)
+
+                            for e in exclude_from_metadata):
+                        # this is a difference that could have an impact on
+                        # metadata stop right here and proceed to extraction
+                        have_diff = True
+                        break
+            if last_refcommit is None or have_diff:
+                # TODO really _extract_ metadata for aggsrc
+                agginfo = {}
+                for res in _extract_metadata(aggsrc, ds, agginfo):
+                    yield res
+                # logic based on the idea that there will only be one
+                # record per dataset (extracted or from pre-aggregate)
+                assert(aggsrc.pathobj not in agginfo_db)
+                # place in DB under full path, needs to become relative
+                # to any updated dataset later on
+                agginfo_db[aggsrc.pathobj] = agginfo
+
+            # if there is a path in aggsubjs match it against all datasets on
+            # which we have aggregated metadata, and expand aggsubjs with a
+            # list of such dataset instances
+            subjs = []
+            for subj in aggsubjs:
+                if not isinstance(subj, Dataset):
+                    subjs.extend(
+                        Dataset(aggds) for aggds in src_agginfo_db
+                        # TODO think about distinguishing a direct match
+                        # vs this match of any parent (maybe the
+                        # latter/current only with --recursive)
+                        if ut.Path(aggds) == subj \
+                        or subj in ut.Path(aggds).parents
+                    )
+                else:
+                    subjs.append(subj)
+
+            # loop over aggsubjs and pull aggregated metadata for them
+            for dssubj in subjs:
+                agginfo = src_agginfo_db.get(dssubj.path, None)
+                if agginfo is None:
+                    # TODO proper error/warning result
+                    continue
+                # logic based on the idea that there will only be one
+                # record per dataset (extracted or from pre-aggregate)
+                assert(dssubj.pathobj not in agginfo_db)
+                agginfo_db[dssubj.pathobj] = agginfo
+
+        # TODO try to get rid of this call and live without `agg_base_path`
+        # we disable absent DB warnings, because our aim is to create a new one
+        src_agginfo_db_location, agg_base_path = get_ds_aggregate_db_locations(
+            ds, warn_absent=False)
+        # RF load_ds_aggregate_db() to give pathlib keys already
+        src_agginfo_db = {ut.Path(k): v for k, v in iteritems(
+            load_ds_aggregate_db(ds, abspath=True, warn_absent=False)
+        )}
+
+        # at this point src_agginfo_db has everything on the previous
+        # aggregation state, and agginfo_db everything on what was found in
+        # this run
+
+        # procedure
+        # 1. whatever is in agginfo_db goes into src_agginfo_db
+        # 2. if src_agginfo_db gets an entry replaced, we delete the associated
+        #    files (regular unlink)
+        # 3. stuff that moved into the object tree gets checksumed and placed
+        #    at the target destination
+        # 4. update DB file
+
+        # this is where incoming metadata objects would be
+        aggtmp_basedir = _get_aggtmp_basedir(ds, mkdir=False)
+
+        obsolete_objs = []
+        # src_agginfo_db has the status quo, agginfo_db has all
+        # potential changes
+        for srcds, agginfo in iteritems(agginfo_db):
+            # Check of object files have to be slurped in from TMP
+            for objtype in ('dataset_info', 'content_info'):
+                obj_path = agginfo.get(objtype, None)
+                if obj_path is None:
+                    # nothing to act on
+                    continue
+                obj_path = ut.Path(obj_path)
+                if aggtmp_basedir not in obj_path.parents:
+                    # this is not in the tempdir where we would know what to
+                    # do with it. Trust the integrity of the status quo and
+                    # leave as is
+                    continue
+                # checksum and place in obj tree
+                shasum = Digester(
+                    digests=['sha1'])(text_type(obj_path))['sha1']
+                target_obj_location = _get_obj_location(
+                    ds, obj_path, shasum)
+                # already update location in incoming DB now
+                # a potential file move is happening next
+                agginfo[objtype] = text_type(target_obj_location)
+
+                if op.exists(text_type(target_obj_location)):
+                    # we checksum by content, if it exists, it is identical
+                    # use exist() to be already satisfied by a dangling symlink
+                    lgr.debug(
+                        "Metadata object already exists at %s, skipped",
+                        target_obj_location)
+                    continue
+                # move srcfile into the object store
+                target_obj_location.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(
+                    # in TMP
+                    text_type(obj_path),
+                    # in object store
+                    text_type(target_obj_location)
+                )
+
+            if srcds in src_agginfo_db:
+                old_srcds_info = src_agginfo_db[srcds]
+                # we already know something about this dataset
+                # check if referenced objects need to be deleted
+                # replace this record with the incoming one
+                for objtype in ('dataset_info', 'content_info'):
+                    if objtype not in old_srcds_info:
+                        # all good
+                        continue
+                    if agginfo[objtype] != old_srcds_info[objtype]:
+                        # the old record references another file
+                        # -> mark for deletion
+                        # Rational: it could be that the exact some dataset
+                        # (very same commit) appears as two sub(sub)dataset at
+                        # different locations. This would mean we have to scan
+                        # the entire DB for potential match and not simply
+                        # delete it here instead we have to gather candidate
+                        # for deletion and check that they are no longer
+                        # referenced at the very end of the DB update
+                        obsolete_objs.append(ut.Path(old_srcds_info[objtype]))
+            # replace the record
+            src_agginfo_db[srcds] = agginfo_db[srcds]
+
+        # we are done with moving new stuff into the store, clean out act up
+        rmtree(text_type(aggtmp_basedir))
+
+        # TODO THIS NEEDS A TEST
+        obsolete_objs = [
+            obj for obj in obsolete_objs
+            if all(all(dinfo.get(objtype, None) != obj
+                       for objtype in ('dataset_info', 'content_info'))
+                   for d, dinfo in iteritems(src_agginfo_db))
+        ]
+        for obsolete_obj in obsolete_objs:
+            # remove from the object store
+            # there is no need to fiddle with `remove()`, rev-save will do that
+            # just fine on its own
+            lgr.debug("Remove obsolete metadata object %s", obsolete_obj)
+            obsolete_obj.unlink()
+            try:
+                # make an attempt to kill the parent dir too, to leave the
+                # object store clean(er) -- although git won't care
+                # catch error, in case there is more stuff in the dir
+                obsolete_obj.parent.rmdir()
+            except OSError:
+                # this would be expected and nothing to make a fuzz about
+                pass
+        # store the updated DB
+        _store_agginfo_db(ds, src_agginfo_db)
+
+        # and finally save the beast
+        for res in Save()(
+                dataset=ds,
+                # be explicit, because we have to take in untracked content,
+                # and there might be cruft lying around
+                path=[
+                    ds.pathobj / '.datalad' / 'metadata' / 'aggregate_v1.json',
+                    ds.pathobj / '.datalad' / 'metadata' / 'objects',
+                ],
+                message="Update aggregated metadata",
+                # never recursive, this call might be triggered from a more
+                # complex algorithm that does a "better" recursion and there
+                # should be nothing to recurse into for the given paths
+                recursive=False,
+                # we need to capture new/untracked content
+                updated=False,
+                # leave this decision to the dataset config
+                to_git=None):
+            # TODO inspect these results to figure out if anything was actually
+            # done
             yield res
+        # TODO yield OK or NOTNEEDED result
+
+
+def _get_aggtmp_basedir(ds, mkdir=False):
+    """Return a pathlib Path for a temp directory to put aggregated metadata"""
+    tmp_basedir = ds.pathobj / '.git' / 'tmp' / 'aggregate-metadata'
+    if mkdir:
+        tmp_basedir.mkdir(parents=True, exist_ok=True)
+    return tmp_basedir
+
+
+def _extract_metadata(fromds, tods, info):
+    """Extract metadata from a dataset into a temporary location in a dataset
+
+    Parameters
+    ----------
+    fromds : Dataset
+      To extract from
+    tods : Dataset
+      Aggregate into
+    info : dict
+      Will be modified in-place and receive the info on the aggregation
+      (version, extractors, dataset and content metadata object file locations)
+
+    Yields
+    ------
+    dict
+      Any extraction error status results will be re-yielded
+    """
+    meta = {
+        'dataset': None,
+        'content': [],
+    }
+    extracted_metadata_sources = set()
+
+    # perform the actual extraction
+    for res in fromds.rev_extract_metadata(
+            # just let it do its thing
+            path=None,
+            # None indicates to honor a datasets per-extractor configuration
+            # and to be on by default
+            process_type=None,
+            # error handlingis done upstairs
+            on_failure='ignore',
+            return_type='generator'):
+        if success_status_map.get(res['status'], False) != 'success':
+            yield res
+            continue
+        restype = res.get('type', None)
+        extracted_metadata_sources = extracted_metadata_sources.union(
+            # assumes that any non-JSONLD-internal key is a metadata
+            # extractor, which should be valid
+            (k for k in res.get('metadata', {}) if not k.startswith('@')))
+        if restype == 'dataset':
+            if meta['dataset'] is not None:
+                res.update(
+                    message=(
+                        'Metadata extraction from %s yielded second dataset '
+                        'metadata set, ignored',
+                        fromds),
+                    status='error',
+                )
+                yield res
+                continue
+            meta['dataset'] = res['metadata']
+        elif restype == 'file':
+            meta['content'].append(
+                dict(
+                    res['metadata'],
+                    path=op.relpath(res['path'], start=fromds.path)
+                )
+            )
+        else:
+            res.update(
+                message=(
+                    'Metadata extraction from %s yielded unexpected '
+                    'result type (%s), ignored record',
+                    fromds, restype),
+                status='error',
+            )
+            yield res
+            continue
+    # store esssential extraction config in dataset record
+    info['datalad_version'] = datalad.__version__
+    # instead of reporting what was enabled, report what was actually retrieved
+    info['extractors'] = sorted(extracted_metadata_sources)
+
+    # create a tempdir for this dataset under .git/tmp
+    tmp_basedir = _get_aggtmp_basedir(tods, mkdir=True)
+    tmpdir = tempfile.mkdtemp(
+        dir=text_type(tmp_basedir),
+        prefix=fromds.id + '_')
+
+    # for both types of metadata
+    for label, props in iteritems(meta):
+        if not meta[label]:
+            # we got nothing from extraction
+            continue
+
+        tmp_obj_fname = op.join(tmpdir, '{}.xz'.format(label))
+        # place JSON dump of the metadata into this dir
+        (json_py.dump if label == 'dataset' else json_py.dump2stream)(
+            meta[label], tmp_obj_fname, compressed=True)
+
+        # place info on objects into info dict
+        info['{}_info'.format(label)] = tmp_obj_fname
+
+    # do not place the files anywhere, just report where they are
+    return info
+
+
+def _get_obj_location(ds, srcfile, hash_str):
+    """Determine the location of a metadata object in a dataset's object store
+
+    Parameters
+    ----------
+    ds : Dataset
+      The reference dataset whose store shall be used.
+    srcfile : Path
+      The path of the object's sourcefile (to determine the correct
+      file extension.
+    hash_str : str
+      The hash the object should be stored under.
+
+    Returns
+    -------
+    Path
+      pathlib Path instance to the absolute location for the metadata object
+    """
+    objpath = \
+        ds.pathobj / '.datalad' / 'metadata' / 'objects' / \
+        hash_str[:2] / (hash_str[2:] + srcfile.suffix)
+
+    return objpath
+
+
+def _store_agginfo_db(ds, db):
+    # base path in which aggregate.json and objects is located
+    # TODO avoid this call
+    agginfo_path, agg_base_path = get_ds_aggregate_db_locations(
+        ds, warn_absent=False)
+    # make DB paths on disk always relative
+    json_py.dump(
+        {
+            op.relpath(p, start=ds.path):
+            {k: op.relpath(v, start=agg_base_path) if k in location_keys else v
+             for k, v in props.items()}
+            for p, props in db.items()
+        },
+        agginfo_path
+    )
