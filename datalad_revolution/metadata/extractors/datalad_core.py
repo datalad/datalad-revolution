@@ -72,23 +72,11 @@ class DataladCoreExtractor(MetadataExtractor):
         )
 
     def _get_dsmeta(self, ds, status, process_type):
-        # determine the commit that we are describing
-        # build a compact path list (take all top-level paths)
-        # `status` will already not contain any to be ignored content
-        # but if we call git-log without paths, we do not get the
-        # desired answer
-        refcommit = ds.repo.get_last_commit_hash(
-            list(set(
-                ut.Path(s['path']).relative_to(ds.pathobj).parts[0]
-                for s in status))
-        )
         meta = {
             # the desired ID
             'identifier': ds.id,
-            # the true ID of this version of this dataset
-            '@id': refcommit,
         }
-        meta.update(_get_commit_info(ds, refcommit))
+        meta.update(_get_commit_info(ds, status))
         parts = [{
             # this version would change anytime we aggregate metadata,
             # let's not do this for now
@@ -139,6 +127,9 @@ class DataladCoreExtractor(MetadataExtractor):
                 'Extracted core metadata from %s', rec['path'],
                 update=1,
                 increment=True)
+            if rec['type'] == 'dataset':
+                # subdatasets have been dealt with in the dataset metadata
+                continue
             yield dict(
                 path=rec['path'],
                 metadata=self._describe_file(rec),
@@ -166,7 +157,7 @@ class DataladCoreExtractor(MetadataExtractor):
         return info
 
 
-def _get_commit_info(ds, refcommit):
+def _get_commit_info(ds, status):
     """Get info about all commits, up to (and incl. the refcommit)"""
     #- get all the commit info with git log --pretty='%aN%x00%aI%x00%H'
     #  - use all first-level paths other than .datalad and .git for the query
@@ -175,10 +166,23 @@ def _get_commit_info(ds, refcommit):
     #  a version by counting all commits since inception up to the refcommit
     #  - we cannot use the first query, because it will be constrained by the
     #    present paths that may not have existed previously at all
+
+    # determine the commit that we are describing
+    # build a compact path list (take all top-level paths)
+    # `status` will already not contain any to be ignored content
+    # but if we call git-log without paths, we do not get the
+    # desired answer
+    refcommit = ds.repo.get_last_commit_hash(
+        list(set(
+            ut.Path(s['path']).relative_to(ds.pathobj).parts[0]
+            for s in status))
+    )
+
+    # grab the history until the refcommit
     stdout, stderr = ds.repo._git_custom_command(
         None,
         # name, email, timestamp, shasum
-        ['git', 'log', '--pretty=format:%aN%x00%aE%x00%aI%x00%H'],
+        ['git', 'log', '--pretty=format:%aN%x00%aE%x00%aI%x00%H', refcommit],
         expect_fail=True)
     commits = [line.split('\0') for line in stdout.splitlines()]
     # version, always anchored on the first commit (tags could move and
@@ -191,6 +195,8 @@ def _get_commit_info(ds, refcommit):
     )
     meta = {
         'version': version,
+        # the true ID of this version of this dataset
+        '@id': refcommit,
     }
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-authors',
