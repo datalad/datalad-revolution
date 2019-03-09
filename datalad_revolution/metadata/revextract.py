@@ -56,7 +56,6 @@ from datalad.dochelpers import exc_str
 from datalad.log import log_progress
 
 # API commands needed
-from datalad.distribution.subdatasets import Subdatasets
 from .. import revstatus
 
 lgr = logging.getLogger('datalad.metadata.metadata')
