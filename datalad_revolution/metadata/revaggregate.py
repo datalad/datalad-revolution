@@ -342,7 +342,7 @@ class RevAggregateMetadata(Interface):
             # check extraction is actually needed, by running a diff on the
             # dataset against the last known refcommit, to see whether it had
             # any metadata relevant changes
-            last_refcommit = src_agginfo_db.get('.', {}).get('refcommit', None)
+            last_refcommit = src_agginfo_db.get(aggsrc.path, {}).get('refcommit', None)
             have_diff = False
             # TODO should we fall back on the PRE_COMMIT_SHA in case there is
             # no recorded refcommit. This might turn out to be more efficient,
@@ -362,8 +362,14 @@ class RevAggregateMetadata(Interface):
                         return_type='generator',
                         # let the top-level caller handle failure
                         on_failure='ignore'):
-                    if not any(
-                            res['path'].startswith(
+                    if res.get('action', None) != 'diff':
+                        # something unexpected, send upstairs
+                        yield res
+                    if res['state'] == 'clean':
+                        # not an actual diff
+                        continue
+                    if all(
+                            not res['path'].startswith(
                                 op.join(res['parentds'], e) + op.sep)
 
                             for e in exclude_from_metadata):
@@ -504,8 +510,9 @@ class RevAggregateMetadata(Interface):
             # replace the record
             src_agginfo_db[srcds] = agginfo_db[srcds]
 
-        # we are done with moving new stuff into the store, clean out act up
-        rmtree(text_type(aggtmp_basedir))
+        # we are done with moving new stuff into the store, clean our act up
+        if aggtmp_basedir.exists():
+            rmtree(text_type(aggtmp_basedir))
 
         # TODO THIS NEEDS A TEST
         obsolete_objs = [
@@ -640,6 +647,14 @@ def _extract_metadata(fromds, tods):
     info['datalad_version'] = datalad.__version__
     # instead of reporting what was enabled, report what was actually retrieved
     info['extractors'] = sorted(extracted_metadata_sources)
+
+    # place recorded refcommit in info dict to facilitate subsequent
+    # change detection
+    refcommit = \
+        meta.get('dataset', {}).get('datalad_core', {}).get('refcommit', None) \
+        if meta.get('dataset', None) is not None else None
+    if refcommit:
+        info['refcommit'] = refcommit
 
     # create a tempdir for this dataset under .git/tmp
     tmp_basedir = _get_aggtmp_basedir(tods, mkdir=True)
