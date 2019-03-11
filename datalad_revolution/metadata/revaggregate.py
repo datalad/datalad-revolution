@@ -372,9 +372,14 @@ class RevAggregateMetadata(Interface):
                         have_diff = True
                         break
             if last_refcommit is None or have_diff:
-                # TODO really _extract_ metadata for aggsrc
+                # really _extract_ metadata for aggsrc
                 agginfo = {}
-                for res in _extract_metadata(aggsrc, ds, agginfo):
+                for res in _extract_metadata(aggsrc, ds):
+                    if res.get('action', None) == 'extract_metadata' \
+                            and res.get('status', None) == 'ok' \
+                            and 'info' in res:
+                        agginfo = res['info']
+                    # always also report
                     yield res
                 # logic based on the idea that there will only be one
                 # record per dataset (extracted or from pre-aggregate)
@@ -558,7 +563,7 @@ def _get_aggtmp_basedir(ds, mkdir=False):
     return tmp_basedir
 
 
-def _extract_metadata(fromds, tods, info):
+def _extract_metadata(fromds, tods):
     """Extract metadata from a dataset into a temporary location in a dataset
 
     Parameters
@@ -576,6 +581,8 @@ def _extract_metadata(fromds, tods, info):
     dict
       Any extraction error status results will be re-yielded
     """
+    # this will gather information on the extraction result
+    info = {}
     meta = {
         'dataset': None,
         'content': [],
@@ -655,7 +662,14 @@ def _extract_metadata(fromds, tods, info):
         info['{}_info'.format(label)] = tmp_obj_fname
 
     # do not place the files anywhere, just report where they are
-    return info
+    yield dict(
+        path=fromds.path,
+        type='dataset',
+        action='extract_metadata',
+        status='ok',
+        info=info,
+        logger=lgr,
+    )
 
 
 def _get_obj_location(ds, srcfile, hash_str):
