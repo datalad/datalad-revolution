@@ -110,7 +110,8 @@ class DataladCoreExtractor(MetadataExtractor):
                         # not very informative
                         #'description': 'DataLad dataset sibling',
                     })
-            meta['distribution'] = distributions
+            if len(distributions):
+                meta['distribution'] = distributions
         return meta
 
     def _get_contentmeta(self, ds, status):
@@ -196,7 +197,7 @@ def _get_commit_info(ds, status):
     meta = {
         'version': version,
         # the true ID of this version of this dataset
-        '@id': refcommit,
+        'refcommit': refcommit,
     }
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-authors',
