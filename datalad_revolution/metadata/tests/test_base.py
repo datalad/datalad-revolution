@@ -10,7 +10,6 @@
 """Test metadata """
 
 import logging
-import os
 
 from os.path import join as opj
 from os.path import relpath
@@ -27,26 +26,35 @@ from datalad.metadata.metadata import (
     query_aggregated_metadata,
     _get_containingds_from_agginfo,
 )
-from datalad.utils import chpwd
-from datalad.utils import assure_unicode
-from datalad.tests.utils import with_tree, with_tempfile
-from datalad.tests.utils import slow
-from datalad.tests.utils import assert_status
-from datalad.tests.utils import assert_result_count
-from datalad.tests.utils import assert_dict_equal
-from datalad.tests.utils import assert_in
-from datalad.tests.utils import eq_
-from datalad.tests.utils import ok_clean_git
-from datalad.tests.utils import ok_file_has_content
-from datalad.tests.utils import ok_
-from datalad.tests.utils import swallow_logs
-from datalad.tests.utils import assert_re_in
-from datalad.support.exceptions import InsufficientArgumentsError
-from datalad.support.exceptions import NoDatasetArgumentFound
+from datalad.utils import (
+    chpwd,
+    assure_unicode,
+)
+from datalad.tests.utils import (
+    with_tree,
+    with_tempfile,
+    slow,
+    assert_status,
+    assert_result_count,
+    assert_dict_equal,
+    assert_in,
+    eq_,
+    ok_clean_git,
+    swallow_logs,
+    assert_re_in,
+)
+from datalad.support.exceptions import (
+    InsufficientArgumentsError,
+    NoDatasetArgumentFound,
+)
 from datalad.support.gitrepo import GitRepo
 from datalad.support.annexrepo import AnnexRepo
 
-from nose.tools import assert_true, assert_equal, assert_raises
+from nose.tools import (
+    assert_true,
+    assert_equal,
+    assert_raises,
+)
 
 
 _dataset_hierarchy_template = {
