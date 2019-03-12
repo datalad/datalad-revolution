@@ -398,6 +398,16 @@ class RevAggregateMetadata(Interface):
                 # place in DB under full path, needs to become relative
                 # to any updated dataset later on
                 agginfo_db[aggsrc.pathobj] = agginfo
+            else:
+                # we already have what we need in the toplevel dataset
+                # for this locally available dataset
+                yield dict(
+                    action="extract_metadata",
+                    path=aggsrc.path,
+                    status='notneeded',
+                    type='dataset',
+                    logger=lgr,
+                )
 
             # if there is a path in aggsubjs match it against all datasets on
             # which we have aggregated metadata, and expand aggsubjs with a
