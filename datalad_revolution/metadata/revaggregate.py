@@ -268,7 +268,7 @@ class RevAggregateMetadata(Interface):
             # (no repo) path
             ds_candidate = Dataset(s['parentds'])
 
-            # ignore anything that isn't all clean, other wise we have no
+            # ignore anything that isn't all clean, otherwise we have no
             # reliable record of an ID
             if s['state'] != 'clean':
                 if ds_candidate not in ds_with_pending_changes:
@@ -327,6 +327,13 @@ class RevAggregateMetadata(Interface):
         # metadata in the source/key dataset. Such Paths are always assigned
         # to the closest containing available dataset
 
+        # load the info that we have on the top-level dataset's aggregated
+        # metadata
+        # RF load_ds_aggregate_db() to give pathlib keys already
+        top_agginfo_db = {ut.Path(k): v for k, v in iteritems(
+            load_ds_aggregate_db(ds, abspath=True, warn_absent=False)
+        )}
+
         # XXX keep in mind that recursion can
         # - traverse the file system
         # - additionally end up recursion into pre-aggregated metadata
@@ -336,13 +343,11 @@ class RevAggregateMetadata(Interface):
         # TODO this for loop does the heavy lifting (extraction/aggregation)
         # wrap in progress bar
         for aggsrc, aggsubjs in iteritems(extract_from_ds):
-            # load the info that we have on this dataset's aggregated metadata
-            src_agginfo_db = load_ds_aggregate_db(
-                aggsrc, abspath=True, warn_absent=False)
             # check extraction is actually needed, by running a diff on the
             # dataset against the last known refcommit, to see whether it had
             # any metadata relevant changes
-            last_refcommit = src_agginfo_db.get(aggsrc.path, {}).get('refcommit', None)
+            last_refcommit = top_agginfo_db.get(
+                aggsrc.pathobj, {}).get('refcommit', None)
             have_diff = False
             # TODO should we fall back on the PRE_COMMIT_SHA in case there is
             # no recorded refcommit. This might turn out to be more efficient,
@@ -401,7 +406,7 @@ class RevAggregateMetadata(Interface):
             for subj in aggsubjs:
                 if not isinstance(subj, Dataset):
                     subjs.extend(
-                        Dataset(aggds) for aggds in src_agginfo_db
+                        Dataset(aggds) for aggds in top_agginfo_db
                         # TODO think about distinguishing a direct match
                         # vs this match of any parent (maybe the
                         # latter/current only with --recursive)
@@ -413,7 +418,7 @@ class RevAggregateMetadata(Interface):
 
             # loop over aggsubjs and pull aggregated metadata for them
             for dssubj in subjs:
-                agginfo = src_agginfo_db.get(dssubj.path, None)
+                agginfo = top_agginfo_db.get(dssubj.path, None)
                 if agginfo is None:
                     # TODO proper error/warning result
                     continue
@@ -422,22 +427,13 @@ class RevAggregateMetadata(Interface):
                 assert(dssubj.pathobj not in agginfo_db)
                 agginfo_db[dssubj.pathobj] = agginfo
 
-        # TODO try to get rid of this call and live without `agg_base_path`
-        # we disable absent DB warnings, because our aim is to create a new one
-        src_agginfo_db_location, agg_base_path = get_ds_aggregate_db_locations(
-            ds, warn_absent=False)
-        # RF load_ds_aggregate_db() to give pathlib keys already
-        src_agginfo_db = {ut.Path(k): v for k, v in iteritems(
-            load_ds_aggregate_db(ds, abspath=True, warn_absent=False)
-        )}
-
-        # at this point src_agginfo_db has everything on the previous
+        # at this point top_agginfo_db has everything on the previous
         # aggregation state, and agginfo_db everything on what was found in
         # this run
 
         # procedure
-        # 1. whatever is in agginfo_db goes into src_agginfo_db
-        # 2. if src_agginfo_db gets an entry replaced, we delete the associated
+        # 1. whatever is in agginfo_db goes into top_agginfo_db
+        # 2. if top_agginfo_db gets an entry replaced, we delete the associated
         #    files (regular unlink)
         # 3. stuff that moved into the object tree gets checksumed and placed
         #    at the target destination
@@ -447,7 +443,7 @@ class RevAggregateMetadata(Interface):
         aggtmp_basedir = _get_aggtmp_basedir(ds, mkdir=False)
 
         obsolete_objs = []
-        # src_agginfo_db has the status quo, agginfo_db has all
+        # top_agginfo_db has the status quo, agginfo_db has all
         # potential changes
         for srcds, agginfo in iteritems(agginfo_db):
             # Check of object files have to be slurped in from TMP
@@ -487,8 +483,8 @@ class RevAggregateMetadata(Interface):
                     text_type(target_obj_location)
                 )
 
-            if srcds in src_agginfo_db:
-                old_srcds_info = src_agginfo_db[srcds]
+            if srcds in top_agginfo_db:
+                old_srcds_info = top_agginfo_db[srcds]
                 # we already know something about this dataset
                 # check if referenced objects need to be deleted
                 # replace this record with the incoming one
@@ -508,7 +504,7 @@ class RevAggregateMetadata(Interface):
                         # referenced at the very end of the DB update
                         obsolete_objs.append(ut.Path(old_srcds_info[objtype]))
             # replace the record
-            src_agginfo_db[srcds] = agginfo_db[srcds]
+            top_agginfo_db[srcds] = agginfo_db[srcds]
 
         # we are done with moving new stuff into the store, clean our act up
         if aggtmp_basedir.exists():
@@ -519,7 +515,7 @@ class RevAggregateMetadata(Interface):
             obj for obj in obsolete_objs
             if all(all(dinfo.get(objtype, None) != obj
                        for objtype in ('dataset_info', 'content_info'))
-                   for d, dinfo in iteritems(src_agginfo_db))
+                   for d, dinfo in iteritems(top_agginfo_db))
         ]
         for obsolete_obj in obsolete_objs:
             # remove from the object store
@@ -536,7 +532,7 @@ class RevAggregateMetadata(Interface):
                 # this would be expected and nothing to make a fuzz about
                 pass
         # store the updated DB
-        _store_agginfo_db(ds, src_agginfo_db)
+        _store_agginfo_db(ds, top_agginfo_db)
 
         # and finally save the beast
         for res in Save()(
