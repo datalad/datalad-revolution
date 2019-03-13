@@ -340,9 +340,16 @@ class RevAggregateMetadata(Interface):
 
         # this will assemble all aggregation records
         agginfo_db = {}
+        # this will gather no longer needed metadata object files
+        obsolete_objs = set()
+        # this will gather all subdataset that have been found removed
+        # and used as a filter to disable the aggregation of their associated
+        # metadata objects
+        vanished_datasets = set()
+
         # TODO this for loop does the heavy lifting (extraction/aggregation)
         # wrap in progress bar
-        for aggsrc, aggsubjs in iteritems(extract_from_ds):
+        for aggsrc in sorted(extract_from_ds, key=lambda x: x.path):
             # check extraction is actually needed, by running a diff on the
             # dataset against the last known refcommit, to see whether it had
             # any metadata relevant changes
@@ -373,7 +380,7 @@ class RevAggregateMetadata(Interface):
                     if res['state'] == 'clean':
                         # not an actual diff
                         continue
-                    if all(
+                    if not have_diff and all(
                             not res['path'].startswith(
                                 op.join(res['parentds'], e) + op.sep)
 
@@ -381,7 +388,31 @@ class RevAggregateMetadata(Interface):
                         # this is a difference that could have an impact on
                         # metadata stop right here and proceed to extraction
                         have_diff = True
-                        break
+                        # we cannot break, we have to keep looking for
+                        # deleted subdatasets
+                        #break
+
+                    # if we find a deleted subdataset, we have to wipe them off
+                    # the todo list, stage their objects for deletion, and
+                    # remove them from the DB
+                    if res['type'] == 'dataset' and res['state'] == 'deleted':
+                        rmdspath = ut.Path(res['path'])
+                        if rmdspath in top_agginfo_db:
+                            # stage its metadata object files for deletion
+                            for objtype in ('dataset_info', 'content_info'):
+                                obj_path = top_agginfo_db[rmdspath].get(
+                                    objtype, None)
+                                if obj_path is None:
+                                    # nothing to act on
+                                    continue
+                                obsolete_objs.add(ut.Path(obj_path))
+                            # wipe out dataset entry from DB
+                            del top_agginfo_db[rmdspath]
+                        # prevent further processing of downward datasets
+                        # if a dataset is gone, it can only be listed as
+                        # a value, but not as a key in extract_from_ds
+                        vanished_datasets.add(rmdspath)
+
             if last_refcommit is None or have_diff:
                 # really _extract_ metadata for aggsrc
                 agginfo = {}
@@ -409,11 +440,31 @@ class RevAggregateMetadata(Interface):
                     logger=lgr,
                 )
 
+            # filter out any dataset records that belong to a vanished dataset
+            # or to a dataset underneath a vanished dataset
+            lgr.debug('Discovered records of removed datasets: %s',
+                      vanished_datasets)
+            obsolete_datasets = {
+                d for d in top_agginfo_db
+                if d in vanished_datasets
+                or any(p in vanished_datasets for p in d.parents)
+            }
+            lgr.debug('Present, now obsolete, dataset records: %s',
+                      obsolete_datasets)
+            for od in obsolete_datasets:
+                for objtype in ('dataset_info', 'content_info'):
+                    obj_path = top_agginfo_db[od].get(objtype, None)
+                    if obj_path is None:
+                        # nothing to act on
+                        continue
+                    obsolete_objs.add(ut.Path(obj_path))
+                del top_agginfo_db[od]
+
             # if there is a path in aggsubjs match it against all datasets on
             # which we have aggregated metadata, and expand aggsubjs with a
             # list of such dataset instances
             subjs = []
-            for subj in aggsubjs:
+            for subj in extract_from_ds[aggsrc]:
                 if not isinstance(subj, Dataset):
                     subjs.extend(
                         Dataset(aggds) for aggds in top_agginfo_db
@@ -428,9 +479,10 @@ class RevAggregateMetadata(Interface):
 
             # loop over aggsubjs and pull aggregated metadata for them
             for dssubj in subjs:
-                agginfo = top_agginfo_db.get(dssubj.path, None)
+                agginfo = top_agginfo_db.get(dssubj.pathobj, None)
                 if agginfo is None:
-                    # TODO proper error/warning result
+                    # TODO proper error/warning result: we don't have metadata
+                    # for a locally unavailable dataset
                     continue
                 # logic based on the idea that there will only be one
                 # record per dataset (extracted or from pre-aggregate)
@@ -438,8 +490,8 @@ class RevAggregateMetadata(Interface):
                 agginfo_db[dssubj.pathobj] = agginfo
 
         # at this point top_agginfo_db has everything on the previous
-        # aggregation state, and agginfo_db everything on what was found in
-        # this run
+        # aggregation state that is still valid, and agginfo_db everything newly
+        # found in this run
 
         # procedure
         # 1. whatever is in agginfo_db goes into top_agginfo_db
@@ -452,7 +504,6 @@ class RevAggregateMetadata(Interface):
         # this is where incoming metadata objects would be
         aggtmp_basedir = _get_aggtmp_basedir(ds, mkdir=False)
 
-        obsolete_objs = []
         # top_agginfo_db has the status quo, agginfo_db has all
         # potential changes
         for srcds, agginfo in iteritems(agginfo_db):
@@ -512,7 +563,7 @@ class RevAggregateMetadata(Interface):
                         # delete it here instead we have to gather candidate
                         # for deletion and check that they are no longer
                         # referenced at the very end of the DB update
-                        obsolete_objs.append(ut.Path(old_srcds_info[objtype]))
+                        obsolete_objs.add(ut.Path(old_srcds_info[objtype]))
             # replace the record
             top_agginfo_db[srcds] = agginfo_db[srcds]
 
