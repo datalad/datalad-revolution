@@ -276,10 +276,14 @@ class RevAggregateMetadata(Interface):
                         action='aggregate_metadata',
                         path=ds_candidate.path,
                         logger=lgr,
-                        status='impossible',
+                        status='error' if ds_candidate == ds else 'impossible',
                         message='dataset has pending changes',
                     )
                     ds_with_pending_changes.add(ds_candidate)
+                    if ds_candidate == ds:
+                        # this is the target dataset, this is the only one that
+                        # we cannot skip, as extraction can and will happen
+                        return
                 continue
 
             # we always know that the parent was modified too
