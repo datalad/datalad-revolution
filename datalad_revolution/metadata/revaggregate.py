@@ -596,6 +596,7 @@ class RevAggregateMetadata(Interface):
         _store_agginfo_db(ds, top_agginfo_db)
 
         # and finally save the beast
+        something_changed = False
         for res in Save()(
                 dataset=ds,
                 # be explicit, because we have to take in untracked content,
@@ -613,10 +614,22 @@ class RevAggregateMetadata(Interface):
                 updated=False,
                 # leave this decision to the dataset config
                 to_git=None):
-            # TODO inspect these results to figure out if anything was actually
-            # done
+
+            # inspect these results to figure out if anything was actually
+            # done, we rely on save as a proxy to figure this out. If save
+            # doesn't do anything, nothing was necessary, and the various tests
+            # above should have minimized the actual work -> issue NOTNEEDED vs
+            # OK to make it easy for a caller to act on a relevant change vs no
+            # change
+            if res['action'] == 'save' and res.get('status', None) == 'ok':
+                something_changed = True
             yield res
-        # TODO yield OK or NOTNEEDED result
+        yield dict(
+            action='aggregate_metadata',
+            status='ok' if something_changed else 'notneeded',
+            path=ds.path,
+            type='dataset',
+        )
 
 
 def _get_aggtmp_basedir(ds, mkdir=False):
