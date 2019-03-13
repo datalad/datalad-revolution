@@ -36,6 +36,7 @@ import datalad
 from datalad.interface.base import Interface
 from datalad.interface.utils import (
     eval_results,
+    discover_dataset_trace_to_targets,
 )
 from datalad.interface.base import build_doc
 from datalad.interface.common_opts import (
@@ -318,14 +319,14 @@ class RevAggregateMetadata(Interface):
         extract_from_ds = {
             # remove all aggregation subjects for datasets that are actually
             # available
-            k: [i for i in v if i not in extract_from_ds]
+            k: set([i for i in v if i not in extract_from_ds])
             for k, v in iteritems(extract_from_ds)
             # remove all datasets that have been found to have pending
             # modifications
             if k not in ds_with_pending_changes}
         # at this point extract_from_ds is a dict where the keys are
         # locally available datasets (as Dataset() instances), and
-        # values are lists of dataset for which to extract aggregated
+        # values are lists of datasets for which to extract aggregated
         # metadata. The key/source dataset is not listed and always
         # implied. Values can be Dataset() instances, which identified
         # registered (possibly unavailable) subdatasets. Values can also
@@ -338,8 +339,78 @@ class RevAggregateMetadata(Interface):
         if into == 'top':
             for res in _do_top_aggregation(ds, extract_from_ds, force):
                 yield res
+        elif into == 'all':
+            # which datasets have we dealt with already
+            processed_ds = set()
+            # adjust extract_from_ds appropriately for individual
+            # call to _do_top_aggregation for each dataset in the affected
+            # hierarchy from the bottom up
+
+            # discover all affected dataset, these may not have been
+            # found by the status() call above, dependening on the given path
+            # argument
+            spec = {}
+            known_dataset_paths = [d.path for d in extract_from_ds]
+            discover_dataset_trace_to_targets(
+                ds.path,
+                known_dataset_paths,
+                [],
+                spec,
+            )
+
+            # we don't care for the actual dataset linkage (edges), just the
+            # datasets involved (nodes)
+            to_update = set()
+            for k, v in iteritems(spec):
+                to_update.add(k)
+                to_update.update(v)
+            # make sure to include all the datasets we already knew about
+            to_update.update(known_dataset_paths)
+
+            # loop over all datasets we need to aggregate into from the bottom
+            # up
+            for topds in sorted(to_update, reverse=True):
+                topds = Dataset(topds)
+
+                # compose an instruction set for this dataset's aggregation
+                task = {k: v for k, v in iteritems(extract_from_ds)
+                        if topds == k or topds.pathobj in k.pathobj.parents}
+
+                # before we aggregate this dataset, we must make sure that any
+                # potential subdataset changes get saved, so that we have
+                # a defined subdataset state that will not change upon
+                # re-aggregation with not other modification
+                for res in Save()(
+                        dataset=topds,
+                        path=[d.pathobj for d in processed_ds
+                         if topds.pathobj in d.pathobj.parents],
+                        message="Update subdataset state after metadata aggregation",
+                        # never recursive
+                        recursive=False,
+                        # we cannot have anything new
+                        updated=True,
+                        # these are only submodule commits
+                        to_git=True):
+                    res['refds'] = ds.path
+                    yield res
+
+                for res in _do_top_aggregation(
+                        topds,
+                        task,
+                        force):
+                    # recode results to it becomes clear via which dataset
+                    # aggregation was invoked
+                    res['refds'] = ds.path
+                    yield res
+                processed_ds.add(topds)
+
+                # for the next round we only need to note that data on the
+                # current topds is available from itself
+                if topds in extract_from_ds:
+                    extract_from_ds[topds].add(topds)
         else:
-            raise NotImplementedError
+            raise ValueError('Unkown aggregation mode: --into {}'.format(
+                into))
 
 
 def _do_top_aggregation(ds, extract_from_ds, force):
@@ -377,12 +448,14 @@ def _do_top_aggregation(ds, extract_from_ds, force):
         last_refcommit = top_agginfo_db.get(
             aggsrc.pathobj, {}).get('refcommit', None)
         have_diff = False
+        # we are instructed to take pre-aggregated metadata
+        use_self_aggregate = aggsrc in extract_from_ds[aggsrc]
         # TODO should we fall back on the PRE_COMMIT_SHA in case there is
         # no recorded refcommit. This might turn out to be more efficient,
         # as it could avoid working with dataset that have no
         # metadata-relevant content
         # skip diff'ing when extraction is forced
-        if force != 'extraction' and last_refcommit:
+        if not use_self_aggregate and force != 'extraction' and last_refcommit:
             for res in aggsrc.rev_diff(
                     fr=last_refcommit,
                     to='HEAD',
@@ -435,7 +508,8 @@ def _do_top_aggregation(ds, extract_from_ds, force):
                     # a value, but not as a key in extract_from_ds
                     vanished_datasets.add(rmdspath)
 
-        if force == 'extraction' or last_refcommit is None or have_diff:
+        if not use_self_aggregate and (
+                force == 'extraction' or last_refcommit is None or have_diff):
             # really _extract_ metadata for aggsrc
             agginfo = {}
             for res in _extract_metadata(aggsrc, ds):
@@ -499,9 +573,15 @@ def _do_top_aggregation(ds, extract_from_ds, force):
             else:
                 subjs.append(subj)
 
+        if not subjs:
+            continue
+
+        src_agginfo_db = {ut.Path(k): v for k, v in iteritems(
+            load_ds_aggregate_db(aggsrc, abspath=True, warn_absent=False)
+        )}
         # loop over aggsubjs and pull aggregated metadata for them
         for dssubj in subjs:
-            agginfo = top_agginfo_db.get(dssubj.pathobj, None)
+            agginfo = src_agginfo_db.get(dssubj.pathobj, None)
             if agginfo is None:
                 # TODO proper error/warning result: we don't have metadata
                 # for a locally unavailable dataset
@@ -702,7 +782,7 @@ def _extract_metadata(fromds, tods):
             yield res
             continue
         restype = res.get('type', None)
-        extracted_metadata_sources = extracted_metadata_sources.union(
+        extracted_metadata_sources.update(
             # assumes that any non-JSONLD-internal key is a metadata
             # extractor, which should be valid
             (k for k in res.get('metadata', {}) if not k.startswith('@')))
