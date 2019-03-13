@@ -194,12 +194,15 @@ class RevAggregateMetadata(Interface):
             all datasets from any leaf dataset to the top-level target dataset
             including all intermediate datasets (all), or just the top-level
             target dataset (target)."""),
-        force_extraction=Parameter(
-            args=('--force-extraction',),
-            action='store_true',
-            doc="""If set, all enabled extractors will be engaged regardless of
-            whether change detection indicates that metadata has already been
-            extracted for a given dataset state."""),
+        force=Parameter(
+            args=('--force',),
+            constraints=EnsureChoice('extraction', 'fromscratch', None),
+            doc="""Disable specific optimizations: 'extraction' overrides
+            change detection and engages all enabled extractors regardless of
+            whether an actual change in a dataset's state is detected with
+            respect to any existing metadata aggregate; 'fromscratch' wipes out
+            any existing metadata aggregates first, including aggregates for
+            unavailable datasets (implies 'extraction').  """),
     )
 
     @staticmethod
@@ -211,10 +214,11 @@ class RevAggregateMetadata(Interface):
             recursive=False,
             recursion_limit=None,
             update_mode='target',
-            force_extraction=False):
+            force=None):
 
         ds = require_dataset(
             dataset, check_installed=True, purpose='metadata aggregation')
+
         # path args could be
         # - installed datasets
         # - names of pre-aggregated dataset that are not around
@@ -331,6 +335,11 @@ class RevAggregateMetadata(Interface):
         # metadata in the source/key dataset. Such Paths are always assigned
         # to the closest containing available dataset
 
+        if force == 'fromscratch':
+            # all we have to do is to remove the directory from the working
+            # tree
+            rmtree(text_type(ds.pathobj / '.datalad' / 'metadata'))
+
         # load the info that we have on the top-level dataset's aggregated
         # metadata
         # RF load_ds_aggregate_db() to give pathlib keys already
@@ -364,7 +373,8 @@ class RevAggregateMetadata(Interface):
             # no recorded refcommit. This might turn out to be more efficient,
             # as it could avoid working with dataset that have no
             # metadata-relevant content
-            if last_refcommit:
+            # skip diff'ing when extraction is forced
+            if force != 'extraction' and last_refcommit:
                 for res in aggsrc.rev_diff(
                         fr=last_refcommit,
                         to='HEAD',
@@ -417,7 +427,7 @@ class RevAggregateMetadata(Interface):
                         # a value, but not as a key in extract_from_ds
                         vanished_datasets.add(rmdspath)
 
-            if last_refcommit is None or have_diff:
+            if force == 'extraction' or last_refcommit is None or have_diff:
                 # really _extract_ metadata for aggsrc
                 agginfo = {}
                 for res in _extract_metadata(aggsrc, ds):
