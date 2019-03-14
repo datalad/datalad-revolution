@@ -616,11 +616,19 @@ def _do_top_aggregation(ds, extract_from_ds, force):
                 # nothing to act on
                 continue
             obj_path = ut.Path(obj_path)
-            if aggtmp_basedir not in obj_path.parents:
-                # this is not in the tempdir where we would know what to
-                # do with it. Trust the integrity of the status quo and
-                # leave as is
-                continue
+
+            # TODO obtain file content, possibly in a concerted
+            # effort for all source datasets at once
+
+            # we treat all metadata objects alike, regardless of
+            # whether we just build them in TMP or import them from
+            # another object store. This makes sure that we
+            # get homogeneous objects stores (as much as possible)
+            # while still being able to improve layout and
+            # fileformats without maintaining version-dependent
+            # processing conditions -- for the price of having to
+            # checksum each file
+
             # checksum and place in obj tree
             shasum = Digester(
                 digests=['sha1'])(text_type(obj_path))['sha1']
@@ -630,16 +638,20 @@ def _do_top_aggregation(ds, extract_from_ds, force):
             # a potential file move is happening next
             agginfo[objtype] = text_type(target_obj_location)
 
-            if op.exists(text_type(target_obj_location)):
+            if op.lexists(text_type(target_obj_location)):
                 # we checksum by content, if it exists, it is identical
                 # use exist() to be already satisfied by a dangling symlink
                 lgr.debug(
                     "Metadata object already exists at %s, skipped",
                     target_obj_location)
                 continue
-            # move srcfile into the object store
+            # get srcfile into the object store
             target_obj_location.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(
+            # if it is from TMP we can move the file and slim down
+            # the storage footprint ASAP
+            (shutil.move
+             if aggtmp_basedir in obj_path.parents
+             else shutil.copyfile)(
                 # in TMP
                 text_type(obj_path),
                 # in object store
