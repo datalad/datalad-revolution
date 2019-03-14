@@ -36,14 +36,14 @@ from datalad.tests.utils import (
     assert_result_count,
 )
 
-from .. import utils as ut
+import datalad.utils as ut
 from ..dataset import RevolutionDataset as Dataset
 from datalad.api import (
     rev_save as save,
     rev_create as create,
     rev_diff as diff,
 )
-from .utils import (
+from datalad.tests.utils import (
     get_deeply_nested_structure,
     has_symlink_capability,
     assert_repo_status,
