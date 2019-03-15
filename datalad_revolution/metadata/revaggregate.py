@@ -325,7 +325,8 @@ class RevAggregateMetadata(Interface):
             # modifications
             if k not in ds_with_pending_changes}
         # at this point extract_from_ds is a dict where the keys are
-        # locally available datasets (as Dataset() instances), and
+        # locally available datasets that matched the `path` and `recursion`
+        # configuration given as arguments (as Dataset() instances), and
         # values are lists of datasets for which to extract aggregated
         # metadata. The key/source dataset is not listed and always
         # implied. Values can be Dataset() instances, which identified
@@ -335,9 +336,31 @@ class RevAggregateMetadata(Interface):
         # metadata in the source/key dataset. Such Paths are always assigned
         # to the closest containing available dataset
 
+        if recursive:
+            # when going recursive, we also want to capture all pre-aggregated
+            # metadata underneath the discovered datasets
+            # this trick looks for dataset records that have no query path
+            # assigned already (which will be used to match aggregate records)
+            # and assign them their own path). This will match all stored
+            # records and captures the aggregate --recursive case without
+            # a dedicated `path` argument.
+            extract_from_ds = {
+                k:
+                v
+                if len([i for i in v if not isinstance(i, Dataset)])
+                else v.union([k.pathobj])
+                for k, v in iteritems(extract_from_ds)
+            }
+
+        # this will gather all subdataset that have been found removed
+        # and used as a filter to disable the aggregation of their associated
+        # metadata objects
+        vanished_datasets = set()
+
         # HERE IS WHERE THE "INTO" MODES NEED TO BE TREATED DIFFERENTLY
         if into == 'top':
-            for res in _do_top_aggregation(ds, extract_from_ds, force):
+            for res in _do_top_aggregation(
+                    ds, extract_from_ds, force, vanished_datasets):
                 yield res
         elif into == 'all':
             # which datasets have we dealt with already
@@ -397,7 +420,8 @@ class RevAggregateMetadata(Interface):
                 for res in _do_top_aggregation(
                         topds,
                         task,
-                        force):
+                        force,
+                        vanished_datasets):
                     # recode results to it becomes clear via which dataset
                     # aggregation was invoked
                     res['refds'] = ds.path
@@ -413,7 +437,24 @@ class RevAggregateMetadata(Interface):
                 into))
 
 
-def _do_top_aggregation(ds, extract_from_ds, force):
+def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
+    """Internal helper
+
+    Performs non-recursive aggergation for a single dataset.
+
+    Parameters
+    ----------
+    ds : Dataset
+      Top-level reference dataset
+    extract_from_ds : dict
+      Aggregation instructions, what to take from where.
+    force : str
+      Force-mode label, just relayed from the command API
+    vanished_datasets : set
+      Path instances of datasets that are known to have been removed
+      from any inspected dataset since the last aggregated state. This
+      is modified in-place!
+    """
     if force == 'fromscratch':
         # all we have to do is to remove the directory from the working
         # tree
@@ -434,10 +475,6 @@ def _do_top_aggregation(ds, extract_from_ds, force):
     agginfo_db = {}
     # this will gather no longer needed metadata object files
     obsolete_objs = set()
-    # this will gather all subdataset that have been found removed
-    # and used as a filter to disable the aggregation of their associated
-    # metadata objects
-    vanished_datasets = set()
 
     # TODO this for loop does the heavy lifting (extraction/aggregation)
     # wrap in progress bar
@@ -579,17 +616,37 @@ def _do_top_aggregation(ds, extract_from_ds, force):
         src_agginfo_db = {ut.Path(k): v for k, v in iteritems(
             load_ds_aggregate_db(aggsrc, abspath=True, warn_absent=False)
         )}
+        referenced_objs = set()
         # loop over aggsubjs and pull aggregated metadata for them
-        for dssubj in subjs:
+        for dssubj in set(subjs):
+            if dssubj.pathobj in agginfo_db:
+                # logic based on the idea that there can only be one
+                # record per dataset (extracted or from pre-aggregate)
+                # if we have one already, it was extracted.
+                # we can get here during recursion
+                lgr.debug(
+                    'Prefer extraction metadata record over pre-aggregated '
+                    'one for %s', dssubj.pathobj)
+                continue
             agginfo = src_agginfo_db.get(dssubj.pathobj, None)
             if agginfo is None:
                 # TODO proper error/warning result: we don't have metadata
                 # for a locally unavailable dataset
                 continue
-            # logic based on the idea that there will only be one
-            # record per dataset (extracted or from pre-aggregate)
-            assert(dssubj.pathobj not in agginfo_db)
             agginfo_db[dssubj.pathobj] = agginfo
+            for objtype in ('dataset_info', 'content_info'):
+                if objtype in agginfo:
+                    referenced_objs.add(ut.Path(agginfo[objtype]))
+        # make sure all referenced metadata objects are actually around
+        # use a low-level report methods for speed, as we should know
+        # that everything is local to aggsrc
+        if hasattr(aggsrc, 'get'):
+            res = aggsrc.repo.get(
+                [text_type(o.relative_to(aggsrc.pathobj))
+                 for o in referenced_objs]
+            )
+            # TODO evaluate the results, but ATM get() output is not
+            # very helpful. Do when it gives proper results
 
     # at this point top_agginfo_db has everything on the previous
     # aggregation state that is still valid, and agginfo_db everything newly
@@ -832,13 +889,28 @@ def _extract_metadata(fromds, tods):
     # instead of reporting what was enabled, report what was actually retrieved
     info['extractors'] = sorted(extracted_metadata_sources)
 
+    if meta.get('dataset', None) is None:
+        yield dict(
+            path=fromds.path,
+            type='dataset',
+            action='extract_metadata',
+            status='error',
+            message='extraction yielded no dataset-global metadata',
+            info=info,
+            logger=lgr,
+        )
+        return
+
     # place recorded refcommit in info dict to facilitate subsequent
     # change detection
     refcommit = \
-        meta.get('dataset', {}).get('datalad_core', {}).get('refcommit', None) \
-        if meta.get('dataset', None) is not None else None
+        meta['dataset'].get('datalad_core', {}).get('refcommit', None)
     if refcommit:
         info['refcommit'] = refcommit
+    else:
+        lgr.warn(
+            'Could not determine a reference commit for the metadata ',
+            'extracted from %s', fromds)
 
     # create a tempdir for this dataset under .git/tmp
     tmp_basedir = _get_aggtmp_basedir(tods, mkdir=True)

@@ -71,18 +71,17 @@ def test_basic_aggregate(path):
     sub.rev_aggregate_metadata()
     base.save()
     ok_clean_git(base.path)
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     ok_clean_git(base.path)
     direct_meta = base.metadata(recursive=True, return_type='list')
     # loose the deepest dataset
     sub.uninstall('subsub', check=False)
-    # no we should eb able to reaggregate metadata, and loose nothing
+    # no we should be able to reaggregate metadata, and loose nothing
     # because we can aggregate aggregated metadata of subsub from sub
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     # same result for aggregate query than for (saved) direct query
     agg_meta = base.metadata(recursive=True, return_type='list')
     for d, a in zip(direct_meta, agg_meta):
-        print(d['path'], a['path'])
         assert_dict_equal(d, a)
     # no we can throw away the subdataset tree, and loose no metadata
     base.uninstall('sub', recursive=True, check=False)
@@ -157,7 +156,7 @@ def test_reaggregate_with_unavailable_objects(path):
     subsub = base.rev_create(opj('sub', 'subsub'), force=True)
     base.add('.', recursive=True)
     ok_clean_git(base.path)
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     ok_clean_git(base.path)
     objpath = opj('.datalad', 'metadata', 'objects')
     objs = list(sorted(base.repo.find(objpath)))
@@ -170,7 +169,7 @@ def test_reaggregate_with_unavailable_objects(path):
     ok_clean_git(base.path)
     # now re-aggregate, the state hasn't changed, so the file names will
     # be the same
-    base.rev_aggregate_metadata(recursive=True, update_mode='all', force_extraction=True)
+    base.rev_aggregate_metadata(recursive=True, into='all', force='fromscratch')
     eq_(all(base.repo.file_has_content(objs)), True)
     # and there are no new objects
     eq_(
@@ -191,7 +190,7 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
     subsub = base.rev_create(opj('sub', 'subsub'), force=True)
     base.add('.', recursive=True)
     ok_clean_git(base.path)
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     ok_clean_git(base.path)
 
     # now make that a subdataset of a new one, so aggregation needs to get the
@@ -207,8 +206,7 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
     eq_(all(clone.repo.file_has_content(objs)), False)
 
     # now aggregate should get those metadata objects
-    super.rev_aggregate_metadata(recursive=True, update_mode='all',
-                             force_extraction=False)
+    super.rev_aggregate_metadata(recursive=True, into='all')
     eq_(all(clone.repo.file_has_content(objs)), True)
 
 
@@ -225,7 +223,7 @@ def test_publish_aggregated(path):
     base.rev_create('sub', force=True)
     base.add('.', recursive=True)
     ok_clean_git(base.path)
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     ok_clean_git(base.path)
 
     # create sibling and publish to it
@@ -271,7 +269,7 @@ def test_aggregate_removal(path):
     sub = base.rev_create('sub', force=True)
     subsub = sub.rev_create(opj('subsub'), force=True)
     base.add('.', recursive=True)
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     ok_clean_git(base.path)
     res = base.metadata(get_aggregates=True)
     assert_result_count(res, 3)
@@ -283,7 +281,7 @@ def test_aggregate_removal(path):
     base.remove(opj('sub', 'subsub'), check=False)
     # now aggregation has to detect that subsub is not simply missing, but gone
     # for good
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     ok_clean_git(base.path)
     # internally consistent state
     eq_(_get_contained_objs(base), _get_referenced_objs(base))
@@ -336,7 +334,7 @@ def test_update_strategy(path):
 
     # now redo full aggregation, this time updating all
     # (intermediate) datasets
-    base.rev_aggregate_metadata(recursive=True, update_mode='all')
+    base.rev_aggregate_metadata(recursive=True, into='all')
     eq_(len(_get_contained_objs(base)), 6)
     eq_(len(_get_contained_objs(sub)), 4)
     eq_(len(_get_contained_objs(subsub)), 2)
@@ -378,12 +376,12 @@ def test_partial_aggregation(path):
     # we should not loose information on the other datasets
     # as this would be a problem any time anything in a dataset
     # subtree is missing: not installed, too expensive to reaggregate, ...
-    ds.rev_aggregate_metadata(path='sub1', incremental=True)
+    ds.rev_aggregate_metadata(path='sub1')
     res = ds.metadata(get_aggregates=True)
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=sub2.path)
     # from-scratch aggregation kills datasets that where not listed
-    ds.rev_aggregate_metadata(path='sub1', incremental=False)
+    ds.rev_aggregate_metadata(path='sub1', force='fromscratch')
     res = ds.metadata(get_aggregates=True)
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=sub2.path)
