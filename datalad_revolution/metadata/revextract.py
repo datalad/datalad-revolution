@@ -130,9 +130,36 @@ class RevExtractMetadata(Interface):
                 + assure_list(get_metadata_type(dataset))
         # keep local, who knows what some extractors might pull in
         from pkg_resources import iter_entry_points  # delayed heavy import
-        extractors = {
-            ep.name: ep
-            for ep in iter_entry_points('datalad.metadata.extractors')}
+        extractors = {}
+        for ep in iter_entry_points('datalad.metadata.extractors'):
+            if ep.name in extractors:
+                # potential conflict
+                if extractors[ep.name].dist.project_name == 'datalad':
+                    # this is OK, just state it is happening
+                    lgr.debug(
+                        'Extractor %s overrides datalad-core variant', ep)
+                    extractors[ep.name] = ep
+                elif ep.dist.project_name == 'datalad':
+                    # also OK
+                    lgr.debug(
+                        'Prefer extractor %s over datalad-core variant', ep)
+                else:
+                    msg = (
+                        'At least two DataLad extensions provide metadata '
+                        'extractor %s: %s vs. %s',
+                        ep.name,
+                        ep.dist,
+                        extractors[ep.name].dist)
+                    if ep.name in sources:
+                        # this extractor is required -> blow hard
+                        raise RuntimeError(msg[0] % msg[1:])
+                    else:
+                        # still moan
+                        lgr.warn(msg)
+                    # ignore the newcomer, is listed second in sys.path
+            else:
+                # this fresh and unique
+                extractors[ep.name] = ep
         for msrc in sources:
             if msrc not in extractors:
                 # we said that we want to fail, rather then just moan about
