@@ -31,7 +31,7 @@ class MetadataExtractor(BaseMetadataExtractor):
             [])
         cfg_srcfiles = assure_list(cfg_srcfiles)
         # OK to be always POSIX
-        srcfiles = ['.datalad/metadata/custom.json'] \
+        srcfiles = ['.datalad/custom_metadata.json'] \
             if not cfg_srcfiles else cfg_srcfiles
         dsmeta = {}
         for srcfile in srcfiles:

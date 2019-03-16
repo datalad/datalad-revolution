@@ -13,7 +13,7 @@ from ....dataset import RevolutionDataset as Dataset
 from datalad.api import (
     rev_create,
     rev_save,
-    aggregate_metadata,
+    rev_aggregate_metadata,
 )
 from datalad.tests.utils import (
     with_tree,
@@ -91,8 +91,7 @@ testmeta = {
 @with_tree(
     tree={
         '.datalad': {
-            'metadata': {
-                'custom.json': jsondumps(sample_jsonld)}},
+            'custom_metadata.json': jsondumps(sample_jsonld)},
         'down': {
             'customloc': jsondumps(testmeta)}})
 def test_custom(path):
@@ -102,7 +101,7 @@ def test_custom(path):
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
     ds.rev_save()
     assert_repo_status(ds.path)
-    res = ds.aggregate_metadata()
+    res = ds.rev_aggregate_metadata()
     assert_status('ok', res)
     res = ds.metadata(reporton='datasets')
     assert_result_count(res, 1)
@@ -117,10 +116,15 @@ def test_custom(path):
         'datalad.metadata.custom-dataset-source',
         'nothere',
         where='dataset')
-    ds.aggregate_metadata()
+    ds.rev_save()
+    # we could argue that any config change should lead
+    # to a reaggregation automatically, but that would mean
+    # that we are willing to pay a hefty performance price
+    # in many situation that do not need re-aggregation
+    ds.rev_aggregate_metadata(force='fromscratch')
     res = ds.metadata(reporton='datasets')
     assert_result_count(res, 1)
-    assert_not_in('custom', res[0]['metadata'])
+    eq_(res[0]['metadata'].get('custom', {}), {})
 
     # overwrite default source location within something existing
     ds.config.set(
@@ -129,7 +133,7 @@ def test_custom(path):
         'down/customloc',
         where='dataset')
     ds.rev_save()
-    ds.aggregate_metadata()
+    ds.rev_aggregate_metadata(force='fromscratch')
     res = ds.metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(testmeta, res[0]['metadata']['custom'])
@@ -138,10 +142,10 @@ def test_custom(path):
     ds.config.add(
         'datalad.metadata.custom-dataset-source',
         # put back default
-        '.datalad/metadata/custom.json',
+        '.datalad/custom_metadata.json',
         where='dataset')
     ds.rev_save()
-    ds.aggregate_metadata()
+    ds.rev_aggregate_metadata(force='fromscratch')
     res = ds.metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(
