@@ -381,10 +381,13 @@ def test_partial_aggregation(path):
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=sub2.path)
     # from-scratch aggregation kills datasets that where not listed
-    ds.rev_aggregate_metadata(path='sub1', force='fromscratch')
+    # note the trailing separator that indicated that path refers
+    # to the content of the subdataset, not the subdataset record
+    # in the superdataset
+    ds.rev_aggregate_metadata(path='sub1' + op.sep, force='fromscratch')
     res = ds.metadata(get_aggregates=True)
-    assert_result_count(res, 3)
-    assert_result_count(res, 1, path=sub2.path)
+    assert_result_count(res, 1)
+    assert_result_count(res, 1, path=sub1.path)
     # now reaggregated in full
     ds.rev_aggregate_metadata(recursive=True)
     # make change in sub1
