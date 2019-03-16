@@ -57,14 +57,8 @@ def check_api(no_annex, path):
                 type='dataset',
                 status='ok',
             )
-            assert_result_count(
-                res,
-                1,
-                path=text_type(ds.pathobj / 'file.dat'),
-                type='file',
-                status='ok',
-                metadata={'datalad_core': {}},
-            )
+            assert_true(
+                all('datalad_core' in r.get('metadata', {}) for r in res))
         elif extractor_ep.name == 'annex':
             if not no_annex:
                 assert_result_count(
