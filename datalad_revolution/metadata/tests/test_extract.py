@@ -53,9 +53,15 @@ def test_ds_extraction(path):
 
     # by default we get core and annex reports
     res = extract_metadata(dataset=ds)
-    assert_result_count(res, 2)
-    for k in ('datalad_core', 'annex'):
-        assert(all(k in r['metadata'] for r in res))
+    # dataset, plus two file (xmp.pdf, .gitattributes)
+    assert_result_count(res, 3)
+    assert_result_count(res, 1, type='dataset')
+    assert_result_count(res, 2, type='file')
+    # core has stuff on everythin
+    assert(all('datalad_core' in r['metadata'] for r in res))
+    # annex just on the annex'ed file
+    assert(all('annex' in r['metadata'] or not r['path'].endswith('.pdf')
+               for r in res))
 
     # now for specific extractor request
     res = extract_metadata(
