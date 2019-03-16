@@ -102,8 +102,9 @@ def _compare_metadata_helper(origres, compds):
         cres = cres[0]
         assert_dict_equal(ores['metadata'], cres['metadata'])
         if ores['type'] == 'dataset':
-            for i in ('dsid', ):
-                eq_(ores[i], cres[i])
+            for i in ('identifier', ):
+                eq_(ores['metadata']['datalad_core'][i],
+                    cres['metadata']['datalad_core'][i])
 
 
 @slow  # ~16s
@@ -129,12 +130,14 @@ def test_aggregation(path):
     ok_clean_git(ds.path)
     # aggregate metadata from all subdatasets into any superdataset, including
     # intermediate ones
-    res = ds.rev_aggregate_metadata(recursive=True, update_mode='all')
+    res = ds.rev_aggregate_metadata(recursive=True, into='all')
     # we get success report for both subdatasets and the superdataset,
     # and they get saved
-    assert_result_count(res, 6)
     assert_result_count(res, 3, status='ok', action='aggregate_metadata')
-    assert_result_count(res, 3, status='ok', action='save')
+    # the respective super datasets see two saves, one to record the change
+    # in the subdataset after its own aggregation, and one after the super
+    # updated with aggregated metadata
+    assert_result_count(res, 5, status='ok', action='save', type='dataset')
     # nice and tidy
     ok_clean_git(ds.path)
 
@@ -148,11 +151,15 @@ def test_aggregation(path):
     # store clean direct result
     origres = ds.metadata(recursive=True)
     # basic sanity check
-    assert_result_count(origres, 6)
     assert_result_count(origres, 3, type='dataset')
-    assert_result_count(origres, 3, type='file')  # Now that we have annex.key
+    assert_result_count(
+        [r for r in origres if r['path'].endswith('.json')],
+        3, type='file')  # Now that we have annex.key
     # three different IDs
-    assert_equal(3, len(set([s['dsid'] for s in origres if s['type'] == 'dataset'])))
+    assert_equal(
+        3,
+        len(set([s['metadata']['datalad_core']['identifier']
+                for s in origres if s['type'] == 'dataset'])))
     # and we know about all three datasets
     for name in ('MOTHER_äöü東', 'child_äöü東', 'grandchild_äöü東'):
         assert_true(
@@ -170,9 +177,9 @@ def test_aggregation(path):
     # get fresh metadata
     cloneres = clone.metadata()
     # basic sanity check
-    assert_result_count(cloneres, 2)
     assert_result_count(cloneres, 1, type='dataset')
-    assert_result_count(cloneres, 1, type='file')
+    # payload file, .gitattr, .gitmodule
+    assert_result_count(cloneres, 3, type='file')
 
     # now loop over the previous results from the direct metadata query of
     # origin and make sure we get the extact same stuff from the clone
