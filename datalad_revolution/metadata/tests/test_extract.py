@@ -9,8 +9,7 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Test metadata extraction"""
 
-from os.path import join as opj
-from os.path import dirname
+import os.path as op
 
 from shutil import copy
 
@@ -18,24 +17,32 @@ from ...dataset import RevolutionDataset as Dataset
 from datalad.api import rev_extract_metadata as extract_metadata
 from datalad.utils import chpwd
 
-from datalad.tests.utils import ok_clean_git
-from datalad.tests.utils import with_tempfile
-from datalad.tests.utils import assert_raises
-from datalad.tests.utils import assert_result_count
-from datalad.tests.utils import assert_in
-from datalad.tests.utils import eq_
+from ...tests.utils import (
+    assert_repo_status,
+)
+
+from datalad.tests.utils import (
+    with_tempfile,
+    assert_raises,
+    assert_result_count,
+    assert_in,
+    eq_,
+)
 
 from datalad.support.exceptions import IncompleteResultsError
 
 
-testpath = opj(dirname(dirname(dirname(__file__))), 'metadata', 'tests', 'data', 'xmp.pdf')
+testpath = op.join(op.dirname(op.dirname(op.dirname(__file__))),
+                   'metadata', 'tests', 'data', 'xmp.pdf')
 
 
 @with_tempfile(mkdir=True)
 def test_error(path):
     # go into virgin dir to avoid detection of any dataset
     with chpwd(path):
-        assert_raises(ValueError, extract_metadata, sources=['bogus__'], path=[testpath])
+        assert_raises(
+            ValueError,
+            extract_metadata, sources=['bogus__'], path=[testpath])
 
 
 @with_tempfile(mkdir=True)
@@ -49,7 +56,7 @@ def test_ds_extraction(path):
     ds = Dataset(path).rev_create()
     copy(testpath, path)
     ds.add('.')
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
 
     # by default we get core and annex reports
     res = extract_metadata(dataset=ds)
@@ -71,7 +78,8 @@ def test_ds_extraction(path):
         path=[])
     assert_result_count(
         res, 1,
-        type='dataset', status='ok', action='extract_metadata', path=path, refds=ds.path)
+        type='dataset', status='ok', action='extract_metadata', path=path,
+        refds=ds.path)
     assert_in('xmp', res[0]['metadata'])
 
     # now the more useful case: getting everthing for xmp from a dataset
@@ -81,10 +89,12 @@ def test_ds_extraction(path):
     assert_result_count(res, 2)
     assert_result_count(
         res, 1,
-        type='dataset', status='ok', action='extract_metadata', path=path, refds=ds.path)
+        type='dataset', status='ok', action='extract_metadata', path=path,
+        refds=ds.path)
     assert_result_count(
         res, 1,
-        type='file', status='ok', action='extract_metadata', path=opj(path, 'xmp.pdf'),
+        type='file', status='ok', action='extract_metadata',
+        path=op.join(path, 'xmp.pdf'),
         parentds=ds.path)
     for r in res:
         assert_in('xmp', r['metadata'])
@@ -94,7 +104,8 @@ def test_ds_extraction(path):
         ["dlsubject"]
     )
     # and lastly, if we disable extraction via config, we get nothing
-    ds.config.add('datalad.metadata.extract-from-xmp', 'dataset', where='dataset')
+    ds.config.add('datalad.metadata.extract-from-xmp', 'dataset',
+                  where='dataset')
     assert_result_count(extract_metadata(sources=['xmp'], dataset=ds), 1)
 
 
@@ -111,5 +122,7 @@ def test_file_extraction(path):
         res = extract_metadata(
             sources=['xmp'],
             path=[testpath])
-        assert_result_count(res, 1, type='file', status='ok', action='extract_metadata', path=testpath)
+        assert_result_count(
+            res, 1, type='file', status='ok', action='extract_metadata',
+            path=testpath)
         assert_in('xmp', res[0]['metadata'])
