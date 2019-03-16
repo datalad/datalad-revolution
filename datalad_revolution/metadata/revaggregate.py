@@ -871,7 +871,8 @@ def _extract_metadata(fromds, tods):
             meta['content'].append(
                 dict(
                     res['metadata'],
-                    path=op.relpath(res['path'], start=fromds.path)
+                    path=text_type(ut.Path(res['path']).relative_to(
+                        fromds.pathobj))
                 )
             )
         else:
@@ -976,8 +977,9 @@ def _store_agginfo_db(ds, db):
     # make DB paths on disk always relative
     json_py.dump(
         {
-            op.relpath(p, start=ds.path):
-            {k: op.relpath(v, start=agg_base_path) if k in location_keys else v
+            text_type(ut.Path(p).relative_to(ds.pathobj)):
+            {k: text_type(ut.Path(v).relative_to(agg_base_path))
+             if k in location_keys else v
              for k, v in props.items()}
             for p, props in db.items()
         },

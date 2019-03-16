@@ -15,6 +15,7 @@ import os.path as op
 import logging
 from six import (
     iteritems,
+    text_type,
 )
 from collections import (
     Mapping,
@@ -28,6 +29,7 @@ from datalad.interface.results import (
     success_status_map,
 )
 from datalad.interface.utils import eval_results
+from .. import utils as ut
 from ..dataset import (
     rev_datasetmethod as datasetmethod,
     EnsureRevDataset as EnsureDataset,
@@ -444,7 +446,8 @@ def _run_extractor(extractor_cls, name, ds, status, process_type):
                     # old extractors only take a list of relative paths
                     # and cannot benefit from outside knowledge
                     # TODO avoid is_installed() call
-                    [op.relpath(p['path'], start=ds.path) if ds.is_installed()
+                    [text_type(ut.Path(p['path']).relative_to(ds.pathobj))
+                     if ds.is_installed()
                      else p['path']
                      for p in status]):
                 yield res
