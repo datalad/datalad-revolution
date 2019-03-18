@@ -26,6 +26,11 @@ from datalad.core.local.status import Status
 lgr = logging.getLogger('datalad.revolution.status')
 
 
+lgr.warn(
+    "The module 'datalad_revolution.revstatus' is deprecated. "
+    'The `RevStatus` class can be imported with: '
+    '`from datalad.core.local.status import Status as RevStatus`')
+
 # Note: We're keeping this docstring around because if we used core's
 # it would say "datalad status ...".
 
