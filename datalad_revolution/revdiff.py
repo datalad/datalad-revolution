@@ -27,14 +27,9 @@ from datalad.interface.base import (
     build_doc,
 )
 from datalad.interface.utils import eval_results
-from datalad.interface.common_opts import (
-    recursion_limit,
-    recursion_flag,
-)
 
 from .dataset import (
     RevolutionDataset as Dataset,
-    EnsureRevDataset,
     rev_datasetmethod,
     require_rev_dataset,
     rev_resolve_path,
@@ -51,43 +46,12 @@ from datalad.support.constraints import (
 from datalad.support.param import Parameter
 from datalad.consts import PRE_INIT_COMMIT_SHA
 
+from datalad.core.local.status import (
+    Status,
+    _common_diffstatus_params,
+)
+
 lgr = logging.getLogger('datalad.revolution.diff')
-
-
-_common_diffstatus_params = dict(
-    dataset=Parameter(
-        args=("-d", "--dataset"),
-        doc="""specify the dataset to query.  If
-        no dataset is given, an attempt is made to identify the dataset
-        based on the current working directory""",
-        constraints=EnsureRevDataset() | EnsureNone()),
-    annex=Parameter(
-        args=('--annex',),
-        metavar='MODE',
-        constraints=EnsureChoice(None, 'basic', 'availability', 'all'),
-        doc="""Switch whether to include information on the annex
-        content of individual files in the status report, such as
-        recorded file size. By default no annex information is reported
-        (faster). Three report modes are available: basic information
-        like file size and key name ('basic'); additionally test whether
-        file content is present in the local annex ('availability';
-        requires one or two additional file system stat calls, but does
-        not call git-annex), this will add the result properties
-        'has_content' (boolean flag) and 'objloc' (absolute path to an
-        existing annex object file); or 'all' which will report all
-        available information (presently identical to 'availability').
-        """),
-    untracked=Parameter(
-        args=('--untracked',),
-        metavar='MODE',
-        constraints=EnsureChoice('no', 'normal', 'all'),
-        doc="""If and how untracked content is reported when comparing
-        a revision to the state of the work tree. 'no': no untracked
-        content is reported; 'normal': untracked files and entire
-        untracked directories are reported as such; 'all': report
-        individual files even in fully untracked directories."""),
-    recursive=recursion_flag,
-    recursion_limit=recursion_limit)
 
 
 @build_doc
@@ -174,31 +138,7 @@ class RevDiff(Interface):
 
     @staticmethod
     def custom_result_renderer(res, **kwargs):  # pragma: no cover
-        if not (res['status'] == 'ok' \
-                and res['action'] in ('status', 'diff') \
-                and res.get('state', None) != 'clean'):
-            # logging reported already
-            return
-        from datalad.ui import ui
-        # when to render relative paths:
-        #  1) if a dataset arg was given
-        #  2) if CWD is the refds
-        refds = res.get('refds', None)
-        refds = refds if kwargs.get('dataset', None) is not None \
-            or refds == os.getcwd() else None
-        path = res['path'] if refds is None \
-            else str(ut.Path(res['path']).relative_to(refds))
-        type_ = res.get('type', res.get('type_src', ''))
-        max_len = len('untracked')
-        state = res['state']
-        ui.message('{fill}{state}: {path}{type_}'.format(
-            fill=' ' * max(0, max_len - len(state)),
-            state=ut.ac.color_word(
-                state,
-                ut.state_color_map.get(res['state'], ut.ac.WHITE)),
-            path=path,
-            type_=' ({})'.format(
-                ut.ac.color_word(type_, ut.ac.MAGENTA) if type_ else '')))
+        Status.custom_result_renderer(res, **kwargs)
 
 
 def _diff_cmd(
