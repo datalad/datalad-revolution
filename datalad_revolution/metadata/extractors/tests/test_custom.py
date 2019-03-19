@@ -22,8 +22,6 @@ from datalad.tests.utils import (
     assert_result_count,
     assert_in,
     assert_not_in,
-)
-from datalad.tests.utils import (
     assert_repo_status,
 )
 from simplejson import dumps as jsondumps

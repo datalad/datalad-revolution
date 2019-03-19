@@ -15,10 +15,10 @@ from pkg_resources import iter_entry_points
 from datalad.api import Dataset
 from datalad.api import rev_extract_metadata as extract_metadata
 from datalad.api import rev_save as save
-from ....tests.utils import assert_repo_status
 
 from nose import SkipTest
 from datalad.tests.utils import (
+    assert_repo_status,
     assert_true,
     assert_result_count,
     with_tree,

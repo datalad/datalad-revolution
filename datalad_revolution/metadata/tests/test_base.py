@@ -11,16 +11,16 @@
 
 import logging
 
-from os.path import join as opj
-from os.path import relpath
 import os.path as op
 
 from ...dataset import RevolutionDataset as Dataset
-from datalad.api import rev_create
-from datalad.api import rev_aggregate_metadata as aggregate_metadata
-from datalad.api import install
-from datalad.api import search
-from datalad.api import metadata
+from datalad.api import (
+    rev_create,
+    rev_aggregate_metadata as aggregate_metadata,
+    install,
+    search,
+    metadata,
+)
 from datalad.metadata.metadata import (
     get_metadata_type,
     query_aggregated_metadata,
@@ -39,9 +39,9 @@ from datalad.tests.utils import (
     assert_dict_equal,
     assert_in,
     eq_,
-    ok_clean_git,
     swallow_logs,
     assert_re_in,
+    assert_repo_status,
 )
 from datalad.support.exceptions import (
     InsufficientArgumentsError,
@@ -82,16 +82,16 @@ def test_get_metadata_type(path):
     # nothing set, nothing found
     assert_equal(get_metadata_type(Dataset(path)), [])
     # got section, but no setting
-    open(opj(path, '.datalad', 'config'), 'w').write('[datalad "metadata"]\n')
+    open(op.join(path, '.datalad', 'config'), 'w').write('[datalad "metadata"]\n')
     assert_equal(get_metadata_type(Dataset(path)), [])
     # minimal setting
-    open(opj(path, '.datalad', 'config'), 'w+').write('[datalad "metadata"]\nnativetype = mamboschwambo\n')
+    open(op.join(path, '.datalad', 'config'), 'w+').write('[datalad "metadata"]\nnativetype = mamboschwambo\n')
     assert_equal(get_metadata_type(Dataset(path)), 'mamboschwambo')
 
 
 def _compare_metadata_helper(origres, compds):
     for ores in origres:
-        rpath = relpath(ores['path'], ores['refds'])
+        rpath = op.relpath(ores['path'], ores['refds'])
         cres = compds.metadata(
             rpath,
             reporton='{}s'.format(ores['type']))
@@ -113,7 +113,7 @@ def test_aggregation(path):
     with chpwd(path):
         assert_raises(InsufficientArgumentsError, aggregate_metadata, None)
     # a hierarchy of three (super/sub)datasets, each with some native metadata
-    ds = Dataset(opj(path, 'origin')).rev_create(force=True)
+    ds = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # before anything aggregated we would get nothing and only a log warning
     with swallow_logs(new_level=logging.WARNING) as cml:
         assert_equal(list(query_aggregated_metadata('all', ds, [])), [])
@@ -127,7 +127,7 @@ def test_aggregation(path):
     subsubds.config.add('datalad.metadata.nativetype', 'frictionless_datapackage',
                         where='dataset')
     ds.add('.', recursive=True)
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
     # aggregate metadata from all subdatasets into any superdataset, including
     # intermediate ones
     res = ds.rev_aggregate_metadata(recursive=True, into='all')
@@ -139,7 +139,7 @@ def test_aggregation(path):
     # updated with aggregated metadata
     assert_result_count(res, 5, status='ok', action='save', type='dataset')
     # nice and tidy
-    ok_clean_git(ds.path)
+    assert_repo_status(ds.path)
 
     # quick test of aggregate report
     aggs = ds.metadata(get_aggregates=True)
@@ -169,7 +169,7 @@ def test_aggregation(path):
 
     # now clone the beast to simulate a new user installing an empty dataset
     clone = install(
-        opj(path, 'clone'), source=ds.path,
+        op.join(path, 'clone'), source=ds.path,
         result_xfm='datasets', return_type='item-or-list')
     # ID mechanism works
     assert_equal(ds.id, clone.id)
@@ -227,9 +227,9 @@ def test_ignore_nondatasets(path):
     n_subm = 0
     # placing another repo in the dataset has no effect on metadata
     for cls, subpath in ((GitRepo, 'subm'), (AnnexRepo, 'annex_subm')):
-        subm_path = opj(ds.path, subpath)
+        subm_path = op.join(ds.path, subpath)
         r = cls(subm_path, create=True)
-        with open(opj(subm_path, 'test'), 'w') as f:
+        with open(op.join(subm_path, 'test'), 'w') as f:
             f.write('test')
         r.add('test')
         r.commit('some')

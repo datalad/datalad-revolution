@@ -17,19 +17,14 @@ from ...dataset import RevolutionDataset as Dataset
 from datalad.api import rev_extract_metadata as extract_metadata
 from datalad.utils import chpwd
 
-from ...tests.utils import (
-    assert_repo_status,
-)
-
 from datalad.tests.utils import (
     with_tempfile,
+    assert_repo_status,
     assert_raises,
     assert_result_count,
     assert_in,
     eq_,
 )
-
-from datalad.support.exceptions import IncompleteResultsError
 
 
 testpath = op.join(op.dirname(op.dirname(op.dirname(__file__))),

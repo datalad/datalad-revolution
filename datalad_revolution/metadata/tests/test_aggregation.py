@@ -11,25 +11,28 @@
 
 
 import os.path as op
-from os.path import join as opj
 
-from datalad.api import metadata
-from datalad.api import install
-from datalad.api import rev_create
-from datalad.api import rev_aggregate_metadata
+from datalad.api import (
+    metadata,
+    install,
+    rev_create,
+    rev_aggregate_metadata,
+)
 from ...dataset import RevolutionDataset as Dataset
 
 
-from datalad.tests.utils import skip_ssh
-from datalad.tests.utils import with_tree
-from datalad.tests.utils import with_tempfile
-from datalad.tests.utils import assert_result_count
-from datalad.tests.utils import assert_status
-from datalad.tests.utils import assert_dict_equal
-from datalad.tests.utils import assert_not_in
-from datalad.tests.utils import eq_
-from datalad.tests.utils import ok_clean_git
-from datalad.tests.utils import skip_if_on_windows
+from datalad.tests.utils import (
+    skip_ssh,
+    with_tree,
+    with_tempfile,
+    assert_result_count,
+    assert_status,
+    assert_repo_status,
+    assert_dict_equal,
+    assert_not_in,
+    eq_,
+    skip_if_on_windows,
+)
 
 
 def _assert_metadata_empty(meta):
@@ -60,19 +63,19 @@ _dataset_hierarchy_template = {
 @with_tree(tree=_dataset_hierarchy_template)
 def test_basic_aggregate(path):
     # TODO give datasets some more metadata to actually aggregate stuff
-    base = Dataset(opj(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     sub = base.rev_create('sub', force=True)
     #base.metadata(sub.path, init=dict(homepage='this'), apply2global=True)
-    subsub = base.rev_create(opj('sub', 'subsub'), force=True)
+    subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
     base.add('.', recursive=True)
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     # we will first aggregate the middle dataset on its own, this will
     # serve as a smoke test for the reuse of metadata objects later on
     sub.rev_aggregate_metadata()
     base.save()
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     direct_meta = base.metadata(recursive=True, return_type='list')
     # loose the deepest dataset
     sub.uninstall('subsub', check=False)
@@ -86,7 +89,7 @@ def test_basic_aggregate(path):
     # no we can throw away the subdataset tree, and loose no metadata
     base.uninstall('sub', recursive=True, check=False)
     assert(not sub.is_installed())
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     # same result for aggregate query than for (saved) direct query
     agg_meta = base.metadata(recursive=True, return_type='list')
     for d, a in zip(direct_meta, agg_meta):
@@ -127,19 +130,19 @@ def test_aggregate_query(path):
     assert_result_count(res, 1)
     assert_not_in('metadata', res[0])
     # but we can now ask for metadata of stuff that is unknown on disk
-    res = ds.metadata(opj('sub', 'deep', 'some'), reporton='datasets')
+    res = ds.metadata(op.join('sub', 'deep', 'some'), reporton='datasets')
     assert_result_count(res, 1)
     eq_({'homepage': 'http://top.example.com'}, res[0]['metadata'])
     # when no reference dataset is given the command will report the
     # aggregated metadata as it is recorded in the dataset that is the
     # closest parent on disk
     ds.rev_create('sub', force=True)
-    res = metadata(opj(path, 'sub', 'deep', 'some'), reporton='datasets')
+    res = metadata(op.join(path, 'sub', 'deep', 'some'), reporton='datasets')
     assert_result_count(res, 1)
     eq_({'homepage': 'http://sub.example.com'}, res[0]['metadata'])
     # when a reference dataset is given, it will be used as the metadata
     # provider
-    res = ds.metadata(opj('sub', 'deep', 'some'), reporton='datasets')
+    res = ds.metadata(op.join('sub', 'deep', 'some'), reporton='datasets')
     assert_result_count(res, 1)
     eq_({'homepage': 'http://top.example.com'}, res[0]['metadata'])
 
@@ -147,18 +150,18 @@ def test_aggregate_query(path):
 # this is for gh-1971
 @with_tree(tree=_dataset_hierarchy_template)
 def test_reaggregate_with_unavailable_objects(path):
-    base = Dataset(opj(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
-    with open(opj(base.path, '.datalad', '.gitattributes'), 'w') as f:
+    with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
-    subsub = base.rev_create(opj('sub', 'subsub'), force=True)
+    subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
     base.add('.', recursive=True)
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
-    ok_clean_git(base.path)
-    objpath = opj('.datalad', 'metadata', 'objects')
+    assert_repo_status(base.path)
+    objpath = op.join('.datalad', 'metadata', 'objects')
     objs = list(sorted(base.repo.find(objpath)))
     # we have 3x2 metadata sets (dataset/files) under annex
     eq_(len(objs), 6)
@@ -166,7 +169,7 @@ def test_reaggregate_with_unavailable_objects(path):
     # drop all object content
     base.drop(objs, check=False)
     eq_(all(base.repo.file_has_content(objs)), False)
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     # now re-aggregate, the state hasn't changed, so the file names will
     # be the same
     base.rev_aggregate_metadata(recursive=True, into='all', force='fromscratch')
@@ -181,26 +184,26 @@ def test_reaggregate_with_unavailable_objects(path):
 @with_tree(tree=_dataset_hierarchy_template)
 @with_tempfile(mkdir=True)
 def test_aggregate_with_unavailable_objects_from_subds(path, target):
-    base = Dataset(opj(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
-    with open(opj(base.path, '.datalad', '.gitattributes'), 'w') as f:
+    with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
-    subsub = base.rev_create(opj('sub', 'subsub'), force=True)
+    subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
     base.add('.', recursive=True)
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
 
     # now make that a subdataset of a new one, so aggregation needs to get the
     # metadata objects first:
     super = Dataset(target).rev_create()
     super.install("base", source=base.path)
-    ok_clean_git(super.path)
-    clone = Dataset(opj(super.path, "base"))
-    ok_clean_git(clone.path)
-    objpath = opj('.datalad', 'metadata', 'objects')
+    assert_repo_status(super.path)
+    clone = Dataset(op.join(super.path, "base"))
+    assert_repo_status(clone.path)
+    objpath = op.join('.datalad', 'metadata', 'objects')
     objs = [o for o in sorted(clone.repo.get_annexed_files(with_content_only=False)) if o.startswith(objpath)]
     eq_(len(objs), 6)
     eq_(all(clone.repo.file_has_content(objs)), False)
@@ -215,26 +218,26 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
 @skip_ssh
 @with_tree(tree=_dataset_hierarchy_template)
 def test_publish_aggregated(path):
-    base = Dataset(opj(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
-    with open(opj(base.path, '.datalad', '.gitattributes'), 'w') as f:
+    with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     base.rev_create('sub', force=True)
     base.add('.', recursive=True)
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
 
     # create sibling and publish to it
-    spath = opj(path, 'remote')
+    spath = op.join(path, 'remote')
     base.create_sibling(
         name="local_target",
         sshurl="ssh://localhost",
         target_dir=spath)
     base.publish('.', to='local_target', transfer_data='all')
     remote = Dataset(spath)
-    objpath = opj('.datalad', 'metadata', 'objects')
+    objpath = op.join('.datalad', 'metadata', 'objects')
     objs = list(sorted(base.repo.find(objpath)))
     # all object files a present in both datasets
     eq_(all(base.repo.file_has_content(objs)), True)
@@ -250,7 +253,7 @@ def test_publish_aggregated(path):
 
 def _get_contained_objs(ds):
     return set(f for f in ds.repo.get_indexed_files()
-               if f.startswith(opj('.datalad', 'metadata', 'objects', '')))
+               if f.startswith(op.join('.datalad', 'metadata', 'objects', '')))
 
 
 def _get_referenced_objs(ds):
@@ -261,16 +264,16 @@ def _get_referenced_objs(ds):
 
 @with_tree(tree=_dataset_hierarchy_template)
 def test_aggregate_removal(path):
-    base = Dataset(opj(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
-    with open(opj(base.path, '.datalad', '.gitattributes'), 'w') as f:
+    with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
-    subsub = sub.rev_create(opj('subsub'), force=True)
+    subsub = sub.rev_create(op.join('subsub'), force=True)
     base.add('.', recursive=True)
     base.rev_aggregate_metadata(recursive=True, into='all')
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     res = base.metadata(get_aggregates=True)
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=subsub.path)
@@ -278,11 +281,11 @@ def test_aggregate_removal(path):
     eq_(_get_contained_objs(base), _get_referenced_objs(base))
     # now delete the deepest subdataset to test cleanup of aggregated objects
     # in the top-level ds
-    base.remove(opj('sub', 'subsub'), check=False)
+    base.remove(op.join('sub', 'subsub'), check=False)
     # now aggregation has to detect that subsub is not simply missing, but gone
     # for good
     base.rev_aggregate_metadata(recursive=True, into='all')
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     # internally consistent state
     eq_(_get_contained_objs(base), _get_referenced_objs(base))
     # info on subsub was removed at all levels
@@ -296,15 +299,15 @@ def test_aggregate_removal(path):
 
 @with_tree(tree=_dataset_hierarchy_template)
 def test_update_strategy(path):
-    base = Dataset(opj(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
-    with open(opj(base.path, '.datalad', '.gitattributes'), 'w') as f:
+    with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
-    subsub = sub.rev_create(opj('subsub'), force=True)
+    subsub = sub.rev_create(op.join('subsub'), force=True)
     base.add('.', recursive=True)
-    ok_clean_git(base.path)
+    assert_repo_status(base.path)
     # we start clean
     for ds in base, sub, subsub:
         eq_(len(_get_contained_objs(ds)), 0)
@@ -395,10 +398,10 @@ def test_partial_aggregation(path):
     ds.rev_aggregate_metadata(recursive=True)
     # make change in sub1
     sub1.unlock('here')
-    with open(opj(sub1.path, 'here'), 'w') as f:
+    with open(op.join(sub1.path, 'here'), 'w') as f:
         f.write('fresh')
     ds.save(recursive=True)
-    ok_clean_git(path)
+    assert_repo_status(path)
     # TODO for later
     # test --since with non-incremental
     #ds.aggregate_metadata(recursive=True, since='HEAD~1', incremental=False)

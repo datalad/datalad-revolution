@@ -25,8 +25,8 @@ import shutil
 
 # API commands we need
 from .revextract import RevExtractMetadata
-from ..revstatus import RevStatus as Status
-from ..revsave import RevSave as Save
+from datalad.core.local.status import Status
+from datalad.core.local.save import Save
 from ..revdiff import (
     RevDiff as Diff,
     PRE_INIT_COMMIT_SHA,
