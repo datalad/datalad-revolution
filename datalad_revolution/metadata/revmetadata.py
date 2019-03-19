@@ -33,6 +33,7 @@ from datalad.interface.base import build_doc
 from datalad.support.constraints import (
     EnsureNone,
     EnsureStr,
+    EnsureChoice,
 )
 from datalad.support.gitrepo import GitRepo
 from datalad.support.param import Parameter
@@ -626,7 +627,7 @@ class RevMetadata(Interface):
       information on enabled metadata extractors, dataset versions, dataset IDs,
       and dataset paths::
 
-        % datalad -f json metadata --get-aggregates
+        % datalad -f json metadata --reporton aggregates
     """
     # make the custom renderer the default, path reporting isn't the top
     # priority here
@@ -645,16 +646,15 @@ class RevMetadata(Interface):
             doc="path(s) to query metadata for",
             nargs="*",
             constraints=EnsureStr() | EnsureNone()),
-        get_aggregates=Parameter(
-            args=('--get-aggregates',),
-            action='store_true',
-            doc="""if set, yields all (sub)datasets for which aggregate
-            metadata are available in the dataset. No other action is
-            performed, even if other arguments are given. The reported
-            results contain a datasets's ID, the commit hash at which
-            metadata aggregation was performed, and the location of the
-            object file(s) containing the aggregated metadata."""),
-        reporton=reporton_opt,
+        reporton=Parameter(
+            args=('--reporton',),
+            metavar='TYPE',
+            constraints=EnsureChoice('all', 'datasets', 'files', 'aggregates'),
+            doc="""choose on what type metadata to report on: dataset-global
+            metadata only ('datasets'), metadata on dataset content/files only
+            ('files'), or both ('all', default). There is an additional
+            category 'aggregates' that reports on which datasets aggregate
+            metadata is recorded in the queried dataset."""),
         recursive=recursion_flag)
 
     @staticmethod
@@ -663,7 +663,6 @@ class RevMetadata(Interface):
     def __call__(
             path=None,
             dataset=None,
-            get_aggregates=False,
             reporton='all',
             recursive=False):
         # prep results
@@ -672,7 +671,7 @@ class RevMetadata(Interface):
         if refds_path:
             res_kwargs['refds'] = refds_path
 
-        if get_aggregates:
+        if reporton == 'aggregates':
             # yield all datasets for which we have aggregated metadata as results
             # the get actual dataset results, so we can turn them into dataset
             # instances using generic top-level code if desired
@@ -683,7 +682,9 @@ class RevMetadata(Interface):
             agginfos = load_ds_aggregate_db(
                 ds,
                 version=str(aggregate_layout_version),
-                abspath=True
+                abspath=True,
+                # we are handling errors below
+                warn_absent=False,
             )
             if not agginfos:
                 # if there has ever been an aggregation run, this file would
@@ -696,6 +697,7 @@ class RevMetadata(Interface):
                     logger=lgr,
                     message='metadata aggregation has never been performed in this dataset')
                 return
+            # TODO match by `path` argument and filter output
             parentds = []
             for dspath in sorted(agginfos):
                 info = agginfos[dspath]

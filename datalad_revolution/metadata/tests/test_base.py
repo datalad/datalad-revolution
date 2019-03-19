@@ -142,7 +142,7 @@ def test_aggregation(path):
     assert_repo_status(ds.path)
 
     # quick test of aggregate report
-    aggs = ds.rev_metadata(get_aggregates=True)
+    aggs = ds.rev_metadata(reporton='aggregates')
     # one for each dataset
     assert_result_count(aggs, 3)
     # mother also report layout version
@@ -245,9 +245,9 @@ def test_ignore_nondatasets(path):
 @with_tempfile(mkdir=True)
 def test_get_aggregates_fails(path):
     with chpwd(path), assert_raises(NoDatasetArgumentFound):
-        metadata(get_aggregates=True)
+        metadata(reporton='aggregates')
     ds = Dataset(path).create()
-    res = ds.rev_metadata(get_aggregates=True, on_failure='ignore')
+    res = ds.rev_metadata(reporton='aggregates', on_failure='ignore')
     assert_result_count(res, 1, path=ds.path, status='impossible')
 
 

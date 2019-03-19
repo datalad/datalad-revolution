@@ -258,7 +258,7 @@ def _get_contained_objs(ds):
 
 def _get_referenced_objs(ds):
     return set([op.relpath(r[f], start=ds.path)
-                for r in ds.rev_metadata(get_aggregates=True)
+                for r in ds.rev_metadata(reporton='aggregates')
                 for f in ('content_info', 'dataset_info')])
 
 
@@ -274,7 +274,7 @@ def test_aggregate_removal(path):
     base.add('.', recursive=True)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
-    res = base.rev_metadata(get_aggregates=True)
+    res = base.rev_metadata(reporton='aggregates')
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=subsub.path)
     # check that we only have object files that are listed in agginfo
@@ -289,10 +289,10 @@ def test_aggregate_removal(path):
     # internally consistent state
     eq_(_get_contained_objs(base), _get_referenced_objs(base))
     # info on subsub was removed at all levels
-    res = base.rev_metadata(get_aggregates=True)
+    res = base.rev_metadata(reporton='aggregates')
     assert_result_count(res, 0, path=subsub.path)
     assert_result_count(res, 2)
-    res = sub.rev_metadata(get_aggregates=True)
+    res = sub.rev_metadata(reporton='aggregates')
     assert_result_count(res, 0, path=subsub.path)
     assert_result_count(res, 1)
 
@@ -324,14 +324,14 @@ def test_update_strategy(path):
     eq_(len(_get_referenced_objs(base)), 6)
     for ds in sub, subsub:
         eq_(len(_get_contained_objs(ds)), 0)
-    res = base.rev_metadata(get_aggregates=True)
+    res = base.rev_metadata(reporton='aggregates')
     assert_result_count(res, 3)
     # it is impossible to query an intermediate or leaf dataset
     # for metadata
     for ds in sub, subsub:
         assert_status(
             'impossible',
-            ds.rev_metadata(get_aggregates=True, on_failure='ignore'))
+            ds.rev_metadata(reporton='aggregates', on_failure='ignore'))
     # get the full metadata report
     target_meta = base.rev_metadata(return_type='list')
 
@@ -346,7 +346,7 @@ def test_update_strategy(path):
     for ds in sub, subsub:
         assert_status(
             'ok',
-            ds.rev_metadata(get_aggregates=True, on_failure='ignore'))
+            ds.rev_metadata(reporton='aggregates', on_failure='ignore'))
 
     # TODO end here until https://github.com/datalad/datalad-revolution/pull/84
     # has metadata() adjusted to give a uniform input
@@ -368,7 +368,7 @@ def test_partial_aggregation(path):
     # if we aggregate a path(s) and say to recurse, we must not recurse into
     # the dataset itself and aggregate others
     ds.rev_aggregate_metadata(path='sub1', recursive=True)
-    res = ds.rev_metadata(get_aggregates=True)
+    res = ds.rev_metadata(reporton='aggregates')
     assert_result_count(res, 1, path=ds.path)
     assert_result_count(res, 1, path=sub1.path)
     # so no metadata aggregates for sub2 yet
@@ -376,14 +376,14 @@ def test_partial_aggregation(path):
 
     ds.rev_aggregate_metadata(recursive=True)
     # baseline, recursive aggregation gets us something for all three datasets
-    res = ds.rev_metadata(get_aggregates=True)
+    res = ds.rev_metadata(reporton='aggregates')
     assert_result_count(res, 3)
     # now let's do partial aggregation from just one subdataset
     # we should not loose information on the other datasets
     # as this would be a problem any time anything in a dataset
     # subtree is missing: not installed, too expensive to reaggregate, ...
     ds.rev_aggregate_metadata(path='sub1')
-    res = ds.rev_metadata(get_aggregates=True)
+    res = ds.rev_metadata(reporton='aggregates')
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=sub2.path)
     # from-scratch aggregation kills datasets that where not listed
@@ -391,7 +391,7 @@ def test_partial_aggregation(path):
     # to the content of the subdataset, not the subdataset record
     # in the superdataset
     ds.rev_aggregate_metadata(path='sub1' + op.sep, force='fromscratch')
-    res = ds.rev_metadata(get_aggregates=True)
+    res = ds.rev_metadata(reporton='aggregates')
     assert_result_count(res, 1)
     assert_result_count(res, 1, path=sub1.path)
     # now reaggregated in full
@@ -405,6 +405,6 @@ def test_partial_aggregation(path):
     # TODO for later
     # test --since with non-incremental
     #ds.aggregate_metadata(recursive=True, since='HEAD~1', incremental=False)
-    #res = ds.rev_metadata(get_aggregates=True)
+    #res = ds.rev_metadata(reporton='aggregates')
     #assert_result_count(res, 3)
     #assert_result_count(res, 1, path=sub2.path)
