@@ -19,7 +19,7 @@ from datalad.api import (
     rev_aggregate_metadata as aggregate_metadata,
     install,
     search,
-    metadata,
+    rev_metadata as metadata,
 )
 from datalad.metadata.metadata import (
     get_metadata_type,
