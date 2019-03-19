@@ -13,7 +13,6 @@ __docformat__ = 'restructuredtext'
 
 import glob
 import logging
-import re
 import os
 import os.path as op
 from collections import (
@@ -31,14 +30,11 @@ from datalad.interface.base import Interface
 from datalad.interface.results import get_status_dict
 from datalad.interface.utils import eval_results
 from datalad.interface.base import build_doc
-from datalad.metadata.definitions import version as vocabulary_version
 from datalad.support.constraints import (
     EnsureNone,
-    EnsureBool,
     EnsureStr,
 )
 from datalad.support.gitrepo import GitRepo
-from datalad.support.annexrepo import AnnexRepo
 from datalad.support.param import Parameter
 import datalad.support.ansi_colors as ac
 from datalad.support.json_py import (
@@ -62,12 +58,10 @@ from datalad.utils import (
     as_unicode,
 )
 from datalad.ui import ui
-from datalad.dochelpers import exc_str
 from datalad.consts import (
     METADATA_DIR,
     METADATA_FILENAME,
 )
-from datalad.log import log_progress
 
 lgr = logging.getLogger('datalad.metadata.metadata')
 
@@ -126,12 +120,6 @@ def _load_xz_json_stream(fpath, cache=None):
          for s in load_xzstream(fpath)} if op.lexists(fpath) else {})
     cache[fpath] = obj
     return obj
-
-
-def _get_metadatarelevant_paths(ds, subds_relpaths):
-    return (f for f in ds.repo.get_files()
-            if not any(path_startswith(f, ex)
-                       for ex in list(exclude_from_metadata) + subds_relpaths))
 
 
 def _get_containingds_from_agginfo(info, rpath):
@@ -429,266 +417,6 @@ def _ok_metadata(meta, mtype, ds, loc):
     return False
 
 
-def _get_metadata(ds, types, global_meta=None, content_meta=None, paths=None):
-    """Make a direct query of a dataset to extract its metadata.
-
-    Parameters
-    ----------
-    ds : Dataset
-    types : list
-    """
-    errored = False
-    dsmeta = dict()
-    contentmeta = {}
-
-    if global_meta is not None and content_meta is not None and \
-            not global_meta and not content_meta:
-        # both are false and not just none
-        return dsmeta, contentmeta, errored
-
-    context = {
-        '@vocab': 'http://docs.datalad.org/schema_v{}.json'.format(
-            vocabulary_version)}
-
-    fullpathlist = paths
-    if paths and isinstance(ds.repo, AnnexRepo):
-        # Ugly? Jep: #2055
-        content_info = zip(paths, ds.repo.file_has_content(paths), ds.repo.is_under_annex(paths))
-        paths = [p for p, c, a in content_info if not a or c]
-        nocontent = len(fullpathlist) - len(paths)
-        if nocontent:
-            # TODO better fail, or support incremental and label this file as no present
-            lgr.warn(
-                '{} files have no content present, '
-                'some extractors will not operate on {}'.format(
-                    nocontent,
-                    'them' if nocontent > 10
-                           else [p for p, c, a in content_info if not c and a])
-            )
-
-    # pull out potential metadata field blacklist config settings
-    blacklist = [re.compile(bl) for bl in assure_list(ds.config.obtain(
-        'datalad.metadata.aggregate-ignore-fields',
-        default=[]))]
-    # enforce size limits
-    max_fieldsize = ds.config.obtain('datalad.metadata.maxfieldsize')
-    # keep local, who knows what some extractors might pull in
-    from pkg_resources import iter_entry_points  # delayed heavy import
-    extractors = {ep.name: ep for ep in iter_entry_points('datalad.metadata.extractors')}
-
-    log_progress(
-        lgr.info,
-        'metadataextractors',
-        'Start metadata extraction from %s', ds,
-        total=len(types),
-        label='Metadata extraction',
-        unit=' extractors',
-    )
-    for mtype in types:
-        mtype_key = mtype
-        log_progress(
-            lgr.info,
-            'metadataextractors',
-            'Engage %s metadata extractor', mtype_key,
-            update=1,
-            increment=True)
-        if mtype_key not in extractors:
-            # we said that we want to fail, rather then just moan about less metadata
-            log_progress(
-                lgr.error,
-                'metadataextractors',
-                'Failed %s metadata extraction from %s', mtype_key, ds,
-            )
-            raise ValueError(
-                'Enabled metadata extractor %s is not available in this installation',
-                mtype_key)
-        try:
-            extractor_cls = extractors[mtype_key].load()
-            extractor = extractor_cls(
-                ds,
-                paths=paths if extractor_cls.NEEDS_CONTENT else fullpathlist)
-        except Exception as e:
-            log_progress(
-                lgr.error,
-                'metadataextractors',
-                'Failed %s metadata extraction from %s', mtype_key, ds,
-            )
-            raise ValueError(
-                "Failed to load metadata extractor for '%s', "
-                "broken dataset configuration (%s)?: %s",
-                mtype, ds, exc_str(e))
-            continue
-        try:
-            dsmeta_t, contentmeta_t = extractor.get_metadata(
-                dataset=global_meta if global_meta is not None else ds.config.obtain(
-                    'datalad.metadata.aggregate-dataset-{}'.format(mtype.replace('_', '-')),
-                    default=True,
-                    valtype=EnsureBool()),
-                content=content_meta if content_meta is not None else ds.config.obtain(
-                    'datalad.metadata.aggregate-content-{}'.format(mtype.replace('_', '-')),
-                    default=True,
-                    valtype=EnsureBool()))
-        except Exception as e:
-            lgr.error('Failed to get dataset metadata ({}): {}'.format(
-                mtype, exc_str(e)))
-            if cfg.get('datalad.runtime.raiseonerror'):
-                log_progress(
-                    lgr.error,
-                    'metadataextractors',
-                    'Failed %s metadata extraction from %s', mtype_key, ds,
-                )
-                raise
-            errored = True
-            # if we dont get global metadata we do not want content metadata
-            continue
-
-        if dsmeta_t:
-            if _ok_metadata(dsmeta_t, mtype, ds, None):
-                dsmeta_t = _filter_metadata_fields(
-                    dsmeta_t,
-                    maxsize=max_fieldsize,
-                    blacklist=blacklist)
-                dsmeta[mtype_key] = dsmeta_t
-            else:
-                errored = True
-
-        unique_cm = {}
-        extractor_unique_exclude = getattr(extractor_cls, "_unique_exclude", set())
-        # TODO: ATM neuroimaging extractors all provide their own internal
-        #  log_progress but if they are all generators, we could provide generic
-        #  handling of the progress here.  Note also that log message is actually
-        #  seems to be ignored and not used, only the label ;-)
-        # log_progress(
-        #     lgr.debug,
-        #     'metadataextractors_loc',
-        #     'Metadata extraction per location for %s', mtype,
-        #     # contentmeta_t is a generator... so no cound is known
-        #     # total=len(contentmeta_t or []),
-        #     label='Metadata extraction per location',
-        #     unit=' locations',
-        # )
-        for loc, meta in contentmeta_t or {}:
-            lgr.log(5, "Analyzing metadata for %s", loc)
-            # log_progress(
-            #     lgr.debug,
-            #     'metadataextractors_loc',
-            #     'ignoredatm',
-            #     label=loc,
-            #     update=1,
-            #     increment=True)
-            if not _ok_metadata(meta, mtype, ds, loc):
-                errored = True
-                # log_progress(
-                #     lgr.debug,
-                #     'metadataextractors_loc',
-                #     'ignoredatm',
-                #     label='Failed for %s' % loc,
-                # )
-                continue
-            # we also want to store info that there was no metadata(e.g. to get a list of
-            # files that have no metadata)
-            # if there is an issue that a extractor needlessly produces empty records, the
-            # extractor should be fixed and not a general switch. For example the datalad_core
-            # issues empty records to document the presence of a file
-            #elif not meta:
-            #    continue
-
-            # apply filters
-            meta = _filter_metadata_fields(
-                meta,
-                maxsize=max_fieldsize,
-                blacklist=blacklist)
-
-            if not meta:
-                continue
-
-            # assign
-            # only ask each metadata extractor once, hence no conflict possible
-            loc_dict = contentmeta.get(loc, {})
-            loc_dict[mtype_key] = meta
-            contentmeta[loc] = loc_dict
-
-            if ds.config.obtain(
-                    'datalad.metadata.generate-unique-{}'.format(mtype_key.replace('_', '-')),
-                    default=True,
-                    valtype=EnsureBool()):
-                # go through content metadata and inject report of unique keys
-                # and values into `dsmeta`
-                for k, v in iteritems(meta):
-                    if k in dsmeta.get(mtype_key, {}):
-                        # if the dataset already has a dedicated idea
-                        # about a key, we skip it from the unique list
-                        # the point of the list is to make missing info about
-                        # content known in the dataset, not to blindly
-                        # duplicate metadata. Example: list of samples data
-                        # were recorded from. If the dataset has such under
-                        # a 'sample' key, we should prefer that, over an
-                        # aggregated list of a hopefully-kinda-ok structure
-                        continue
-                    elif k in extractor_unique_exclude:
-                        # the extractor thinks this key is worthless for the purpose
-                        # of discovering whole datasets
-                        # we keep the key (so we know that some file is providing this key),
-                        # but ignore any value it came with
-                        unique_cm[k] = None
-                        continue
-                    vset = unique_cm.get(k, set())
-                    vset.add(_val2hashable(v))
-                    unique_cm[k] = vset
-
-        # log_progress(
-        #     lgr.debug,
-        #     'metadataextractors_loc',
-        #     'Finished metadata extraction across locations for %s', mtype)
-
-        if unique_cm:
-            # per source storage here too
-            ucp = dsmeta.get('datalad_unique_content_properties', {})
-            # important: we want to have a stable order regarding
-            # the unique values (a list). we cannot guarantee the
-            # same order of discovery, hence even when not using a
-            # set above we would still need sorting. the callenge
-            # is that any value can be an arbitrarily complex nested
-            # beast
-            # we also want to have each unique value set always come
-            # in a top-level list, so we known if some unique value
-            # was a list, os opposed to a list of unique values
-
-            def _ensure_serializable(val):
-                if isinstance(val, ReadOnlyDict):
-                    return {k: _ensure_serializable(v) for k, v in iteritems(val)}
-                if isinstance(val, (tuple, list)):
-                    return [_ensure_serializable(v) for v in val]
-                else:
-                    return val
-
-            ucp[mtype_key] = {
-                k: [_ensure_serializable(i)
-                    for i in sorted(
-                        v,
-                        key=_unique_value_key)] if v is not None else None
-                for k, v in iteritems(unique_cm)
-                # v == None (disable unique, but there was a value at some point)
-                # otherwise we only want actual values, and also no single-item-lists
-                # of a non-value
-                # those contribute no information, but bloat the operation
-                # (inflated number of keys, inflated storage, inflated search index, ...)
-                if v is None or (v and not v == {''})}
-            dsmeta['datalad_unique_content_properties'] = ucp
-
-    log_progress(
-        lgr.info,
-        'metadataextractors',
-        'Finished metadata extraction from %s', ds,
-    )
-
-    # always identify the effective vocabulary - JSON-LD style
-    if context:
-        dsmeta['@context'] = context
-
-    return dsmeta, contentmeta, errored
-
-
 def _unique_value_key(x):
     """Small helper for sorting unique content metadata values"""
     if isinstance(x, ReadOnlyDict):
@@ -928,9 +656,6 @@ class RevMetadata(Interface):
             object file(s) containing the aggregated metadata."""),
         reporton=reporton_opt,
         recursive=recursion_flag)
-        # MIH: not sure of a recursion limit makes sense here
-        # ("outdated from 5 levels down?")
-        #recursion_limit=recursion_limit)
 
     @staticmethod
     @datasetmethod(name='rev_metadata')
