@@ -672,51 +672,9 @@ class RevMetadata(Interface):
             res_kwargs['refds'] = refds_path
 
         if reporton == 'aggregates':
-            # yield all datasets for which we have aggregated metadata as results
-            # the get actual dataset results, so we can turn them into dataset
-            # instances using generic top-level code if desired
-            ds = require_dataset(
-                refds_path,
-                check_installed=True,
-                purpose='aggregate metadata query')
-            agginfos = load_ds_aggregate_db(
-                ds,
-                version=str(aggregate_layout_version),
-                abspath=True,
-                # we are handling errors below
-                warn_absent=False,
-            )
-            if not agginfos:
-                # if there has ever been an aggregation run, this file would
-                # exist, hence there has not been and we need to tell this
-                # to people
-                yield get_status_dict(
-                    ds=ds,
-                    status='impossible',
-                    action='metadata',
-                    logger=lgr,
-                    message='metadata aggregation has never been performed in this dataset')
-                return
-            # TODO match by `path` argument and filter output
-            parentds = []
-            for dspath in sorted(agginfos):
-                info = agginfos[dspath]
-                if parentds and not path_is_subpath(dspath, parentds[-1]):
-                    parentds.pop()
-                info.update(
-                    path=dspath,
-                    type='dataset',
-                    status='ok',
-                )
-                if dspath == ds.path:
-                    info['layout_version'] = aggregate_layout_version
-                if parentds:
-                    info['parentds'] = parentds[-1]
-                yield dict(
-                    info,
-                    **res_kwargs
-                )
-                parentds.append(dspath)
+            for r in _yield_aggregates(refds_path, res_kwargs):
+                yield r
+            # nothing else to do
             return
 
         if not dataset and not path:
@@ -809,3 +767,52 @@ class RevMetadata(Interface):
                  if meta else ' -' if 'metadata' in res else ' aggregated',
             tags='' if 'tag' not in meta else ' [{}]'.format(
                  ','.join(assure_list(meta['tag'])))))
+
+
+def _yield_aggregates(refds_path, res_kwargs):
+    # yield all datasets for which we have aggregated metadata as results
+    # the get actual dataset results, so we can turn them into dataset
+    # instances using generic top-level code if desired
+    ds = require_dataset(
+        refds_path,
+        check_installed=True,
+        purpose='aggregate metadata query')
+    agginfos = load_ds_aggregate_db(
+        ds,
+        version=str(aggregate_layout_version),
+        abspath=True,
+        # we are handling errors below
+        warn_absent=False,
+    )
+    if not agginfos:
+        # if there has ever been an aggregation run, this file would
+        # exist, hence there has not been and we need to tell this
+        # to people
+        yield get_status_dict(
+            ds=ds,
+            status='impossible',
+            action='metadata',
+            logger=lgr,
+            message='metadata aggregation has never been performed in this dataset')
+        return
+    # TODO match by `path` argument and filter output
+    parentds = []
+    for dspath in sorted(agginfos):
+        info = agginfos[dspath]
+        if parentds and not path_is_subpath(dspath, parentds[-1]):
+            parentds.pop()
+        info.update(
+            path=dspath,
+            type='dataset',
+            status='ok',
+        )
+        if dspath == ds.path:
+            info['layout_version'] = aggregate_layout_version
+        if parentds:
+            info['parentds'] = parentds[-1]
+        yield dict(
+            info,
+            **res_kwargs
+        )
+        parentds.append(dspath)
+    return
