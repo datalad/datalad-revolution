@@ -11,26 +11,15 @@ a description on additional commands and functionality.
 **Note:** There is *no support* for [git-annex direct mode
 repositories](https://git-annex.branchable.com/direct_mode). Users that
 previously relied on this mode, and Windows users in particular, are
-recommended to use [git-annex V6 or V7
+recommended to use [git-annex V7
 mode](https://git-annex.branchable.com/upgrades). DataLad can be instructed to
 always use this mode by running:
 
     git config --global --add datalad.repo.version 6
 
-Commands provided by this extension
+Command(s) currently provided by this extension
 
-- `rev-status` -- like `git status`, but simpler and working with dataset hierarchies
 - `rev-diff` -- sibling of `rev-status` for any state comparison, now also on Windows
-- `rev-save` -- a 2-in-1 replacement for `save` and `add`
-- `rev-create` -- a ~30% faster `create`
-
-Additional base class functionality
-
-- `GitRepo.status()`
-- `GitRepo.annexstatus()`
-- `GitRepo.diff()`
-- `GitRepo.save()`
-
 
 ## Installation
 
