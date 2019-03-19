@@ -24,6 +24,12 @@ command_suite = (
             'rev_diff'
         ),
         (
+            'datalad_revolution.metadata.revmetadata',
+            'RevMetadata',
+            'rev-metadata',
+            'rev_metadata'
+        ),
+        (
             'datalad_revolution.metadata.revextract',
             'RevExtractMetadata',
             'rev-extract-metadata',

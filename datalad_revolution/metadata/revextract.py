@@ -45,7 +45,7 @@ from datalad.support.constraints import (
     EnsureChoice,
     EnsureBool,
 )
-from datalad.metadata.metadata import (
+from .revmetadata import (
     exclude_from_metadata,
     get_metadata_type,
 )

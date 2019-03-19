@@ -46,11 +46,9 @@ from datalad.interface.common_opts import (
 from datalad.interface.results import (
     success_status_map,
 )
-from datalad.metadata.metadata import (
+from .revmetadata import (
     get_ds_aggregate_db_locations,
     load_ds_aggregate_db,
-)
-from datalad.metadata.metadata import (
     exclude_from_metadata,
     location_keys,
 )

@@ -862,7 +862,7 @@ def load_ds_aggregate_db(ds, version='default', abspath=False, warn_absent=True)
 
 
 @build_doc
-class Metadata(Interface):
+class RevMetadata(Interface):
     """Metadata reporting for files and entire datasets
 
     Two types of metadata are supported:
@@ -933,7 +933,7 @@ class Metadata(Interface):
         #recursion_limit=recursion_limit)
 
     @staticmethod
-    @datasetmethod(name='metadata')
+    @datasetmethod(name='rev_metadata')
     @eval_results
     def __call__(
             path=None,
