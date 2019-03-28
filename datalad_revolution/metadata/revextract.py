@@ -189,7 +189,7 @@ class RevExtractMetadata(Interface):
             # we can make use of status
             res_props.update(refds=dataset.path)
 
-            for r in ds.rev_status(
+            for r in ds.status(
                     # let status sort out all path arg handling
                     # but this will likely make it impossible to use this
                     # command to just process an individual file independent
