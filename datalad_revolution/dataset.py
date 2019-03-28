@@ -29,6 +29,8 @@ get_dataset_root = rev_get_dataset_root
 EnsureDataset = EnsureRevDataset
 
 
+# TODO drop when https://github.com/datalad/datalad/pull/3247
+# is merged
 def sort_paths_by_datasets(orig_dataset_arg, paths):
     """Sort paths into actually present datasets
 
