@@ -24,10 +24,10 @@ command_suite = (
             'rev_diff'
         ),
         (
-            'datalad_revolution.metadata.revmetadata',
-            'RevMetadata',
-            'rev-metadata',
-            'rev_metadata'
+            'datalad_revolution.metadata.query',
+            'QueryMetadata',
+            'query-metadata',
+            'query_metadata'
         ),
         (
             'datalad_revolution.metadata.revextract',
