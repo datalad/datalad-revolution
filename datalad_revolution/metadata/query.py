@@ -354,13 +354,13 @@ class QueryMetadata(Interface):
                 info = {k: text_type(v) if isinstance(v, ut.PurePath) else v
                         for k, v in iteritems(agg_record)}
                 info.update(
-                    path=aggdspath,
+                    path=text_type(aggdspath),
                     type='dataset',
                 )
-                if aggdspath == ds.path:
+                if aggdspath == ds.pathobj:
                     info['layout_version'] = aggregate_layout_version
                 if parentds:
-                    info['parentds'] = parentds[-1]
+                    info['parentds'] = text_type(parentds[-1])
                 yield dict(
                     info,
                     status='ok',
@@ -386,7 +386,7 @@ class QueryMetadata(Interface):
                     **res_kwargs,
                 )
                 if parentds:
-                    info['parentds'] = parentds[-1]
+                    info['parentds'] = text_type(parentds[-1])
                 yield info
             if reporton in ('files', 'all'):
                 query_paths = paths_by_ds[aggdspath]
