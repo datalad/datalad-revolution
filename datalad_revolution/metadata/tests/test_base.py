@@ -19,7 +19,7 @@ from datalad.api import (
     rev_aggregate_metadata as aggregate_metadata,
     install,
     search,
-    rev_metadata as metadata,
+    query_metadata,
 )
 from datalad.metadata.metadata import (
     get_metadata_type,
@@ -92,7 +92,7 @@ def test_get_metadata_type(path):
 def _compare_metadata_helper(origres, compds):
     for ores in origres:
         rpath = op.relpath(ores['path'], ores['refds'])
-        cres = compds.rev_metadata(
+        cres = compds.query_metadata(
             rpath,
             reporton='{}s'.format(ores['type']))
         if ores['type'] == 'file':
@@ -142,14 +142,14 @@ def test_aggregation(path):
     assert_repo_status(ds.path)
 
     # quick test of aggregate report
-    aggs = ds.rev_metadata(reporton='aggregates')
+    aggs = ds.query_metadata(reporton='aggregates', recursive=True)
     # one for each dataset
     assert_result_count(aggs, 3)
     # mother also report layout version
     assert_result_count(aggs, 1, path=ds.path, layout_version=1)
 
     # store clean direct result
-    origres = ds.rev_metadata(recursive=True)
+    origres = ds.query_metadata(recursive=True)
     # basic sanity check
     assert_result_count(origres, 3, type='dataset')
     assert_result_count(
@@ -175,7 +175,7 @@ def test_aggregation(path):
     assert_equal(ds.id, clone.id)
 
     # get fresh metadata
-    cloneres = clone.rev_metadata()
+    cloneres = clone.query_metadata()
     # basic sanity check
     assert_result_count(cloneres, 1, type='dataset')
     # payload file, .gitattr, .gitmodule
@@ -223,7 +223,7 @@ def test_ignore_nondatasets(path):
         return meta
 
     ds = Dataset(path).create()
-    meta = _kill_time(ds.rev_metadata(reporton='datasets', on_failure='ignore'))
+    meta = _kill_time(ds.query_metadata(reporton='datasets', on_failure='ignore'))
     n_subm = 0
     # placing another repo in the dataset has no effect on metadata
     for cls, subpath in ((GitRepo, 'subm'), (AnnexRepo, 'annex_subm')):
@@ -234,20 +234,20 @@ def test_ignore_nondatasets(path):
         r.add('test')
         r.commit('some')
         assert_true(Dataset(subm_path).is_installed())
-        assert_equal(meta, _kill_time(ds.rev_metadata(reporton='datasets', on_failure='ignore')))
+        assert_equal(meta, _kill_time(ds.query_metadata(reporton='datasets', on_failure='ignore')))
         # making it a submodule has no effect either
         ds.add(subpath)
         assert_equal(len(ds.subdatasets()), n_subm + 1)
-        assert_equal(meta, _kill_time(ds.rev_metadata(reporton='datasets', on_failure='ignore')))
+        assert_equal(meta, _kill_time(ds.query_metadata(reporton='datasets', on_failure='ignore')))
         n_subm += 1
 
 
 @with_tempfile(mkdir=True)
 def test_get_aggregates_fails(path):
     with chpwd(path), assert_raises(NoDatasetArgumentFound):
-        metadata(reporton='aggregates')
+        query_metadata(reporton='aggregates')
     ds = Dataset(path).create()
-    res = ds.rev_metadata(reporton='aggregates', on_failure='ignore')
+    res = ds.query_metadata(reporton='aggregates', on_failure='ignore')
     assert_result_count(res, 1, path=ds.path, status='impossible')
 
 
@@ -263,7 +263,7 @@ def test_bf2458(src, dst):
     # content is not here
     eq_(clone.repo.whereis('dummy'), [ds.config.get('annex.uuid')])
     # check that plain metadata access does not `get` stuff
-    clone.rev_metadata('.', on_failure='ignore')
+    clone.query_metadata('.', on_failure='ignore')
     # XXX whereis says nothing in direct mode
     eq_(clone.repo.whereis('dummy'), [ds.config.get('annex.uuid')])
 
