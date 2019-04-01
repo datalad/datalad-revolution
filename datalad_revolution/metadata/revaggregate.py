@@ -549,6 +549,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                         and res.get('status', None) == 'ok' \
                         and 'info' in res:
                     agginfo = res['info']
+                    # identify the dataset by ID in the aggregation record
+                    agginfo['id'] = aggsrc.id
                 # always also report
                 yield res
             # logic based on the idea that there will only be one
