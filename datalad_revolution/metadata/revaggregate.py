@@ -46,9 +46,9 @@ from datalad.interface.common_opts import (
 from datalad.interface.results import (
     success_status_map,
 )
-from .revmetadata import (
+from .query import (
     get_ds_aggregate_db_locations,
-    load_ds_aggregate_db,
+    get_ds_aggregate_db,
     exclude_from_metadata,
     location_keys,
 )
@@ -460,10 +460,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
 
     # load the info that we have on the top-level dataset's aggregated
     # metadata
-    # RF load_ds_aggregate_db() to give pathlib keys already
-    top_agginfo_db = {ut.Path(k): v for k, v in iteritems(
-        load_ds_aggregate_db(ds, abspath=True, warn_absent=False)
-    )}
+    top_agginfo_db = get_ds_aggregate_db(ds.pathobj, warn_absent=False)
 
     # XXX keep in mind that recursion can
     # - traverse the file system
@@ -611,9 +608,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
         if not subjs:
             continue
 
-        src_agginfo_db = {ut.Path(k): v for k, v in iteritems(
-            load_ds_aggregate_db(aggsrc, abspath=True, warn_absent=False)
-        )}
+        src_agginfo_db = get_ds_aggregate_db(aggsrc.pathobj, warn_absent=False)
+
         referenced_objs = set()
         # loop over aggsubjs and pull aggregated metadata for them
         for dssubj in set(subjs):
@@ -971,7 +967,7 @@ def _store_agginfo_db(ds, db):
     # base path in which aggregate.json and objects is located
     # TODO avoid this call
     agginfo_path, agg_base_path = get_ds_aggregate_db_locations(
-        ds, warn_absent=False)
+        ds.pathobj, warn_absent=False)
     # make DB paths on disk always relative
     json_py.dump(
         {
