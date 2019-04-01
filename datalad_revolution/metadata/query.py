@@ -41,6 +41,7 @@ from datalad.interface.common_opts import (
     recursion_flag,
 )
 from datalad.distribution.dataset import (
+    Dataset,
     EnsureDataset,
     datasetmethod,
     require_dataset,
@@ -275,7 +276,8 @@ class QueryMetadata(Interface):
             return
 
         if not path:
-            path = os.getcwd()
+            # implement https://github.com/datalad/datalad/issues/3282
+            path = ds.pathobj if isinstance(dataset, Dataset) else os.getcwd()
 
         # check for paths that are not underneath this dataset
         resolved_paths = set()
