@@ -637,6 +637,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
         # use a low-level report methods for speed, as we should know
         # that everything is local to aggsrc
         if hasattr(aggsrc, 'get'):
+            lgr.debug('Ensure availability of referenced metadata objects: %s',
+                      referenced_objs)
             res = aggsrc.repo.get(
                 [text_type(o.relative_to(aggsrc.pathobj))
                  for o in referenced_objs]
@@ -689,7 +691,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                 ds, obj_path, shasum)
             # already update location in incoming DB now
             # a potential file move is happening next
-            agginfo[objtype] = text_type(target_obj_location)
+            agginfo[objtype] = target_obj_location
 
             if op.lexists(text_type(target_obj_location)):
                 # we checksum by content, if it exists, it is identical
