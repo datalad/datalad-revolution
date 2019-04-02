@@ -382,9 +382,11 @@ class QueryMetadata(Interface):
                     status='ok',
                     type='dataset',
                     metadata=dsmeta,
-                    dsid=agg_record['id'],
-                    refcommit=agg_record['refcommit'],
-                    datalad_version=agg_record['datalad_version'],
+                    # some things that should be there, but maybe not
+                    # -- make optional to be more robust
+                    dsid=agg_record.get('id', None),
+                    refcommit=agg_record.get('refcommit', None),
+                    datalad_version=agg_record.get('datalad_version', None),
                     **res_kwargs,
                 )
                 if parentds:
