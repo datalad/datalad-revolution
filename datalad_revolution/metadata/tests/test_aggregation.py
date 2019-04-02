@@ -13,19 +13,23 @@
 import os.path as op
 
 from datalad.api import (
-    rev_metadata,
+    query_metadata,
     install,
     rev_create,
     rev_aggregate_metadata,
 )
 from ...dataset import RevolutionDataset as Dataset
 
+from datalad.utils import (
+    chpwd,
+)
 
 from datalad.tests.utils import (
     skip_ssh,
     with_tree,
     with_tempfile,
     assert_result_count,
+    assert_raises,
     assert_status,
     assert_repo_status,
     assert_dict_equal,
@@ -65,7 +69,7 @@ def test_basic_aggregate(path):
     # TODO give datasets some more metadata to actually aggregate stuff
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     sub = base.rev_create('sub', force=True)
-    #base.rev_metadata(sub.path, init=dict(homepage='this'), apply2global=True)
+    #base.query_metadata(sub.path, init=dict(homepage='this'), apply2global=True)
     subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
     base.add('.', recursive=True)
     assert_repo_status(base.path)
@@ -76,14 +80,14 @@ def test_basic_aggregate(path):
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
-    direct_meta = base.rev_metadata(recursive=True, return_type='list')
+    direct_meta = base.query_metadata(recursive=True, return_type='list')
     # loose the deepest dataset
     sub.uninstall('subsub', check=False)
     # no we should be able to reaggregate metadata, and loose nothing
     # because we can aggregate aggregated metadata of subsub from sub
     base.rev_aggregate_metadata(recursive=True, into='all')
     # same result for aggregate query than for (saved) direct query
-    agg_meta = base.rev_metadata(recursive=True, return_type='list')
+    agg_meta = base.query_metadata(recursive=True, return_type='list')
     for d, a in zip(direct_meta, agg_meta):
         assert_dict_equal(d, a)
     # no we can throw away the subdataset tree, and loose no metadata
@@ -91,7 +95,7 @@ def test_basic_aggregate(path):
     assert(not sub.is_installed())
     assert_repo_status(base.path)
     # same result for aggregate query than for (saved) direct query
-    agg_meta = base.rev_metadata(recursive=True, return_type='list')
+    agg_meta = base.query_metadata(recursive=True, return_type='list')
     for d, a in zip(direct_meta, agg_meta):
         assert_dict_equal(d, a)
 
@@ -122,29 +126,37 @@ def test_basic_aggregate(path):
 }
 """}}},
 })
-def test_aggregate_query(path):
+@with_tempfile(mkdir=True)
+def test_aggregate_query(path, randompath):
     ds = Dataset(path).rev_create(force=True)
     # no magic change to actual dataset metadata due to presence of
     # aggregated metadata
-    res = ds.rev_metadata(reporton='datasets', on_failure='ignore')
-    assert_result_count(res, 1)
-    assert_not_in('metadata', res[0])
+    res = ds.query_metadata(reporton='datasets', on_failure='ignore')
+    assert_result_count(res, 0)
     # but we can now ask for metadata of stuff that is unknown on disk
-    res = ds.rev_metadata(op.join('sub', 'deep', 'some'), reporton='datasets')
+    res = ds.query_metadata(op.join('sub', 'deep', 'some'), reporton='datasets')
     assert_result_count(res, 1)
     eq_({'homepage': 'http://top.example.com'}, res[0]['metadata'])
-    # when no reference dataset is given the command will report the
-    # aggregated metadata as it is recorded in the dataset that is the
-    # closest parent on disk
-    ds.rev_create('sub', force=True)
-    res = rev_metadata(op.join(path, 'sub', 'deep', 'some'), reporton='datasets')
-    assert_result_count(res, 1)
-    eq_({'homepage': 'http://sub.example.com'}, res[0]['metadata'])
+    sub = ds.rev_create('sub', force=True)
+    # when no reference dataset there is NO magic discovery of the relevant
+    # dataset
+    with chpwd(randompath):
+        assert_raises(ValueError, query_metadata,
+            op.join(path, 'sub', 'deep', 'some'), reporton='datasets')
+    # but inside a dataset things work
+    with chpwd(ds.path):
+        res = query_metadata(
+            op.join(path, 'sub', 'deep', 'some'),
+            reporton='datasets')
+        assert_result_count(res, 1)
+        # the metadata in the discovered top dataset is return, not the
+        # metadata in the subdataset
+        eq_({'homepage': 'http://top.example.com'}, res[0]['metadata'])
     # when a reference dataset is given, it will be used as the metadata
     # provider
-    res = ds.rev_metadata(op.join('sub', 'deep', 'some'), reporton='datasets')
+    res = sub.query_metadata(op.join('deep', 'some'), reporton='datasets')
     assert_result_count(res, 1)
-    eq_({'homepage': 'http://top.example.com'}, res[0]['metadata'])
+    eq_({'homepage': 'http://sub.example.com'}, res[0]['metadata'])
 
 
 # this is for gh-1971
@@ -245,9 +257,9 @@ def test_publish_aggregated(path):
     # and we can squeeze the same metadata out
     eq_(
         [{k: v for k, v in i.items() if k not in ('path', 'refds', 'parentds')}
-         for i in base.rev_metadata('sub')],
+         for i in base.query_metadata('sub')],
         [{k: v for k, v in i.items() if k not in ('path', 'refds', 'parentds')}
-         for i in remote.rev_metadata('sub')],
+         for i in remote.query_metadata('sub')],
     )
 
 
@@ -258,7 +270,7 @@ def _get_contained_objs(ds):
 
 def _get_referenced_objs(ds):
     return set([op.relpath(r[f], start=ds.path)
-                for r in ds.rev_metadata(reporton='aggregates')
+                for r in ds.query_metadata(reporton='aggregates', recursive=True)
                 for f in ('content_info', 'dataset_info')])
 
 
@@ -274,7 +286,7 @@ def test_aggregate_removal(path):
     base.add('.', recursive=True)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
-    res = base.rev_metadata(reporton='aggregates')
+    res = base.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=subsub.path)
     # check that we only have object files that are listed in agginfo
@@ -289,10 +301,10 @@ def test_aggregate_removal(path):
     # internally consistent state
     eq_(_get_contained_objs(base), _get_referenced_objs(base))
     # info on subsub was removed at all levels
-    res = base.rev_metadata(reporton='aggregates')
+    res = base.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 0, path=subsub.path)
     assert_result_count(res, 2)
-    res = sub.rev_metadata(reporton='aggregates')
+    res = sub.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 0, path=subsub.path)
     assert_result_count(res, 1)
 
@@ -324,16 +336,16 @@ def test_update_strategy(path):
     eq_(len(_get_referenced_objs(base)), 6)
     for ds in sub, subsub:
         eq_(len(_get_contained_objs(ds)), 0)
-    res = base.rev_metadata(reporton='aggregates')
+    res = base.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 3)
     # it is impossible to query an intermediate or leaf dataset
     # for metadata
     for ds in sub, subsub:
         assert_status(
             'impossible',
-            ds.rev_metadata(reporton='aggregates', on_failure='ignore'))
+            ds.query_metadata(reporton='aggregates', on_failure='ignore'))
     # get the full metadata report
-    target_meta = base.rev_metadata(return_type='list')
+    target_meta = base.query_metadata(return_type='list')
 
     # now redo full aggregation, this time updating all
     # (intermediate) datasets
@@ -346,13 +358,13 @@ def test_update_strategy(path):
     for ds in sub, subsub:
         assert_status(
             'ok',
-            ds.rev_metadata(reporton='aggregates', on_failure='ignore'))
+            ds.query_metadata(reporton='aggregates', on_failure='ignore'))
 
     # TODO end here until https://github.com/datalad/datalad-revolution/pull/84
     # has metadata() adjusted to give a uniform input
     return
     # all of that has no impact on the reported metadata
-    eq_(target_meta, base.rev_metadata(return_type='list'))
+    eq_(target_meta, base.query_metadata(return_type='list'))
 
 
 @with_tree({
@@ -368,7 +380,7 @@ def test_partial_aggregation(path):
     # if we aggregate a path(s) and say to recurse, we must not recurse into
     # the dataset itself and aggregate others
     ds.rev_aggregate_metadata(path='sub1', recursive=True)
-    res = ds.rev_metadata(reporton='aggregates')
+    res = ds.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 1, path=ds.path)
     assert_result_count(res, 1, path=sub1.path)
     # so no metadata aggregates for sub2 yet
@@ -376,14 +388,14 @@ def test_partial_aggregation(path):
 
     ds.rev_aggregate_metadata(recursive=True)
     # baseline, recursive aggregation gets us something for all three datasets
-    res = ds.rev_metadata(reporton='aggregates')
+    res = ds.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 3)
     # now let's do partial aggregation from just one subdataset
     # we should not loose information on the other datasets
     # as this would be a problem any time anything in a dataset
     # subtree is missing: not installed, too expensive to reaggregate, ...
     ds.rev_aggregate_metadata(path='sub1')
-    res = ds.rev_metadata(reporton='aggregates')
+    res = ds.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=sub2.path)
     # from-scratch aggregation kills datasets that where not listed
@@ -391,7 +403,7 @@ def test_partial_aggregation(path):
     # to the content of the subdataset, not the subdataset record
     # in the superdataset
     ds.rev_aggregate_metadata(path='sub1' + op.sep, force='fromscratch')
-    res = ds.rev_metadata(reporton='aggregates')
+    res = ds.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 1)
     assert_result_count(res, 1, path=sub1.path)
     # now reaggregated in full

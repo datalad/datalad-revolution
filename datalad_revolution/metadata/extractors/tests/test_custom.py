@@ -13,7 +13,7 @@ from ....dataset import RevolutionDataset as Dataset
 from datalad.api import (
     rev_create,
     rev_save,
-    rev_metadata,
+    query_metadata,
     rev_aggregate_metadata,
 )
 from datalad.tests.utils import (
@@ -102,7 +102,7 @@ def test_custom(path):
     assert_repo_status(ds.path)
     res = ds.rev_aggregate_metadata()
     assert_status('ok', res)
-    res = ds.rev_metadata(reporton='datasets')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     dsmeta = res[0]['metadata']
     assert_in('custom', dsmeta)
@@ -121,7 +121,7 @@ def test_custom(path):
     # that we are willing to pay a hefty performance price
     # in many situation that do not need re-aggregation
     ds.rev_aggregate_metadata(force='fromscratch')
-    res = ds.rev_metadata(reporton='datasets')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(res[0]['metadata'].get('custom', {}), {})
 
@@ -133,7 +133,7 @@ def test_custom(path):
         where='dataset')
     ds.rev_save()
     ds.rev_aggregate_metadata(force='fromscratch')
-    res = ds.rev_metadata(reporton='datasets')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(testmeta, res[0]['metadata']['custom'])
 
@@ -145,7 +145,7 @@ def test_custom(path):
         where='dataset')
     ds.rev_save()
     ds.rev_aggregate_metadata(force='fromscratch')
-    res = ds.rev_metadata(reporton='datasets')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(
         # merge order: testmeta <- sample_jsonld
