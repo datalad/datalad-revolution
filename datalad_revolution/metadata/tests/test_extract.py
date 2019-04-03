@@ -13,8 +13,10 @@ import os.path as op
 
 from shutil import copy
 
-from ...dataset import RevolutionDataset as Dataset
-from datalad.api import rev_extract_metadata as extract_metadata
+from datalad.distribution.dataset import Dataset
+from datalad.api import (
+    rev_extract_metadata as extract_metadata,
+)
 from datalad.utils import chpwd
 
 from datalad.tests.utils import (

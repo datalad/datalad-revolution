@@ -222,7 +222,6 @@ class RevExtractMetadata(Interface):
             # TODO we have to resolve the given path to make it match what
             # status is giving (abspath with ds (not repo) anchor)
             status = [dict(path=p, type='file') for p in assure_list(path)]
-
         try:
             for res in _proc(
                     ds,
@@ -340,7 +339,7 @@ def _proc(ds, sources, status, extractors, process_type):
                 yield res
                 # no further processing of broken stuff
                 continue
-            if success_status_map.get(res['status'], False) == 'success':  # pragma: no cover
+            else:  # pragma: no cover
                 # if the extractor was happy check the result
                 if not _ok_metadata(res, msrc, ds, None):
                     res.update(
@@ -520,7 +519,7 @@ def _yield_res_from_pre2019_extractor(
     # fake the new way of reporting results directly
     # extractors had no way to report errors, hence
     # everything is unconditionally 'ok'
-    for loc, meta in contentmeta_t:
+    for loc, meta in contentmeta_t or []:
         yield dict(
             status='ok',
             path=loc,

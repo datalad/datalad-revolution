@@ -18,22 +18,24 @@ from datalad.api import (
     rev_create,
     rev_aggregate_metadata,
 )
-from ...dataset import RevolutionDataset as Dataset
+from datalad.distribution.dataset import Dataset
 
 from datalad.utils import (
     chpwd,
+    assure_unicode,
 )
-
 from datalad.tests.utils import (
+    slow,
     skip_ssh,
     with_tree,
     with_tempfile,
     assert_result_count,
     assert_raises,
     assert_status,
+    assert_true,
+    assert_in,
     assert_repo_status,
     assert_dict_equal,
-    assert_not_in,
     eq_,
     skip_if_on_windows,
 )
@@ -46,7 +48,26 @@ def _assert_metadata_empty(meta):
             {k: meta[k] for k in meta if k not in ignore})
 
 
-_dataset_hierarchy_template = {
+_dataset_hierarchy_template_friction = {
+    'origin': {
+        'datapackage.json': """
+{
+    "name": "MOTHER_äöü東",
+    "keywords": ["example", "multitype metadata"]
+}""",
+    'sub': {
+        'datapackage.json': """
+{
+    "name": "child_äöü東"
+}""",
+    'subsub': {
+        'datapackage.json': """
+{
+    "name": "grandchild_äöü東"
+}"""}}}}
+
+
+_dataset_hierarchy_template_bids = {
     'origin': {
         'dataset_description.json': """
 {
@@ -64,19 +85,19 @@ _dataset_hierarchy_template = {
 }"""}}}}
 
 
-@with_tree(tree=_dataset_hierarchy_template)
+@with_tree(tree=_dataset_hierarchy_template_bids)
 def test_basic_aggregate(path):
     # TODO give datasets some more metadata to actually aggregate stuff
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     sub = base.rev_create('sub', force=True)
     #base.query_metadata(sub.path, init=dict(homepage='this'), apply2global=True)
     subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
-    base.add('.', recursive=True)
+    base.rev_save(recursive=True)
     assert_repo_status(base.path)
     # we will first aggregate the middle dataset on its own, this will
     # serve as a smoke test for the reuse of metadata objects later on
     sub.rev_aggregate_metadata()
-    base.save()
+    base.rev_save()
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
@@ -98,6 +119,123 @@ def test_basic_aggregate(path):
     agg_meta = base.query_metadata(recursive=True, return_type='list')
     for d, a in zip(direct_meta, agg_meta):
         assert_dict_equal(d, a)
+
+
+def _compare_metadata_helper(origres, compds):
+    for ores in origres:
+        rpath = op.relpath(ores['path'], ores['refds'])
+        cres = compds.query_metadata(
+            rpath,
+            reporton='{}s'.format(ores['type']))
+        if ores['type'] == 'file':
+            # TODO implement file based lookup
+            continue
+        assert_result_count(cres, 1)
+        cres = cres[0]
+        assert_dict_equal(ores['metadata'], cres['metadata'])
+        if ores['type'] == 'dataset':
+            for i in ('identifier', ):
+                eq_(ores['metadata']['datalad_core'][i],
+                    cres['metadata']['datalad_core'][i])
+
+
+@slow  # ~16s
+@with_tree(tree=_dataset_hierarchy_template_friction)
+def test_aggregation(path):
+    # a hierarchy of three (super/sub)datasets, each with some native metadata
+    ds = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    ds.config.add('datalad.metadata.nativetype', 'frictionless_datapackage',
+                  where='dataset')
+    subds = ds.create('sub', force=True)
+    subds.config.add('datalad.metadata.nativetype', 'frictionless_datapackage',
+                     where='dataset')
+    subsubds = subds.create('subsub', force=True)
+    subsubds.config.add('datalad.metadata.nativetype', 'frictionless_datapackage',
+                        where='dataset')
+    ds.rev_save(recursive=True)
+    assert_repo_status(ds.path)
+    # aggregate metadata from all subdatasets into any superdataset, including
+    # intermediate ones
+    res = ds.rev_aggregate_metadata(recursive=True, into='all')
+    # we get success report for both subdatasets and the superdataset,
+    # and they get saved
+    assert_result_count(res, 3, status='ok', action='aggregate_metadata')
+    # the respective super datasets see two saves, one to record the change
+    # in the subdataset after its own aggregation, and one after the super
+    # updated with aggregated metadata
+    assert_result_count(res, 5, status='ok', action='save', type='dataset')
+    # nice and tidy
+    assert_repo_status(ds.path)
+
+    # quick test of aggregate report
+    aggs = ds.query_metadata(reporton='aggregates', recursive=True)
+    # one for each dataset
+    assert_result_count(aggs, 3)
+    # mother also report layout version
+    assert_result_count(aggs, 1, path=ds.path, layout_version=1)
+
+    # store clean direct result
+    origres = ds.query_metadata(recursive=True)
+    # basic sanity check
+    assert_result_count(origres, 3, type='dataset')
+    assert_result_count(
+        [r for r in origres if r['path'].endswith('.json')],
+        3, type='file')  # Now that we have annex.key
+    # three different IDs
+    eq_(
+        3,
+        len(set([s['metadata']['datalad_core']['identifier']
+                for s in origres if s['type'] == 'dataset'])))
+    # and we know about all three datasets
+    for name in ('MOTHER_äöü東', 'child_äöü東', 'grandchild_äöü東'):
+        assert_true(
+            sum([s['metadata']['frictionless_datapackage']['name'] \
+                    == assure_unicode(name) for s in origres
+                 if s['type'] == 'dataset']))
+
+    # now clone the beast to simulate a new user installing an empty dataset
+    clone = install(
+        op.join(path, 'clone'), source=ds.path,
+        result_xfm='datasets', return_type='item-or-list')
+    # ID mechanism works
+    eq_(ds.id, clone.id)
+
+    # get fresh metadata
+    cloneres = clone.query_metadata()
+    # basic sanity check
+    assert_result_count(cloneres, 1, type='dataset')
+    # payload file, .gitattr, .gitmodule
+    assert_result_count(cloneres, 3, type='file')
+
+    # now loop over the previous results from the direct metadata query of
+    # origin and make sure we get the extact same stuff from the clone
+    _compare_metadata_helper(origres, clone)
+
+    # now obtain a subdataset in the clone, should make no difference
+    assert_status('ok', clone.install('sub', result_xfm=None, return_type='list'))
+    _compare_metadata_helper(origres, clone)
+
+    # test search in search tests, not all over the place
+    ## query smoke test
+    assert_result_count(clone.search('mother', mode='egrep'), 1)
+    assert_result_count(clone.search('(?i)MoTHER', mode='egrep'), 1)
+
+    child_res = clone.search('child', mode='egrep')
+    assert_result_count(child_res, 2)
+    for r in child_res:
+        if r['type'] == 'dataset':
+            assert_in(
+                r['query_matched']['frictionless_datapackage.name'],
+                r['metadata']['frictionless_datapackage']['name'])
+
+    ## Test 'and' for multiple search entries
+    #assert_result_count(clone.search(['*child*', '*bids*']), 2)
+    #assert_result_count(clone.search(['*child*', '*subsub*']), 1)
+    #assert_result_count(clone.search(['*bids*', '*sub*']), 2)
+
+    #assert_result_count(clone.search(['*', 'type:dataset']), 3)
+
+    ##TODO update the clone or reclone to check whether saved metadata comes down the pipe
 
 
 # tree puts aggregate metadata structures on two levels inside a dataset
@@ -160,7 +298,7 @@ def test_aggregate_query(path, randompath):
 
 
 # this is for gh-1971
-@with_tree(tree=_dataset_hierarchy_template)
+@with_tree(tree=_dataset_hierarchy_template_bids)
 def test_reaggregate_with_unavailable_objects(path):
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -169,7 +307,7 @@ def test_reaggregate_with_unavailable_objects(path):
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
     subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
-    base.add('.', recursive=True)
+    base.rev_save(recursive=True)
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
@@ -193,7 +331,7 @@ def test_reaggregate_with_unavailable_objects(path):
     )
 
 
-@with_tree(tree=_dataset_hierarchy_template)
+@with_tree(tree=_dataset_hierarchy_template_bids)
 @with_tempfile(mkdir=True)
 def test_aggregate_with_unavailable_objects_from_subds(path, target):
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
@@ -203,7 +341,7 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
     subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
-    base.add('.', recursive=True)
+    base.rev_save(recursive=True)
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
@@ -228,7 +366,7 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
 # this is for gh-1987
 @skip_if_on_windows  # create_sibling incompatible with win servers
 @skip_ssh
-@with_tree(tree=_dataset_hierarchy_template)
+@with_tree(tree=_dataset_hierarchy_template_bids)
 def test_publish_aggregated(path):
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -236,7 +374,7 @@ def test_publish_aggregated(path):
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     base.rev_create('sub', force=True)
-    base.add('.', recursive=True)
+    base.rev_save(recursive=True)
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
@@ -274,7 +412,7 @@ def _get_referenced_objs(ds):
                 for f in ('content_info', 'dataset_info')])
 
 
-@with_tree(tree=_dataset_hierarchy_template)
+@with_tree(tree=_dataset_hierarchy_template_bids)
 def test_aggregate_removal(path):
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -283,7 +421,7 @@ def test_aggregate_removal(path):
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
     subsub = sub.rev_create(op.join('subsub'), force=True)
-    base.add('.', recursive=True)
+    base.rev_save(recursive=True)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
     res = base.query_metadata(reporton='aggregates', recursive=True)
@@ -309,7 +447,7 @@ def test_aggregate_removal(path):
     assert_result_count(res, 1)
 
 
-@with_tree(tree=_dataset_hierarchy_template)
+@with_tree(tree=_dataset_hierarchy_template_bids)
 def test_update_strategy(path):
     base = Dataset(op.join(path, 'origin')).rev_create(force=True)
     # force all metadata objects into the annex
@@ -318,7 +456,7 @@ def test_update_strategy(path):
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
     sub = base.rev_create('sub', force=True)
     subsub = sub.rev_create(op.join('subsub'), force=True)
-    base.add('.', recursive=True)
+    base.rev_save(recursive=True)
     assert_repo_status(base.path)
     # we start clean
     for ds in base, sub, subsub:
@@ -375,7 +513,7 @@ def test_partial_aggregation(path):
     ds = Dataset(path).rev_create(force=True)
     sub1 = ds.rev_create('sub1', force=True)
     sub2 = ds.rev_create('sub2', force=True)
-    ds.add('.', recursive=True)
+    ds.rev_save(recursive=True)
 
     # if we aggregate a path(s) and say to recurse, we must not recurse into
     # the dataset itself and aggregate others
@@ -412,7 +550,7 @@ def test_partial_aggregation(path):
     sub1.unlock('here')
     with open(op.join(sub1.path, 'here'), 'w') as f:
         f.write('fresh')
-    ds.save(recursive=True)
+    ds.rev_save(recursive=True)
     assert_repo_status(path)
     # TODO for later
     # test --since with non-incremental
