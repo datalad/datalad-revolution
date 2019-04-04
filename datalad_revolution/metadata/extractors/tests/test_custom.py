@@ -8,7 +8,9 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Test custom metadata extractor"""
 
-from ....dataset import RevolutionDataset as Dataset
+from six import text_type
+
+from datalad.distribution.dataset import Dataset
 # API commands needed
 from datalad.api import (
     rev_create,
@@ -93,7 +95,7 @@ testmeta = {
             'custom_metadata.json': jsondumps(sample_jsonld)},
         'down': {
             'customloc': jsondumps(testmeta)}})
-def test_custom(path):
+def test_custom_dsmeta(path):
     ds = Dataset(path).rev_create(force=True)
     # enable custom extractor
     # use default location
@@ -162,3 +164,59 @@ def test_custom(path):
         dict(testmeta, **sample_jsonld),
         res[0]['metadata']['custom']
     )
+
+
+@with_tree(
+    tree={
+        'sub': {
+            'one': '1',
+            '.one.dl.json': '{"some":"thing"}',
+        }
+    })
+def test_custom_contentmeta(path):
+    ds = Dataset(path).rev_create(force=True)
+    ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
+    ds.rev_save()
+    res = ds.rev_extract_metadata(sources=['custom'], process_type='content')
+    assert_result_count(
+        res, 1,
+        path=text_type(ds.pathobj / 'sub' / 'one'),
+        type='file',
+        status='ok',
+        metadata={'custom': {'some': 'thing'}},
+        action='extract_metadata'
+    )
+
+
+@with_tree(
+    tree={
+        '.metastore': {
+            'sub': {
+                'one': 'not JSON',
+            },
+        },
+        'sub': {
+            'one': '1',
+        }
+    })
+def test_custom_content_broken(path):
+    ds = Dataset(path).rev_create(force=True)
+    ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
+    # use a custom shadow directory hierarchy for metadata
+    ds.config.add('datalad.metadata.custom-content-source',
+                  '{dspath}/.metastore/{freldir}/{fname}',
+                  where='dataset')
+    ds.rev_save()
+    res = ds.rev_extract_metadata(sources=['custom'], process_type='content',
+                                  on_failure='ignore')
+    assert_result_count(res, 1)
+    assert_result_count(
+        res, 1,
+        path=text_type(ds.pathobj / 'sub' / 'one'),
+        type='file',
+        # specific message might be variable across platforms, see below
+        #message=
+        status='error',
+        action='extract_metadata'
+    )
+    assert_in('decode', res[0]['message'])

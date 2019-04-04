@@ -19,17 +19,18 @@ By default a single file is read: '.datalad/custom_metadata.json'
 
 from .base import MetadataExtractor
 
+from six import text_type
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.custom')
+
+from datalad.log import log_progress
+from datalad.support.json_py import load as jsonload
+from datalad.dochelpers import exc_str
 from datalad.utils import (
     assure_list,
+    Path,
+    PurePosixPath,
 )
-
-from datalad.support.json_py import load as jsonload
-# TODO test the faith of this one
-from datalad.metadata.definitions import version as vocabulary_version
-
-from ... import utils as ut
 
 
 class CustomMetadataExtractor(MetadataExtractor):
@@ -37,9 +38,69 @@ class CustomMetadataExtractor(MetadataExtractor):
         # shortcut
         ds = dataset
 
+        log_progress(
+            lgr.info,
+            'extractorcustom',
+            'Start custom metadata extraction from %s', ds,
+            total=len(status) + 1,
+            label='Custom metadata extraction',
+            unit=' Files',
+        )
+        if process_type in ('all', 'content'):
+            mfile_expr = ds.config.obtain(
+                'datalad.metadata.custom-content-source',
+                '{dspath}/{freldir}/.{fname}.dl.json')
+            for rec in status:
+                fpath = Path(rec['path'])
+                rtype = rec.get('type', None)
+                log_progress(
+                    lgr.info,
+                    'extractorcustom',
+                    'Extracted custom metadata from %s', rec['path'],
+                    update=1,
+                    increment=True)
+                if rtype != 'file':  # pragma: no cover
+                    # nothing else in here
+                    continue
+                # build associated metadata file path from POSIX
+                # pieces and convert to platform conventions at the end
+                meta_fpath = Path(PurePosixPath(mfile_expr.format(
+                    dspath=ds.pathobj.as_posix(),
+                    freldir=fpath.relative_to(ds.pathobj).parent.as_posix(),
+                    fname=fpath.name)))
+                if meta_fpath.exists():
+                    try:
+                        meta = jsonload(text_type(meta_fpath))
+                        if meta:
+                            yield dict(
+                                path=fpath,
+                                metadata=meta,
+                                type=rtype,
+                                status='ok',
+                            )
+                    except Exception as e:
+                        yield dict(
+                            path=fpath,
+                            type=rtype,
+                            status='error',
+                            message=exc_str(e),
+                        )
+
         if process_type in ('all', 'dataset'):
             for r in _yield_dsmeta(ds):
                 yield r
+            log_progress(
+                lgr.info,
+                'extractorcustom',
+                'Extracted custom metadata from %s', ds.path,
+                update=1,
+                increment=True)
+
+        log_progress(
+            lgr.info,
+            'extractorcustom',
+            'Finished custom metadata extraction from %s', ds.path
+        )
 
 
 def _yield_dsmeta(ds):
@@ -53,13 +114,14 @@ def _yield_dsmeta(ds):
         if not cfg_srcfiles else cfg_srcfiles
     dsmeta = {}
     for srcfile in srcfiles:
-        abssrcfile = ds.pathobj / ut.PurePosixPath(srcfile)
+        abssrcfile = ds.pathobj / PurePosixPath(srcfile)
         # TODO get annexed files, or do in a central place?
         if not abssrcfile.exists():
             # nothing to load
             # warn if this was configured
             if srcfile in cfg_srcfiles:
                 yield dict(
+                    path=ds.path,
                     type='dataset',
                     status='impossible',
                     message=(
@@ -69,12 +131,12 @@ def _yield_dsmeta(ds):
                 )
                 # no further operation on half-broken metadata
                 return
-            continue
         lgr.debug('Load custom metadata from %s', abssrcfile)
-        meta = jsonload(str(abssrcfile))
+        meta = jsonload(text_type(abssrcfile))
         dsmeta.update(meta)
     if dsmeta:
         yield dict(
+            path=ds.path,
             metadata=dsmeta,
             type='dataset',
             status='ok',
