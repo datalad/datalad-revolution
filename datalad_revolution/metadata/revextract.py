@@ -134,7 +134,7 @@ class RevExtractMetadata(Interface):
         from pkg_resources import iter_entry_points  # delayed heavy import
         extractors = {}
         for ep in iter_entry_points('datalad.metadata.extractors'):
-            if ep.name in extractors:
+            if ep.name in extractors:  # pragma: no cover
                 # potential conflict
                 if extractors[ep.name].dist.project_name == 'datalad':
                     # this is OK, just state it is happening
@@ -450,7 +450,7 @@ def _run_extractor(extractor_cls, name, ds, status, process_type):
                      else p['path']
                      for p in status]):
                 yield res
-        else:
+        else:  # pragma: no cover
             raise RuntimeError(
                 '{} does not have a recognised extractor API'.format(
                     extractor_cls))
@@ -488,7 +488,7 @@ def _yield_res_from_pre2019_extractor(
             default=True,
             valtype=EnsureBool())
 
-    if not (want_dataset_meta or want_content_meta):
+    if not (want_dataset_meta or want_content_meta):  # pragma: no cover
         log_progress(
             lgr.info,
             'metadataextractors',
@@ -555,8 +555,8 @@ def _update_unique_cm(unique_cm, msrc_key, dsmeta, cnmeta, exclude_keys):
     # go through content metadata and inject report of unique keys
     # and values into `dsmeta`
     for k, v in iteritems(cnmeta):
-        if k in dsmeta.get(msrc_key, {}):
-            # XXX untested, needs a provoked conflict of content and dsmeta
+        if k in dsmeta.get(msrc_key, {}):  # pragma: no cover
+            # untested, needs a provoked conflict of content and dsmeta
             # relatively hard to fake in a test
             #
             # if the dataset already has a dedicated idea
@@ -681,7 +681,8 @@ def _ok_metadata(res, msrc, ds, loc):
     if meta is None or isinstance(meta, dict):
         return True
 
-    # XXX untested, needs broken extractord
+    # TODO untested, needs broken extract, implement with 'custom'
+    # extractor
     msg = (
         "Metadata extractor '%s' yielded something other than a dictionary "
         "for dataset %s%s -- this is likely a bug, please consider "

@@ -40,6 +40,11 @@ def test_error(path):
         assert_raises(
             ValueError,
             extract_metadata, sources=['bogus__'], path=[testpath])
+    # fails also on unavailable metadata extractor
+    ds = Dataset(path).rev_create()
+    assert_raises(
+        ValueError,
+        extract_metadata, dataset=ds, sources=['bogus__'])
 
 
 @with_tempfile(mkdir=True)
