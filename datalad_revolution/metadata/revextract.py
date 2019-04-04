@@ -669,8 +669,8 @@ def _unique_value_key(x):
 
 def _ok_metadata(res, msrc, ds, loc):
     restype = res.get('type', None)
-    if restype not in ('dataset', 'file'):
-        # XXX untested, needs broken extractor
+    if restype not in ('dataset', 'file'):  # pragma: no cover
+        # untested, would need broken extractor
         lgr.error(
             'metadata report for something other than a file or dataset: %s',
             restype
