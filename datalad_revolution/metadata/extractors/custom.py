@@ -34,43 +34,46 @@ from ... import utils as ut
 
 class CustomMetadataExtractor(MetadataExtractor):
     def __call__(self, dataset, process_type, status):
-        if process_type not in ('all', 'dataset'):
-            # ATM we only deal with dataset metadata
-            return
-
         # shortcut
         ds = dataset
 
-        # which files to look at
-        cfg_srcfiles = ds.config.obtain(
-            'datalad.metadata.custom-dataset-source',
-            [])
-        cfg_srcfiles = assure_list(cfg_srcfiles)
-        # OK to be always POSIX
-        srcfiles = ['.datalad/custom_metadata.json'] \
-            if not cfg_srcfiles else cfg_srcfiles
-        dsmeta = {}
-        for srcfile in srcfiles:
-            abssrcfile = ds.pathobj / ut.PurePosixPath(srcfile)
-            # TODO get annexed files, or do in a central place?
-            if not abssrcfile.exists():
-                # nothing to load
-                # warn if this was configured
-                if srcfile in cfg_srcfiles:
-                    yield dict(
-                        type='dataset',
-                        status='impossible',
-                        message=(
-                            'configured custom metadata source is not '
-                            'available in %s: %s',
-                            ds, srcfile),
-                    )
-                    # no further operation on half-broken metadata
-                    return
-                continue
-            lgr.debug('Load custom metadata from %s', abssrcfile)
-            meta = jsonload(str(abssrcfile))
-            dsmeta.update(meta)
+        if process_type in ('all', 'dataset'):
+            for r in _yield_dsmeta(ds):
+                yield r
+
+
+def _yield_dsmeta(ds):
+    # which files to look at
+    cfg_srcfiles = ds.config.obtain(
+        'datalad.metadata.custom-dataset-source',
+        [])
+    cfg_srcfiles = assure_list(cfg_srcfiles)
+    # OK to be always POSIX
+    srcfiles = ['.datalad/custom_metadata.json'] \
+        if not cfg_srcfiles else cfg_srcfiles
+    dsmeta = {}
+    for srcfile in srcfiles:
+        abssrcfile = ds.pathobj / ut.PurePosixPath(srcfile)
+        # TODO get annexed files, or do in a central place?
+        if not abssrcfile.exists():
+            # nothing to load
+            # warn if this was configured
+            if srcfile in cfg_srcfiles:
+                yield dict(
+                    type='dataset',
+                    status='impossible',
+                    message=(
+                        'configured custom metadata source is not '
+                        'available in %s: %s',
+                        ds, srcfile),
+                )
+                # no further operation on half-broken metadata
+                return
+            continue
+        lgr.debug('Load custom metadata from %s', abssrcfile)
+        meta = jsonload(str(abssrcfile))
+        dsmeta.update(meta)
+    if dsmeta:
         yield dict(
             metadata=dsmeta,
             type='dataset',
