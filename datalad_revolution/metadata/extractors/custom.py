@@ -6,9 +6,18 @@
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
-"""Metadata extractor for custom (JSON-LD) metadata contained in a dataset"""
+"""Metadata extractor for custom (JSON-LD) metadata contained in a dataset
 
-from datalad.metadata.extractors.base import BaseMetadataExtractor
+One or more source files with metadata can be specified via the
+'datalad.metadata.custom-dataset-source' configuration variable.
+The content of these files must e a JSON object, and a metadata
+dictionary is built by updating it with the content of the JSON
+objects in the order in which they are given.
+
+By default a single file is read: '.datalad/custom_metadata.json'
+"""
+
+from .base import MetadataExtractor
 
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.custom')
@@ -23,10 +32,17 @@ from datalad.metadata.definitions import version as vocabulary_version
 from ... import utils as ut
 
 
-class MetadataExtractor(BaseMetadataExtractor):
-    def _get_dataset_metadata(self):
+class CustomMetadataExtractor(MetadataExtractor):
+    def __call__(self, dataset, process_type, status):
+        if process_type not in ('all', 'dataset'):
+            # ATM we only deal with dataset metadata
+            return
+
+        # shortcut
+        ds = dataset
+
         # which files to look at
-        cfg_srcfiles = self.ds.config.obtain(
+        cfg_srcfiles = ds.config.obtain(
             'datalad.metadata.custom-dataset-source',
             [])
         cfg_srcfiles = assure_list(cfg_srcfiles)
@@ -35,25 +51,28 @@ class MetadataExtractor(BaseMetadataExtractor):
             if not cfg_srcfiles else cfg_srcfiles
         dsmeta = {}
         for srcfile in srcfiles:
-            # RF to self.ds.pathobj when part of -core
-            abssrcfile = ut.Path(self.ds.path) / ut.PurePosixPath(srcfile)
-            # TODO get annexed files
+            abssrcfile = ds.pathobj / ut.PurePosixPath(srcfile)
+            # TODO get annexed files, or do in a central place?
             if not abssrcfile.exists():
                 # nothing to load
                 # warn if this was configured
                 if srcfile in cfg_srcfiles:
-                    # TODO make this an impossible result, when
-                    # https://github.com/datalad/datalad/issues/3125
-                    # is resolved
-                    lgr.warn(
-                        'configured custom metadata source is not available '
-                        'in %s: %s',
-                        self.ds, srcfile)
+                    yield dict(
+                        type='dataset',
+                        status='impossible',
+                        message=(
+                            'configured custom metadata source is not '
+                            'available in %s: %s',
+                            ds, srcfile),
+                    )
+                    # no further operation on half-broken metadata
+                    return
                 continue
             lgr.debug('Load custom metadata from %s', abssrcfile)
             meta = jsonload(str(abssrcfile))
             dsmeta.update(meta)
-        return dsmeta
-
-    def _get_content_metadata(self):
-        return []
+        yield dict(
+            metadata=dsmeta,
+            type='dataset',
+            status='ok',
+        )

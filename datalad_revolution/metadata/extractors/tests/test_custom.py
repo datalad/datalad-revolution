@@ -120,7 +120,17 @@ def test_custom(path):
     # to a reaggregation automatically, but that would mean
     # that we are willing to pay a hefty performance price
     # in many situation that do not need re-aggregation
-    ds.rev_aggregate_metadata(force='fromscratch')
+    res = ds.rev_aggregate_metadata(
+        force='fromscratch',
+        on_failure='ignore')
+    assert_result_count(
+        res, 1, action='extract_metadata', type='dataset', status='impossible',
+        path=ds.path,
+        message=(
+            'configured custom metadata source is not available in %s: %s',
+            ds, 'nothere'),
+    )
+
     res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(res[0]['metadata'].get('custom', {}), {})

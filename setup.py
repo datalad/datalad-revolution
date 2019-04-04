@@ -58,7 +58,7 @@ setup(
             # replacements
             'datalad_core=datalad_revolution.metadata.extractors.datalad_core:DataladCoreExtractor',
             'annex=datalad_revolution.metadata.extractors.annex:MetadataExtractor',
-            'custom=datalad_revolution.metadata.extractors.custom:MetadataExtractor',
+            'custom=datalad_revolution.metadata.extractors.custom:CustomMetadataExtractor',
         ],
     },
 )
