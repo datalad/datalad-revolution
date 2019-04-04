@@ -73,14 +73,14 @@ class CustomMetadataExtractor(MetadataExtractor):
                         meta = jsonload(text_type(meta_fpath))
                         if meta:
                             yield dict(
-                                path=fpath,
+                                path=text_type(fpath),
                                 metadata=meta,
                                 type=rtype,
                                 status='ok',
                             )
                     except Exception as e:
                         yield dict(
-                            path=fpath,
+                            path=text_type(fpath),
                             type=rtype,
                             status='error',
                             message=exc_str(e),

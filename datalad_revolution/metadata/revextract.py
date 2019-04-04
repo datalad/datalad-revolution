@@ -320,12 +320,14 @@ def _proc(ds, sources, status, extractors, process_type):
                 if getattr(extractor_cls, 'NEEDS_CONTENT', False)
                 else fullstatus,
                 extractor_process_type):
-            # always have a path
-            # TODO add check the make sure that any 'file' report already
-            # has a path
+            # always have a path, use any absolute path coming in,
+            # make any relative path absolute using the dataset anchor,
+            # use the dataset path if nothing is coming in (better then
+            # no path at all)
             res.update(
-                path=op.join(ds.path, res['path'])
-                if 'path' in res else ds.path,
+                path=ds.path
+                if 'path' not in res else res['path']
+                if op.isabs(res['path']) else op.join(ds.path, res['path'])
             )
 
             # the following two conditionals are untested, as a test would
