@@ -432,7 +432,7 @@ class QueryMetadata(Interface):
                         dsid=agg_record['id'],
                         refcommit=agg_record['refcommit'],
                         datalad_version=agg_record['datalad_version'],
-                        **res_kwargs,
+                        **res_kwargs
                     )
                     yield info
 
