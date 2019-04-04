@@ -170,12 +170,16 @@ def test_custom_dsmeta(path):
     tree={
         'sub': {
             'one': '1',
-            '.one.dl.json': '{"some":"thing"}',
+            '_one.dl.json': '{"some":"thing"}',
         }
     })
 def test_custom_contentmeta(path):
     ds = Dataset(path).rev_create(force=True)
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
+    # use custom location
+    ds.config.add('datalad.metadata.custom-content-source',
+                  '{dspath}/{freldir}/_{fname}.dl.json',
+                  where='dataset')
     ds.rev_save()
     res = ds.rev_extract_metadata(sources=['custom'], process_type='content')
     assert_result_count(
@@ -190,9 +194,11 @@ def test_custom_contentmeta(path):
 
 @with_tree(
     tree={
-        '.metastore': {
-            'sub': {
-                'one': 'not JSON',
+        '.datalad': {
+            'custom_metadata': {
+                'sub': {
+                    'one.json': 'not JSON',
+                },
             },
         },
         'sub': {
@@ -202,10 +208,6 @@ def test_custom_contentmeta(path):
 def test_custom_content_broken(path):
     ds = Dataset(path).rev_create(force=True)
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
-    # use a custom shadow directory hierarchy for metadata
-    ds.config.add('datalad.metadata.custom-content-source',
-                  '{dspath}/.metastore/{freldir}/{fname}',
-                  where='dataset')
     ds.rev_save()
     res = ds.rev_extract_metadata(sources=['custom'], process_type='content',
                                   on_failure='ignore')

@@ -49,7 +49,7 @@ class CustomMetadataExtractor(MetadataExtractor):
         if process_type in ('all', 'content'):
             mfile_expr = ds.config.obtain(
                 'datalad.metadata.custom-content-source',
-                '{dspath}/{freldir}/.{fname}.dl.json')
+                '{dspath}/.datalad/custom_metadata/{freldir}/{fname}.json')
             for rec in status:
                 fpath = Path(rec['path'])
                 rtype = rec.get('type', None)
