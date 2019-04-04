@@ -981,5 +981,5 @@ def _store_agginfo_db(ds, db):
              for k, v in props.items()}
             for p, props in db.items()
         },
-        agginfo_path
+        text_type(agginfo_path)
     )
