@@ -52,10 +52,6 @@ from datalad.utils import (
     assure_list,
 )
 from datalad.ui import ui
-from datalad.consts import (
-    METADATA_DIR,
-    METADATA_FILENAME,
-)
 
 lgr = logging.getLogger('datalad.metadata.metadata')
 
@@ -106,6 +102,10 @@ def get_ds_aggregate_db_locations(dspath, version='default', warn_absent=True):
     # a higher level
     if warn_absent and not info_fpath.exists():
         if version == 'default':
+            from datalad.consts import (
+                OLDMETADATA_DIR,
+                OLDMETADATA_FILENAME,
+            )
             # caller had no specific idea what metadata version is
             # needed/available This dataset does not have aggregated metadata.
             # Does it have any other version?
@@ -115,7 +115,7 @@ def get_ds_aggregate_db_locations(dspath, version='default', warn_absent=True):
             msg = "Found no aggregated metadata info file %s." \
                   % info_fpath
             old_metadata_file = op.join(
-                text_type(dspath), METADATA_DIR, METADATA_FILENAME)
+                text_type(dspath), OLDMETADATA_DIR, OLDMETADATA_FILENAME)
             if op.exists(old_metadata_file):
                 msg += " Found metadata generated with pre-0.10 version of " \
                        "DataLad, but it will not be used."
