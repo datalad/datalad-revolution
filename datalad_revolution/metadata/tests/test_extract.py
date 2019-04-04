@@ -11,7 +11,7 @@
 
 import os.path as op
 
-from shutil import copy
+from simplejson import dumps as jsondumps
 
 from datalad.distribution.dataset import Dataset
 from datalad.api import (
@@ -21,6 +21,7 @@ from datalad.utils import chpwd
 
 from datalad.tests.utils import (
     with_tempfile,
+    with_tree,
     assert_repo_status,
     assert_raises,
     assert_result_count,
@@ -28,9 +29,22 @@ from datalad.tests.utils import (
     eq_,
 )
 
-
-testpath = op.join(op.dirname(op.dirname(op.dirname(__file__))),
-                   'metadata', 'tests', 'data', 'xmp.pdf')
+sample_dsmeta = {
+    "@context": "https://schema.org/",
+    "@type": "Dataset",
+    "name": "NCDC Storm Events Database",
+    "description": "Storm Data is provided by the NWS",
+}
+sample_fmeta = {
+    "something": "stupid",
+}
+meta_tree = {
+    '.datalad': {
+        'custom_metadata.json': jsondumps(sample_dsmeta)},
+    'sub': {
+        'one': '1',
+        '.one.dl.json': jsondumps(sample_fmeta)},
+}
 
 
 @with_tempfile(mkdir=True)
@@ -39,7 +53,7 @@ def test_error(path):
     with chpwd(path):
         assert_raises(
             ValueError,
-            extract_metadata, sources=['bogus__'], path=[testpath])
+            extract_metadata, sources=['bogus__'], path=[path])
     # fails also on unavailable metadata extractor
     ds = Dataset(path).rev_create()
     assert_raises(
@@ -47,34 +61,24 @@ def test_error(path):
         extract_metadata, dataset=ds, sources=['bogus__'])
 
 
-@with_tempfile(mkdir=True)
+@with_tree(meta_tree)
 def test_ds_extraction(path):
-    from datalad.tests.utils import SkipTest
-    try:
-        import libxmp
-    except ImportError:
-        raise SkipTest
-
-    ds = Dataset(path).rev_create()
-    copy(testpath, path)
-    ds.add('.')
+    ds = Dataset(path).rev_create(force=True)
+    ds.rev_save()
     assert_repo_status(ds.path)
 
     # by default we get core and annex reports
     res = extract_metadata(dataset=ds)
-    # dataset, plus two file (xmp.pdf, .gitattributes)
-    assert_result_count(res, 3)
+    # dataset, plus two file (payload + metadata, .gitattributes)
+    assert_result_count(res, 4)
     assert_result_count(res, 1, type='dataset')
-    assert_result_count(res, 2, type='file')
+    assert_result_count(res, 3, type='file')
     # core has stuff on everythin
     assert(all('datalad_core' in r['metadata'] for r in res))
-    # annex just on the annex'ed file
-    assert(all('annex' in r['metadata'] or not r['path'].endswith('.pdf')
-               for r in res))
 
     # now for specific extractor request
     res = extract_metadata(
-        sources=['xmp'],
+        sources=['custom'],
         dataset=ds,
         # artificially disable extraction from any file in the dataset
         path=[])
@@ -82,11 +86,11 @@ def test_ds_extraction(path):
         res, 1,
         type='dataset', status='ok', action='extract_metadata', path=path,
         refds=ds.path)
-    assert_in('xmp', res[0]['metadata'])
+    assert_in('custom', res[0]['metadata'])
 
-    # now the more useful case: getting everthing for xmp from a dataset
+    # now the more useful case: getting everthing for 'custom' from a dataset
     res = extract_metadata(
-        sources=['xmp'],
+        sources=['custom'],
         dataset=ds)
     assert_result_count(res, 2)
     assert_result_count(
@@ -96,35 +100,31 @@ def test_ds_extraction(path):
     assert_result_count(
         res, 1,
         type='file', status='ok', action='extract_metadata',
-        path=op.join(path, 'xmp.pdf'),
+        path=op.join(path, 'sub', 'one'),
         parentds=ds.path)
     for r in res:
-        assert_in('xmp', r['metadata'])
+        assert_in('custom', r['metadata'])
     # we have a unique value report
     eq_(
-        res[0]['metadata']["datalad_unique_content_properties"]['xmp']["dc:description"],
-        ["dlsubject"]
+        res[0]['metadata']["datalad_unique_content_properties"]['custom']["something"],
+        ["stupid"]
     )
     # and lastly, if we disable extraction via config, we get nothing
-    ds.config.add('datalad.metadata.extract-from-xmp', 'dataset',
+    ds.config.add('datalad.metadata.extract-from-custom', 'dataset',
                   where='dataset')
-    assert_result_count(extract_metadata(sources=['xmp'], dataset=ds), 1)
+    assert_result_count(extract_metadata(sources=['custom'], dataset=ds), 1)
 
 
-@with_tempfile(mkdir=True)
+@with_tree(meta_tree)
 def test_file_extraction(path):
-    from datalad.tests.utils import SkipTest
-    try:
-        import libxmp
-    except ImportError:
-        raise SkipTest
-
     # go into virgin dir to avoid detection of any dataset
+    testpath = op.join(path, 'sub', 'one')
     with chpwd(path):
         res = extract_metadata(
-            sources=['xmp'],
+            sources=['custom'],
             path=[testpath])
         assert_result_count(
             res, 1, type='file', status='ok', action='extract_metadata',
             path=testpath)
-        assert_in('xmp', res[0]['metadata'])
+        assert_in('custom', res[0]['metadata'])
+        eq_(res[0]['metadata']['custom'], sample_fmeta)
