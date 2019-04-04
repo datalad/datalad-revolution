@@ -23,6 +23,8 @@ from datalad.distribution.dataset import Dataset
 from datalad.utils import (
     chpwd,
     assure_unicode,
+    Path,
+    PurePosixPath,
 )
 from datalad.tests.utils import (
     slow,
@@ -353,8 +355,9 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
     assert_repo_status(super.path)
     clone = Dataset(op.join(super.path, "base"))
     assert_repo_status(clone.path)
-    objpath = op.join('.datalad', 'metadata', 'objects')
-    objs = [o for o in sorted(clone.repo.get_annexed_files(with_content_only=False)) if o.startswith(objpath)]
+    objpath = PurePosixPath('.datalad/metadata/objects')
+    objs = [o for o in sorted(clone.repo.get_annexed_files(with_content_only=False))
+            if objpath in PurePosixPath(o).parents]
     eq_(len(objs), 6)
     eq_(all(clone.repo.file_has_content(objs)), False)
 
@@ -402,12 +405,13 @@ def test_publish_aggregated(path):
 
 
 def _get_contained_objs(ds):
+    root = ds.pathobj / '.datalad' / 'metadata' / 'objects'
     return set(f for f in ds.repo.get_indexed_files()
-               if f.startswith(op.join('.datalad', 'metadata', 'objects', '')))
+               if root in (ds.pathobj / PurePosixPath(f)).parents)
 
 
 def _get_referenced_objs(ds):
-    return set([op.relpath(r[f], start=ds.path)
+    return set([Path(r[f]).relative_to(ds.pathobj).as_posix()
                 for r in ds.query_metadata(reporton='aggregates', recursive=True)
                 for f in ('content_info', 'dataset_info')])
 
