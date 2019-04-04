@@ -387,7 +387,7 @@ class QueryMetadata(Interface):
                     dsid=agg_record.get('id', None),
                     refcommit=agg_record.get('refcommit', None),
                     datalad_version=agg_record.get('datalad_version', None),
-                    **res_kwargs,
+                    **res_kwargs
                 )
                 if parentds:
                     info['parentds'] = text_type(parentds[-1])
