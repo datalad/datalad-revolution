@@ -134,13 +134,14 @@ class RevExtractMetadata(Interface):
         from pkg_resources import iter_entry_points  # delayed heavy import
         extractors = {}
         for ep in iter_entry_points('datalad.metadata.extractors'):
+            rec = dict(entrypoint=ep)
             if ep.name in extractors:  # pragma: no cover
                 # potential conflict
-                if extractors[ep.name].dist.project_name == 'datalad':
+                if extractors[ep.name]['entrypoint'].dist.project_name == 'datalad':
                     # this is OK, just state it is happening
                     lgr.debug(
                         'Extractor %s overrides datalad-core variant', ep)
-                    extractors[ep.name] = ep
+                    extractors[ep.name] = rec
                 elif ep.dist.project_name == 'datalad':
                     # also OK
                     lgr.debug(
@@ -161,7 +162,7 @@ class RevExtractMetadata(Interface):
                     # ignore the newcomer, is listed second in sys.path
             else:
                 # this fresh and unique
-                extractors[ep.name] = ep
+                extractors[ep.name] = rec
         for msrc in sources:
             if msrc not in extractors:
                 # we said that we want to fail, rather then just moan about
@@ -291,7 +292,7 @@ def _proc(ds, sources, status, extractors, process_type):
                 default='all')
         # load the extractor class, no instantiation yet
         try:
-            extractor_cls = extractors[msrc].load()
+            extractor_cls = extractors[msrc]['entrypoint'].load()
         except Exception as e:  # pragma: no cover
             msg = ('Failed %s metadata extraction from %s: %s',
                    msrc, ds, exc_str(e))
