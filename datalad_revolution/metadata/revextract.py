@@ -58,7 +58,7 @@ from datalad.dochelpers import exc_str
 from datalad.log import log_progress
 
 # API commands needed
-from datalad.core.local import status
+from datalad.core.local import status as _status
 
 lgr = logging.getLogger('datalad.metadata.metadata')
 
@@ -170,6 +170,22 @@ class RevExtractMetadata(Interface):
                 raise ValueError(
                     'Enabled metadata extractor %s not available'.format(msrc),
                 )
+            # load extractor implementation
+            rec = extractors[msrc]
+            rec['process_type'] = process_type \
+                if process_type \
+                else ds.config.obtain(
+                    'datalad.metadata.extract-from-{}'.format(
+                        msrc.replace('_', '-')),
+                    default='all')
+            # load the extractor class, no instantiation yet
+            try:
+                rec['class'] = rec['entrypoint'].load()
+            except Exception as e:  # pragma: no cover
+                msg = ('Failed %s metadata extraction from %s: %s',
+                       msrc, ds, exc_str(e))
+                log_progress(lgr.error, 'metadataextractors', *msg)
+                raise ValueError(msg[0] % msg[1:])
 
         res_props = dict(
             action='extract_metadata',
@@ -223,6 +239,7 @@ class RevExtractMetadata(Interface):
             # TODO we have to resolve the given path to make it match what
             # status is giving (abspath with ds (not repo) anchor)
             status = [dict(path=p, type='file') for p in assure_list(path)]
+
         try:
             for res in _proc(
                     ds,
@@ -278,26 +295,13 @@ def _proc(ds, sources, status, extractors, process_type):
     )
     for msrc in sources:
         msrc_key = msrc
+        extractor = extractors[msrc]
         log_progress(
             lgr.info,
             'metadataextractors',
             'Engage %s metadata extractor', msrc_key,
             update=1,
             increment=True)
-
-        extractor_process_type = process_type if process_type \
-            else ds.config.obtain(
-                'datalad.metadata.extract-from-{}'.format(
-                    msrc_key.replace('_', '-')),
-                default='all')
-        # load the extractor class, no instantiation yet
-        try:
-            extractor_cls = extractors[msrc]['entrypoint'].load()
-        except Exception as e:  # pragma: no cover
-            msg = ('Failed %s metadata extraction from %s: %s',
-                   msrc, ds, exc_str(e))
-            log_progress(lgr.error, 'metadataextractors', *msg)
-            raise ValueError(msg[0] % msg[1:])
 
         # TODO consider moving the entire unique procedure into aggregation
         # desired setup for generation of unique metadata values
@@ -308,19 +312,19 @@ def _proc(ds, sources, status, extractors, process_type):
             valtype=EnsureBool())
         unique_cm = {}
         extractor_unique_exclude = getattr(
-            extractor_cls,
+            extractor['class'],
             "_unique_exclude",
             set())
 
         # actually pull the metadata records out of the extractor
         for res in _run_extractor(
-                extractor_cls,
+                extractor['class'],
                 msrc,
                 ds,
                 status
-                if getattr(extractor_cls, 'NEEDS_CONTENT', False)
+                if getattr(extractor['class'], 'NEEDS_CONTENT', False)
                 else fullstatus,
-                extractor_process_type):
+                extractor['process_type']):
             # always have a path, use any absolute path coming in,
             # make any relative path absolute using the dataset anchor,
             # use the dataset path if nothing is coming in (better then
