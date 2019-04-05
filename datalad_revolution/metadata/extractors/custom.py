@@ -49,7 +49,7 @@ class CustomMetadataExtractor(MetadataExtractor):
         if process_type in ('all', 'content'):
             mfile_expr = ds.config.obtain(
                 'datalad.metadata.custom-content-source',
-                '{dspath}/.datalad/custom_metadata/{freldir}/{fname}.json')
+                '.datalad/custom_metadata/{freldir}/{fname}.json')
             for rec in status:
                 fpath = Path(rec['path'])
                 rtype = rec.get('type', None)
@@ -64,10 +64,9 @@ class CustomMetadataExtractor(MetadataExtractor):
                     continue
                 # build associated metadata file path from POSIX
                 # pieces and convert to platform conventions at the end
-                meta_fpath = Path(PurePosixPath(mfile_expr.format(
-                    dspath=ds.pathobj.as_posix(),
+                meta_fpath = ds.pathobj / PurePosixPath(mfile_expr.format(
                     freldir=fpath.relative_to(ds.pathobj).parent.as_posix(),
-                    fname=fpath.name)))
+                    fname=fpath.name))
                 if meta_fpath.exists():
                     try:
                         meta = jsonload(text_type(meta_fpath))

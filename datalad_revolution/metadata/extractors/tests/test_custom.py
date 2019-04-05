@@ -178,7 +178,7 @@ def test_custom_contentmeta(path):
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
     # use custom location
     ds.config.add('datalad.metadata.custom-content-source',
-                  '{dspath}/{freldir}/_{fname}.dl.json',
+                  '{freldir}/_{fname}.dl.json',
                   where='dataset')
     ds.rev_save()
     res = ds.rev_extract_metadata(sources=['custom'], process_type='content')
@@ -216,9 +216,8 @@ def test_custom_content_broken(path):
         res, 1,
         path=text_type(ds.pathobj / 'sub' / 'one'),
         type='file',
-        # specific message might be variable across platforms, see below
+        # specific message does vary a lot across platforms
         #message=
         status='error',
         action='extract_metadata'
     )
-    assert_in('decode', res[0]['message'])
