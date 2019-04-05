@@ -10,9 +10,14 @@
 
 from datalad.metadata.extractors.base import BaseMetadataExtractor
 
+from six import text_type
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.annexmeta')
 from datalad.log import log_progress
+from datalad.utils import (
+    Path,
+    PurePosixPath,
+)
 
 from datalad.support.annexrepo import AnnexRepo
 # use main version as core version
@@ -64,7 +69,7 @@ class MetadataExtractor(BaseMetadataExtractor):
             key = repo.get_file_key(file, batch=True)
             if key:
                 meta['key'] = key
-            yield (file, meta)
+            yield (text_type(Path(PurePosixPath(file))), meta)
         # we don't need to terminate batch processes, done centrally
         log_progress(
             lgr.info,
