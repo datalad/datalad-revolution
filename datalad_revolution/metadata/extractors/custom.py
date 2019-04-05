@@ -19,6 +19,7 @@ By default a single file is read: '.datalad/custom_metadata.json'
 
 from .base import MetadataExtractor
 
+import os.path as op
 from six import text_type
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.custom')
@@ -34,6 +35,21 @@ from datalad.utils import (
 
 
 class CustomMetadataExtractor(MetadataExtractor):
+    def get_required_content(self, dataset, process_type, status):
+        if process_type in ('all', 'content'):
+            mfile_expr = _get_fmeta_expr(dataset)
+            for rec in status:
+                # build metadata file path
+                meta_fpath = _get_fmeta_objpath(dataset, mfile_expr, rec)
+                # use op.lexists to also match broken symlinks
+                if meta_fpath is not None and op.lexists(meta_fpath):
+                    yield dict(path=meta_fpath)
+
+        if process_type in ('all', 'dataset'):
+            srcfiles, _ = _get_dsmeta_srcfiles(dataset)
+            for f in srcfiles:
+                yield dict(path=text_type(dataset.pathobj / f))
+
     def __call__(self, dataset, process_type, status):
         # shortcut
         ds = dataset
@@ -47,40 +63,30 @@ class CustomMetadataExtractor(MetadataExtractor):
             unit=' Files',
         )
         if process_type in ('all', 'content'):
-            mfile_expr = ds.config.obtain(
-                'datalad.metadata.custom-content-source',
-                '.datalad/custom_metadata/{freldir}/{fname}.json')
+            mfile_expr = _get_fmeta_expr(ds)
             for rec in status:
-                fpath = Path(rec['path'])
-                rtype = rec.get('type', None)
                 log_progress(
                     lgr.info,
                     'extractorcustom',
                     'Extracted custom metadata from %s', rec['path'],
                     update=1,
                     increment=True)
-                if rtype != 'file':  # pragma: no cover
-                    # nothing else in here
-                    continue
-                # build associated metadata file path from POSIX
-                # pieces and convert to platform conventions at the end
-                meta_fpath = ds.pathobj / PurePosixPath(mfile_expr.format(
-                    freldir=fpath.relative_to(ds.pathobj).parent.as_posix(),
-                    fname=fpath.name))
-                if meta_fpath.exists():
+                # build metadata file path
+                meta_fpath = _get_fmeta_objpath(ds, mfile_expr, rec)
+                if meta_fpath is not None and op.exists(meta_fpath):
                     try:
                         meta = jsonload(text_type(meta_fpath))
                         if meta:
                             yield dict(
-                                path=text_type(fpath),
+                                path=rec['path'],
                                 metadata=meta,
-                                type=rtype,
+                                type=rec['type'],
                                 status='ok',
                             )
                     except Exception as e:
                         yield dict(
-                            path=text_type(fpath),
-                            type=rtype,
+                            path=rec['path'],
+                            type=rec['type'],
                             status='error',
                             message=exc_str(e),
                         )
@@ -102,7 +108,7 @@ class CustomMetadataExtractor(MetadataExtractor):
         )
 
 
-def _yield_dsmeta(ds):
+def _get_dsmeta_srcfiles(ds):
     # which files to look at
     cfg_srcfiles = ds.config.obtain(
         'datalad.metadata.custom-dataset-source',
@@ -111,6 +117,31 @@ def _yield_dsmeta(ds):
     # OK to be always POSIX
     srcfiles = ['.datalad/custom_metadata.json'] \
         if not cfg_srcfiles else cfg_srcfiles
+    return srcfiles, cfg_srcfiles
+
+
+def _get_fmeta_expr(ds):
+    return ds.config.obtain(
+        'datalad.metadata.custom-content-source',
+        '.datalad/custom_metadata/{freldir}/{fname}.json')
+
+
+def _get_fmeta_objpath(ds, expr, rec):
+    fpath = Path(rec['path'])
+    if rec.get('type', None) != 'file':  # pragma: no cover
+        # nothing else in here
+        return
+    # build associated metadata file path from POSIX
+    # pieces and convert to platform conventions at the end
+    return text_type(
+        ds.pathobj / PurePosixPath(expr.format(
+            freldir=fpath.relative_to(
+                ds.pathobj).parent.as_posix(),
+            fname=fpath.name)))
+
+
+def _yield_dsmeta(ds):
+    srcfiles, cfg_srcfiles = _get_dsmeta_srcfiles(ds)
     dsmeta = {}
     for srcfile in srcfiles:
         abssrcfile = ds.pathobj / PurePosixPath(srcfile)
