@@ -256,13 +256,16 @@ class RevExtractMetadata(Interface):
                             status
                         )
                     )
-            for r in ds.get(
-                    path=needed_paths,
-                    return_type='generator',
-                    result_renderer='disabled'):
-                if success_status_map.get(r['status'], False) != 'success':  # pragma: no cover
-                    # online complain when something goes wrong
-                    yield r
+            if needed_paths:
+                for r in ds.get(
+                        path=needed_paths,
+                        return_type='generator',
+                        result_renderer='disabled'):
+                    if success_status_map.get(
+                            r['status'],
+                            False) != 'success':  # pragma: no cover
+                        # online complain when something goes wrong
+                        yield r
 
         try:
             for res in _proc(

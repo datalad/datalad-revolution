@@ -48,7 +48,9 @@ class CustomMetadataExtractor(MetadataExtractor):
         if process_type in ('all', 'dataset'):
             srcfiles, _ = _get_dsmeta_srcfiles(dataset)
             for f in srcfiles:
-                yield dict(path=text_type(dataset.pathobj / f))
+                f = text_type(dataset.pathobj / f)
+                if op.lexists(f):
+                    yield dict(path=f)
 
     def __call__(self, dataset, process_type, status):
         # shortcut
