@@ -14,6 +14,64 @@ class MetadataExtractor(object):
     # detection of new-style extractor API
     pass
 
+    def __call__(self, dataset, process_type, status):
+        """Run metadata extraction
+
+        Any implementation gets a comprehensive description of a dataset
+        via the `status` argument. In many scenarios this can prevent
+        needless interaction with the dataset on disk, or specific
+        further queries via dataset or repository methods.
+
+        Parameters
+        ----------
+        dataset : Dataset
+          Dataset instance to extract metadata from.
+        process_type : {'all', 'dataset', 'content'}
+          Type of metadata to extract.
+        status : list
+          Status records produced by the `status` command for the given
+          dataset. Records are filtered to not contain any untracked
+          content, or any files that are to be ignored for the purpose
+          of metadata extraction (e.g. content under .dataset/metadata).
+          There are only records on content within the given dataset, not
+          about content of any existing subdatasets.
+        """
+        raise NotImplementedError
+
+    def get_required_content(self, dataset, process_type, status):
+        """Report records for dataset content that must be available locally
+
+        Any implementation can yield records in the given `status` that
+        correspond to dataset content that must be available locally for an
+        extractor to perform its work. It is acceptable to not yield such a
+        record, or no records at all. In such case, the extractor is expected
+        to handle the case of non-available content in some sensible way
+        internally.
+
+        The parameters are identical to those of
+        `MetadataExtractor.__call__()`.
+
+        Any content corresponding to a yielded record will be obtained
+        automatically before metadata extraction is initiated. Hence any
+        extractor reporting accurately can expect all relevant content
+        to be present locally.
+
+        Instead of a status record, it is also possible to return custom
+        dictionaries that must contain a 'path' key, containing the absolute
+        path to the required file within the given dataset.
+
+        Example implementation
+
+        ```
+        for s in status:
+            if s['path'].endswith('.pdf'):
+                yield s
+        ```
+        """
+        # be default an individual extractor is expected to manage
+        # availability on its own
+        return []
+
 
 class BaseMetadataExtractor(object):
 

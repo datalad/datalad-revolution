@@ -134,6 +134,9 @@ class RevExtractMetadata(Interface):
         from pkg_resources import iter_entry_points  # delayed heavy import
         extractors = {}
         for ep in iter_entry_points('datalad.metadata.extractors'):
+            if ep.name not in sources:
+                # not needed here
+                continue
             rec = dict(entrypoint=ep)
             if ep.name in extractors:  # pragma: no cover
                 # potential conflict
@@ -239,6 +242,27 @@ class RevExtractMetadata(Interface):
             # TODO we have to resolve the given path to make it match what
             # status is giving (abspath with ds (not repo) anchor)
             status = [dict(path=p, type='file') for p in assure_list(path)]
+
+        if ds.is_installed():
+            # check availability requirements and obtain data as needed
+            needed_paths = set()
+            for rec in extractors.values():
+                if hasattr(rec['class'], 'get_required_content'):
+                    needed_paths.update(
+                        # new extractors do not need any instantiation args
+                        s['path'] for s in rec['class']().get_required_content(
+                            ds,
+                            rec['process_type'],
+                            status
+                        )
+                    )
+            for r in ds.get(
+                    path=needed_paths,
+                    return_type='generator',
+                    result_renderer='disabled'):
+                if success_status_map.get(r['status'], False) != 'success':  # pragma: no cover
+                    # online complain when something goes wrong
+                    yield r
 
         try:
             for res in _proc(
