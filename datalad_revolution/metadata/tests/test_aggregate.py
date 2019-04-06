@@ -487,7 +487,7 @@ def test_update_strategy(path):
             'impossible',
             ds.query_metadata(reporton='aggregates', on_failure='ignore'))
     # get the full metadata report
-    target_meta = base.query_metadata(return_type='list')
+    target_meta = _kill_time(base.query_metadata())
 
     # now redo full aggregation, this time updating all
     # (intermediate) datasets
@@ -502,11 +502,21 @@ def test_update_strategy(path):
             'ok',
             ds.query_metadata(reporton='aggregates', on_failure='ignore'))
 
-    # TODO end here until https://github.com/datalad/datalad-revolution/pull/84
-    # has metadata() adjusted to give a uniform input
-    return
     # all of that has no impact on the reported metadata
-    eq_(target_meta, base.query_metadata(return_type='list'))
+    # minus the change in the refcommits
+    for i in zip(target_meta, _kill_time(base.query_metadata())):
+        assert_dict_equal(i[0], i[1])
+
+
+def _kill_time(iter):
+    m = []
+    for r in iter:
+        # TODO why is it two of them?
+        r.pop('refcommit', None)
+        for k in ('refcommit', 'dateModified', 'version'):
+            r['metadata']['datalad_core'].pop(k, None)
+        m.append(r)
+    return m
 
 
 @with_tree({
