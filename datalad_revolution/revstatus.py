@@ -28,7 +28,7 @@ lgr = logging.getLogger('datalad.revolution.status')
 
 import traceback
 _tb = [t[2] for t in traceback.extract_stack()]
-if '_generate_extension_api' not in _tb:
+if '_generate_extension_api' not in _tb:  # pragma: no cover
     lgr.warn(
         "The module 'datalad_revolution.revstatus' is deprecated. "
         'The `RevStatus` class can be imported with: '

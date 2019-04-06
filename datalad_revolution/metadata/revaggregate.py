@@ -227,7 +227,7 @@ class RevAggregateMetadata(Interface):
         if path:
             extract_from_ds, errors = sort_paths_by_datasets(
                 dataset, assure_list(path))
-            for e in errors:
+            for e in errors:  # pragma: no cover
                 e.update(
                     logger=lgr,
                     refds=ds.path,
@@ -501,7 +501,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                     return_type='generator',
                     # let the top-level caller handle failure
                     on_failure='ignore'):
-                if res.get('action', None) != 'diff':
+                if res.get('action', None) != 'diff':  # pragma: no cover
                     # something unexpected, send upstairs
                     yield res
                 if res['state'] == 'clean':
@@ -873,7 +873,7 @@ def _extract_metadata(fromds, tods):
                         fromds.pathobj))
                 )
             )
-        else:
+        else:  # pragma: no cover
             res.update(
                 message=(
                     'Metadata extraction from %s yielded unexpected '

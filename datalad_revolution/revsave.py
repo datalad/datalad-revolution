@@ -4,7 +4,7 @@ lgr = logging.getLogger('datalad.revolution.save')
 
 import traceback
 _tb = [t[2] for t in traceback.extract_stack()]
-if '_generate_extension_api' not in _tb:
+if '_generate_extension_api' not in _tb:  # pragma: no cover
     lgr.warn(
         "The module 'datalad_revolution.revsave' is deprecated. "
         'The `RevSave` class can be imported with: '

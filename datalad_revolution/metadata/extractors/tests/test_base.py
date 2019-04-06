@@ -59,23 +59,6 @@ def check_api(no_annex, path):
             )
             assert_true(
                 all('datalad_core' in r.get('metadata', {}) for r in res))
-        elif extractor_ep.name == 'annex':
-            if not no_annex:
-                assert_result_count(
-                    res, 1,
-                    path=text_type(ds.pathobj / 'file.dat'),
-                    type='file',
-                    status='ok',
-                    metadata={
-                        'annex': {
-                            'key': 'MD5E-s0--d41d8cd98f00b204e9800998ecf8427e.dat'}}
-                )
-            else:
-                # no metadata on that file
-                assert_result_count(
-                    res, 0,
-                    path=text_type(ds.pathobj / 'file.dat'),
-                )
         processed_extractors.append(extractor_ep.name)
     assert "datalad_core" in processed_extractors, \
         "Should have managed to find at least the core extractor extractor"

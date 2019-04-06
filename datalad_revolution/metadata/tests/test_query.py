@@ -24,7 +24,7 @@ from datalad.tests.utils import (
 @with_tempfile(mkdir=True)
 def test_ignore_nondatasets(path):
     # we want to ignore the version/commits for this test
-    def _kill_time(meta):
+    def _kill_time(meta):  # pragma: no cover
         for m in meta:
             for k in ('version', 'shasum'):
                 if k in m:

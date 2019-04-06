@@ -296,7 +296,7 @@ def _proc(ds, sources, status, extractors, process_type):
     # using old-style extractors that cannot report errors
     # properly
     fullstatus = status
-    if status and isinstance(ds.repo, AnnexRepo):
+    if status and isinstance(ds.repo, AnnexRepo):  # pragma: no cover
         status = [p for p in status if p.get('has_content', True)]
         nocontent = len(fullstatus) - len(status)
         if nocontent and process_type in (None, 'content', 'all'):

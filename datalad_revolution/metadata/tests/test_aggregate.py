@@ -311,6 +311,11 @@ def test_reaggregate_with_unavailable_objects(path):
     subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
     base.rev_save(recursive=True)
     assert_repo_status(base.path)
+    # first a quick check that an unsupported 'into' mode causes an exception
+    assert_raises(
+        ValueError, base.rev_aggregate_metadata, recursive=True,
+        into='spaceship')
+    # no for real
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
     objpath = op.join('.datalad', 'metadata', 'objects')
