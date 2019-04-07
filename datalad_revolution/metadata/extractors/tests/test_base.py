@@ -44,9 +44,6 @@ def check_api(no_annex, path):
             exc_ = str(exc)
             skipped_extractors += [exc_]
             continue
-        # we also get something for the dataset and possibly something for the
-        # content
-        assert_true(len(res))
         # datalad_core does provide some (not really) information about our
         # precious file
         if extractor_ep.name == 'datalad_core':

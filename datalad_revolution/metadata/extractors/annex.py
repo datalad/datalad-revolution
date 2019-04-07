@@ -58,8 +58,3 @@ class AnnexMetadataExtractor(MetadataExtractor):
                     type='file',
                     status='ok',
                 )
-
-        # TODO dataset metadata
-        # - known annex UUIDs
-        # - avoid anything that is specific to a local clone
-        #   (repo mode, etc.) limit to description of dataset(-network)

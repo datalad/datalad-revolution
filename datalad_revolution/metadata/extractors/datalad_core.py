@@ -8,6 +8,11 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Metadata extractor for Datalad's own core storage"""
 
+# TODO dataset metadata
+# - known annex UUIDs
+# - avoid anything that is specific to a local clone
+#   (repo mode, etc.) limit to description of dataset(-network)
+
 from .base import MetadataExtractor
 from datalad.utils import (
     Path,
