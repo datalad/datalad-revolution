@@ -6,7 +6,16 @@
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
-"""Metadata extractor for Git-annex metadata"""
+"""Metadata extractor for Git-annex metadata
+
+This extractor only deals with the metadata that can be assigned to annexed
+files via git-annex's `metadata` command. It does not deal with other implicit
+git-annex metadata, such as file availability information. This is already
+handles by the `datalad_core` extractor.
+
+There is no standard way to define a vocabulary that is used for this kind of
+metadata.
+"""
 
 
 from .base import MetadataExtractor
@@ -16,6 +25,7 @@ import logging
 lgr = logging.getLogger('datalad.metadata.extractors.annexmeta')
 from datalad.utils import (
     Path,
+    PurePosixPath,
 )
 from datalad.support.annexrepo import AnnexRepo
 
@@ -52,8 +62,12 @@ class AnnexMetadataExtractor(MetadataExtractor):
                     k:
                     v[0] if isinstance(v, list) and len(v) == 1 else v
                     for k, v in meta.items()}
+                if not meta:
+                    # only talk about files that actually carry metadata
+                    continue
                 yield dict(
-                    path=fpath,
+                    # git annex reports the path in POSIX conventions
+                    path=PurePosixPath(fpath),
                     metadata=meta,
                     type='file',
                     status='ok',
