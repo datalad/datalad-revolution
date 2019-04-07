@@ -8,71 +8,58 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Metadata extractor for Git-annex metadata"""
 
-from datalad.metadata.extractors.base import BaseMetadataExtractor
+
+from .base import MetadataExtractor
 
 from six import text_type
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.annexmeta')
-from datalad.log import log_progress
 from datalad.utils import (
     Path,
-    PurePosixPath,
 )
-
 from datalad.support.annexrepo import AnnexRepo
-# use main version as core version
-# this must stay, despite being a seemingly unused import, each extractor defines a version
-from datalad.metadata.definitions import version as vocabulary_version
 
 
-class MetadataExtractor(BaseMetadataExtractor):
+class AnnexMetadataExtractor(MetadataExtractor):
+    def __call__(self, dataset, process_type, status):
+        # shortcut
+        ds = dataset
 
-    NEEDS_CONTENT = False
-
-    def _get_dataset_metadata(self):
-        return {}
-
-    def _get_content_metadata(self):
-        log_progress(
-            lgr.info,
-            'extractorannex',
-            'Start annex metadata extraction from %s', self.ds,
-            total=len(self.paths),
-            label='Annex metadata extraction',
-            unit=' Files',
-        )
-        repo = self.ds.repo   # OPT: .repo could be relatively expensive
+        repo = ds.repo   # OPT: .repo could be relatively expensive
         if not isinstance(repo, AnnexRepo):
-            log_progress(
-                lgr.info,
-                'extractorannex',
-                'Finished annex metadata extraction from %s', self.ds
-            )
+            # nothing to be done
             return
 
-        valid_paths = None
-        if self.paths and sum(len(i) for i in self.paths) > 500000:
-            valid_paths = set(self.paths)
-        for file, meta in repo.get_metadata(
-                self.paths if self.paths and valid_paths is None else '.'):
-            if file.startswith('.datalad') or valid_paths and file not in valid_paths:
-                # do not report on our own internal annexed files (e.g. metadata blobs)
-                continue
-            log_progress(
-                lgr.info,
-                'extractorannex',
-                'Extracted annex metadata from %s', file,
-                update=1,
-                increment=True)
-            meta = {k: v[0] if isinstance(v, list) and len(v) == 1 else v
+        if process_type in ('all', 'content'):
+            # no progress bar, we are only making a one-shot call to
+            # annex, the rest is pretty much instantaneous
+
+            # limit query to paths that are annexed
+            query_paths = [
+                # go relative to minimize cmdline footprint of annex call
+                text_type(Path(s['path']).relative_to(ds.pathobj))
+                for s in status
+                # anything that looks like an annexed file
+                if s.get('type', None) == 'file'
+                and s.get('key', None) is not None
+            ]
+
+            for fpath, meta in repo.get_metadata(
+                    query_paths,
+                    # no timestamps, we are describing the status quo
+                    timestamps=False):
+                meta = {
+                    k:
+                    v[0] if isinstance(v, list) and len(v) == 1 else v
                     for k, v in meta.items()}
-            key = repo.get_file_key(file, batch=True)
-            if key:
-                meta['key'] = key
-            yield (text_type(Path(PurePosixPath(file))), meta)
-        # we don't need to terminate batch processes, done centrally
-        log_progress(
-            lgr.info,
-            'extractorannex',
-            'Finished annex metadata extraction from %s', self.ds
-        )
+                yield dict(
+                    path=fpath,
+                    metadata=meta,
+                    type='file',
+                    status='ok',
+                )
+
+        # TODO dataset metadata
+        # - known annex UUIDs
+        # - avoid anything that is specific to a local clone
+        #   (repo mode, etc.) limit to description of dataset(-network)
