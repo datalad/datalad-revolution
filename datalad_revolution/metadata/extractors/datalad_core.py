@@ -9,7 +9,9 @@
 """Metadata extractor for Datalad's own core storage"""
 
 from .base import MetadataExtractor
-from ... import utils as ut
+from datalad.utils import (
+    Path,
+)
 
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
@@ -17,10 +19,6 @@ from datalad.log import log_progress
 from datalad.support.constraints import EnsureBool
 
 import os.path as op
-
-# TODO this is bullshit: extractor version needs to be stored, and a
-# vocabulary version is useless, we need the necessary context
-from datalad.metadata.definitions import version as vocabulary_version
 
 
 class DataladCoreExtractor(MetadataExtractor):
@@ -85,7 +83,7 @@ class DataladCoreExtractor(MetadataExtractor):
             # TODO should this be @type
             'type': 'Dataset' if part['type'] == 'dataset' else 'File',
             # relativ path within dataset, always POSIX
-            'name': ut.Path(part['path']).relative_to(ds.pathobj).as_posix(),
+            'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
         }
             for part in status
             # if we are processing everything we do not need to know about
@@ -175,7 +173,7 @@ def _get_commit_info(ds, status):
     # desired answer
     refcommit = ds.repo.get_last_commit_hash(
         list(set(
-            ut.Path(s['path']).relative_to(ds.pathobj).parts[0]
+            Path(s['path']).relative_to(ds.pathobj).parts[0]
             for s in status))
     )
 
