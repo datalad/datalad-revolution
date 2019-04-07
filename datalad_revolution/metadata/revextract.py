@@ -67,6 +67,10 @@ lgr = logging.getLogger('datalad.metadata.metadata')
 class RevExtractMetadata(Interface):
     """Run one or more of DataLad's metadata extractors on a dataset or file.
 
+    This command does not modified a dataset, but may initiate required data
+    transfers to perform metadata extraction that requires local file content
+    availability.
+
     The result(s) are structured like the metadata DataLad would extract
     during metadata aggregation. There is one result per dataset/file.
 
