@@ -415,7 +415,9 @@ def _proc(ds, sources, status, extractors, process_type):
                     )
         if unique_cm:
             # produce final unique record in dsmeta for this extractor
-            _finalize_unique_cm(unique_cm, msrc_key, dsmeta)
+            ucp = dsmeta.get('datalad_unique_content_properties', {})
+            ucp[msrc_key] = _finalize_unique_cm(unique_cm)
+            dsmeta['datalad_unique_content_properties'] = ucp
 
     log_progress(
         lgr.info,
@@ -617,22 +619,19 @@ def _update_unique_cm(unique_cm, msrc_key, dsmeta, cnmeta, exclude_keys):
         unique_cm[k] = vset
 
 
-def _finalize_unique_cm(unique_cm, msrc_key, dsmeta):
+def _finalize_unique_cm(unique_cm):
     """Convert harvested unique values in a serializable, ordered
-    representation, and inject it into the dataset metadata
+    representation
 
     Parameters
     ----------
     unique_cm : dict
       unique value records for an individual extractor
-    msrc_key : str
-      key of the extractor currently processed
-    dsmeta : dict
-      dataset metadata record to inject unique value report into,
-      modified in place
+
+    Returns
+    -------
+    dict
     """
-    # per source storage here too
-    ucp = dsmeta.get('datalad_unique_content_properties', {})
     # important: we want to have a stable order regarding
     # the unique values (a list). we cannot guarantee the
     # same order of discovery, hence even when not using a
@@ -652,7 +651,7 @@ def _finalize_unique_cm(unique_cm, msrc_key, dsmeta):
         else:
             return val
 
-    ucp[msrc_key] = {
+    return {
         k: [_ensure_serializable(i)
             for i in sorted(
                 v,
@@ -665,7 +664,6 @@ def _finalize_unique_cm(unique_cm, msrc_key, dsmeta):
         # (inflated number of keys, inflated storage, inflated search index,
         # ...)
         if v is None or (v and not v == {''})}
-    dsmeta['datalad_unique_content_properties'] = ucp
 
 
 def _val2hashable(val):
