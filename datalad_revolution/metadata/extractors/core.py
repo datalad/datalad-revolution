@@ -79,15 +79,14 @@ class DataladCoreExtractor(MetadataExtractor):
         meta = {
             # the desired ID
             'identifier': ds.id,
+            '@context': "http://schema.org",
         }
         meta.update(_get_commit_info(ds, status))
         parts = [{
             # this version would change anytime we aggregate metadata,
             # let's not do this for now
             #'@id': sds['gitshasum'],
-            # TODO check that this is the right type term
-            # TODO should this be @type
-            'type': 'Dataset' if part['type'] == 'dataset' else 'File',
+            'type': 'Dataset' if part['type'] == 'dataset' else 'DigitalDocument',
             # relativ path within dataset, always POSIX
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
         }
