@@ -222,7 +222,11 @@ class RevExtractMetadata(Interface):
                     path=path,
                     # it is safe to ask for annex info even when a dataset is
                     # plain Git
-                    annex='availability',
+                    # NOTE changing to 'annex=availability' has substantial
+                    # performance costs, as it involved resolving each annex
+                    # symlink on the file-system, which can be really slow
+                    # depending on the FS and the number of annexed files
+                    annex='basic',
                     # TODO we never want to aggregate metadata from untracked
                     # content, but we might just want to see what we can get
                     # from a file
