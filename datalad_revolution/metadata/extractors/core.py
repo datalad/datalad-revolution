@@ -22,6 +22,7 @@ import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
 from datalad.log import log_progress
 from datalad.support.constraints import EnsureBool
+import datalad.support.network as dsn
 
 import os.path as op
 
@@ -104,15 +105,46 @@ class DataladCoreExtractor(MetadataExtractor):
                 True, valtype=EnsureBool()):
             remote_names = ds.repo.get_remotes()
             distributions = []
+            known_uuids = {}
+            # start with configured Git remotes
             for r in remote_names:
                 url = ds.config.obtain('remote.{}.url'.format(r), None)
-                if url:
-                    distributions.append({
-                        'name': r,
-                        'url': url,
-                        # not very informative
-                        #'description': 'DataLad dataset sibling',
-                    })
+                if not url:
+                    continue
+                # best effort to recode whatever is configured into a URL
+                url = ri2url(dsn.RI(url))
+                if not url:
+                    continue
+                info = {
+                    'name': r,
+                    'url': url,
+                    # not very informative
+                    #'description': 'DataLad dataset sibling',
+                }
+                # do we have information on the annex ID?
+                annex_uuid = ds.config.obtain(
+                    'remote.{}.annex-uuid'.format(r), None)
+                if annex_uuid is not None:
+                    info['identifier'] = annex_uuid
+                    known_uuids[annex_uuid] = info
+                distributions.append(info)
+            # now look for annex info
+            if hasattr(ds.repo, 'repo_info'):
+                info = ds.repo.repo_info(fast=True)
+                for cat in ('trusted repositories',
+                            'semitrusted repositories',
+                            'untrusted repositories'):
+                    for r in info[cat]:
+                        if r['here'] or r['uuid'] in (
+                                '00000000-0000-0000-0000-000000000001',
+                                '00000000-0000-0000-0000-000000000002'):
+                            # ignore local and universally available
+                            # remotes
+                            continue
+                        # avoid duplicates, but record all sources, even
+                        # if not URLs are around
+                        if r['uuid'] not in known_uuids:
+                            distributions.append(dict(identifier=r['uuid']))
             if len(distributions):
                 meta['distribution'] = distributions
         return meta
@@ -217,3 +249,26 @@ def _get_commit_info(ds, status):
             dateModified=commits[0][2],
         )
     return meta
+
+
+# TODO RF to be merged with datalad.support.network
+def ri2url(ri):
+    f = ri.fields
+    if isinstance(ri, dsn.URL):
+        return ri.as_str()
+    elif isinstance(ri, dsn.SSHRI):
+        # construct a URL that Git would understand
+        return 'ssh://{}{}{}{}{}{}'.format(
+            f['username'],
+            '@' if f['username'] else '',
+            f['hostname'],
+            ':' if f['port'] else '',
+            f['port'],
+            f['path'] if op.isabs(f['path'])
+            else '/{}'.format(f['path']) if f['path'].startswith('~')
+            else '/~/{}'.format(f['path'])
+        )
+    elif isinstance(ri, dsn.PathRI):
+        # this has no chance of being resolved outside this machine
+        # not work reporting
+        return None
