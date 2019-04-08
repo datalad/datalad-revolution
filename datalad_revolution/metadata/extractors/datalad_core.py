@@ -145,7 +145,9 @@ class DataladCoreExtractor(MetadataExtractor):
             # always around, identify the GITSHA as such in a similar manner
             # to git-annex's style
             'identifier': rec['key']
-            if 'key' in rec else 'SHA1GIT-{}'.format(rec['gitshasum']),
+            if 'key' in rec else 'SHA1-s{}--{}'.format(
+                rec['bytesize'],
+                rec['gitshasum']),
             # schema.org doesn't have a useful term, only contentSize
             # and fileSize which seem to be geared towards human consumption
             # not numerical accuracy
