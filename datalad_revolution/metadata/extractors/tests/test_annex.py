@@ -28,8 +28,8 @@ def test_annex_contentmeta(path):
     ds = Dataset(path).rev_create()
     mfile_path = ds.pathobj / 'sudir' / 'dummy.txt'
     mfile_path.parent.mkdir()
-    mfile_path.write_text('nothing')
-    (ds.pathobj / 'ignored').write_text('nometa')
+    mfile_path.write_text(u'nothing')
+    (ds.pathobj / 'ignored').write_text(u'nometa')
     ds.rev_save()
     # TODO strip this list() wrapper when
     # https://github.com/datalad/datalad/pull/3298 is merged
