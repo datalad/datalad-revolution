@@ -44,8 +44,7 @@ def check_api(no_annex, path):
             exc_ = str(exc)
             skipped_extractors += [exc_]
             continue
-        # datalad_core does provide some (not really) information about our
-        # precious file
+        # datalad_core does provide some information about our precious file
         if extractor_ep.name == 'datalad_core':
             assert_result_count(
                 res,
@@ -56,6 +55,11 @@ def check_api(no_annex, path):
             )
             assert_true(
                 all('datalad_core' in r.get('metadata', {}) for r in res))
+            # every single report comes with an identifier
+            assert_true(all(
+                r['metadata']['datalad_core'].get(
+                    'identifier', None) is not None
+                for r in res))
         processed_extractors.append(extractor_ep.name)
     assert "datalad_core" in processed_extractors, \
         "Should have managed to find at least the core extractor extractor"
