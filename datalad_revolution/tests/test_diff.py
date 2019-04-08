@@ -37,7 +37,7 @@ from datalad.tests.utils import (
 )
 
 import datalad.utils as ut
-from ..dataset import RevolutionDataset as Dataset
+from datalad.distribution.dataset import Dataset
 from datalad.api import (
     rev_save as save,
     rev_create as create,
@@ -78,6 +78,7 @@ def test_repo_diff(path, norepo):
         {ut.Path(ds.repo.pathobj / 'new'): {
             'state': 'added',
             'type': 'file',
+            'bytesize': 5,
             'gitshasum': '7b4d68d70fcae134d5348f5e118f5e9c9d3f05f6'}})
     # modify known file
     create_tree(ds.path, {'new': 'notempty'})
