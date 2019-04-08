@@ -300,27 +300,6 @@ def _proc(ds, sources, status, extractors, process_type):
     dsmeta = dict()
     contentmeta = {}
 
-    # this block can be removed when we stop supporting partial
-    # extraction from datasets with some unavailable content
-    # using old-style extractors that cannot report errors
-    # properly
-    fullstatus = status
-    if status and isinstance(ds.repo, AnnexRepo):  # pragma: no cover
-        status = [p for p in status if p.get('has_content', True)]
-        nocontent = len(fullstatus) - len(status)
-        if nocontent and process_type in (None, 'content', 'all'):
-            # TODO better fail, or support incremental and label this file as
-            # no present
-            lgr.warn(
-                '{} files have no content present, '
-                'some extractors will not operate on {}'.format(
-                    nocontent,
-                    'them' if nocontent > 10
-                    else [
-                        p['path'] for p in fullstatus
-                        if not p.get('has_content', True)])
-            )
-
     log_progress(
         lgr.info,
         'metadataextractors',
@@ -357,9 +336,7 @@ def _proc(ds, sources, status, extractors, process_type):
                 extractor['class'],
                 msrc,
                 ds,
-                status
-                if getattr(extractor['class'], 'NEEDS_CONTENT', False)
-                else fullstatus,
+                status,
                 extractor['process_type']):
             # always have a path, use any absolute path coming in,
             # make any relative path absolute using the dataset anchor,
