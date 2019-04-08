@@ -53,6 +53,7 @@ from datalad.metadata.definitions import version as vocabulary_version
 from datalad.utils import (
     assure_list,
     as_unicode,
+    Path,
 )
 from datalad.dochelpers import exc_str
 from datalad.log import log_progress
@@ -360,6 +361,10 @@ def _proc(ds, sources, status, extractors, process_type):
             # make any relative path absolute using the dataset anchor,
             # use the dataset path if nothing is coming in (better then
             # no path at all)
+            # for now normalize the reported path to be a plain string
+            # until DataLad as a whole can deal with pathlib objects
+            if 'path' in res:
+                res['path'] = text_type(Path(res['path']))
             res.update(
                 path=ds.path
                 if 'path' not in res else res['path']
