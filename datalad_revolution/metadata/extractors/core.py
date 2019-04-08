@@ -21,6 +21,8 @@ from datalad.utils import (
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
 from datalad.log import log_progress
+from datalad.distribution.dataset import Dataset
+from datalad.support.gitrepo import GitRepo
 from datalad.support.constraints import EnsureBool
 import datalad.support.network as dsn
 
@@ -83,18 +85,23 @@ class DataladCoreExtractor(MetadataExtractor):
         }
         meta.update(_get_commit_info(ds, status))
         parts = [{
-            # this version would change anytime we aggregate metadata,
-            # let's not do this for now
-            #'@id': sds['gitshasum'],
-            'type': 'Dataset' if part['type'] == 'dataset' else 'DigitalDocument',
-            # relativ path within dataset, always POSIX
+            '@type': 'Dataset' if part['type'] == 'dataset'
+            else 'DigitalDocument',
+            # relative path within dataset, always POSIX
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
+            'identifier': _get_file_key(part) if part['type'] == 'file'
+            # TODO this is ugly (looking outside the dataset)
+            # but to do better, we need to RF `rev-save` to import a
+            # subdataset's ID into .gitmodules
+            else Dataset(part['path']).id
+            if GitRepo.is_valid_repo(part['path'])
+            else None,
         }
             for part in status
             # if we are processing everything we do not need to know about
             # files, they will have their own reports
             # but if we are only looking at the dataset, we report the files
-            # here, to have at least their names
+            # here, to have at least their names and IDs
             if process_type == 'dataset' or part['type'] == 'dataset'
         ]
         if parts:
@@ -172,13 +179,7 @@ class DataladCoreExtractor(MetadataExtractor):
 
     def _describe_file(self, rec):
         info = {
-            # prefer the annex key, but fall back on the git shasum that is
-            # always around, identify the GITSHA as such in a similar manner
-            # to git-annex's style
-            'identifier': rec['key']
-            if 'key' in rec else 'SHA1-s{}--{}'.format(
-                rec['bytesize'],
-                rec['gitshasum']),
+            'identifier': _get_file_key(rec),
             # schema.org doesn't have a useful term, only contentSize
             # and fileSize which seem to be geared towards human consumption
             # not numerical accuracy
@@ -192,6 +193,15 @@ class DataladCoreExtractor(MetadataExtractor):
             # TODO determine per file 'contributor' from git log
         }
         return info
+
+
+def _get_file_key(rec):
+    # prefer the annex key, but fall back on the git shasum that is
+    # always around, identify the GITSHA as such in a similar manner
+    # to git-annex's style
+    return rec['key'] if 'key' in rec else 'SHA1-s{}--{}'.format(
+        rec['bytesize'],
+        rec['gitshasum'])
 
 
 def _get_commit_info(ds, status):
