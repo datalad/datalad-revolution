@@ -249,10 +249,11 @@ def _get_commit_info(ds, status):
         'refcommit': refcommit,
     }
     if ds.config.obtain(
-            'datalad.metadata.datalad-core.report-authors',
+            'datalad.metadata.datalad-core.report-contributors',
             True, valtype=EnsureBool()):
         meta.update(
-            authors=sorted(set('{} <{}>'.format(c[0], c[1]) for c in commits)))
+            contributors=sorted(set('{} <{}>'.format(
+                c[0], c[1]) for c in commits)))
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-modification-dates',
             True, valtype=EnsureBool()):
