@@ -82,11 +82,14 @@ class DataladCoreExtractor(MetadataExtractor):
             # the desired ID
             'identifier': ds.id,
             '@context': "http://schema.org",
+            '@type': 'Dataset',
         }
         meta.update(_get_commit_info(ds, status))
         parts = [{
             '@type': 'Dataset' if part['type'] == 'dataset'
-            else 'DigitalDocument',
+            # schema.org doesn't have anything good for a symlink, as it could
+            # be anything
+            else 'Thing' if part['type'] == 'symlink' else 'DigitalDocument',
             # relative path within dataset, always POSIX
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
             'identifier': _get_file_key(part) if part['type'] == 'file'
@@ -200,7 +203,7 @@ def _get_file_key(rec):
     # always around, identify the GITSHA as such in a similar manner
     # to git-annex's style
     return rec['key'] if 'key' in rec else 'SHA1-s{}--{}'.format(
-        rec['bytesize'],
+        rec['bytesize'] if rec['type'] != 'symlink' else 0,
         rec['gitshasum'])
 
 
