@@ -258,6 +258,11 @@ class RevAggregateMetadata(Interface):
             path=path,
             # never act on anything untracked, we cannot record its identity
             untracked='no',
+            # we are not interested in a more expensive test for untracked content
+            # in any subdataset. Any metadata extraction is driven by the content
+            # recorded for a particular state. Limiting status detection to
+            # just commits boosts performance considerably
+            eval_subdataset_state='commit',
             recursive=recursive,
             recursion_limit=recursion_limit,
             result_renderer='disabled',
