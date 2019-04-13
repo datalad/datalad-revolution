@@ -117,7 +117,7 @@ class DataladCoreExtractor(MetadataExtractor):
             known_uuids = {}
             # start with configured Git remotes
             for r in remote_names:
-                url = ds.config.obtain('remote.{}.url'.format(r), None)
+                url = ds.config.get('remote.{}.url'.format(r), None)
                 if not url:
                     continue
                 # best effort to recode whatever is configured into a URL
@@ -131,7 +131,7 @@ class DataladCoreExtractor(MetadataExtractor):
                     #'description': 'DataLad dataset sibling',
                 }
                 # do we have information on the annex ID?
-                annex_uuid = ds.config.obtain(
+                annex_uuid = ds.config.get(
                     'remote.{}.annex-uuid'.format(r), None)
                 if annex_uuid is not None:
                     info['identifier'] = annex_uuid
