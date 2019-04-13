@@ -258,7 +258,6 @@ def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
             to,
             paths=None if not paths else [p for p in paths],
             untracked=untracked,
-            ignore_submodules='other',
             _cache=cache)
     except ValueError as e:
         msg_tmpl = "reference '{}' invalid"
