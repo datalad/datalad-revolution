@@ -913,7 +913,7 @@ def _extract_metadata(fromds, tods):
         info['refcommit'] = refcommit
     else:
         lgr.warn(
-            'Could not determine a reference commit for the metadata ',
+            'Could not determine a reference commit for the metadata '
             'extracted from %s', fromds)
 
     # create a tempdir for this dataset under .git/tmp
