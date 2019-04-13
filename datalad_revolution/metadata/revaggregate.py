@@ -72,6 +72,7 @@ from datalad.utils import (
     assure_list,
     rmtree,
 )
+from datalad.log import log_progress
 
 lgr = logging.getLogger('datalad.metadata.aggregate')
 
@@ -476,9 +477,23 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
     # this will gather no longer needed metadata object files
     obsolete_objs = set()
 
-    # TODO this for loop does the heavy lifting (extraction/aggregation)
+    # this for loop does the heavy lifting (extraction/aggregation)
     # wrap in progress bar
+    log_progress(
+        lgr.info,
+        'metadataaggregation',
+        'Start metadata aggregation into %s', ds,
+        total=len(extract_from_ds),
+        label='Metadata aggregation',
+        unit=' datasets',
+    )
     for aggsrc in sorted(extract_from_ds, key=lambda x: x.path):
+        log_progress(
+            lgr.info,
+            'metadataaggregation',
+            'Aggregate from dataset %s', aggsrc,
+            update=1,
+            increment=True)
         # check extraction is actually needed, by running a diff on the
         # dataset against the last known refcommit, to see whether it had
         # any metadata relevant changes
@@ -556,8 +571,9 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                     agginfo = res['info']
                     # identify the dataset by ID in the aggregation record
                     agginfo['id'] = aggsrc.id
-                # always also report
-                yield res
+                # report if fishy
+                if success_status_map.get(res['status'], False) != 'success':
+                    yield res
             # logic based on the idea that there will only be one
             # record per dataset (extracted or from pre-aggregate)
             assert(aggsrc.pathobj not in agginfo_db)
@@ -650,7 +666,11 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             )
             # TODO evaluate the results, but ATM get() output is not
             # very helpful. Do when it gives proper results
-
+    log_progress(
+        lgr.info,
+        'metadataaggregation',
+        'Finished metadata aggregation into %s', ds,
+    )
     # at this point top_agginfo_db has everything on the previous
     # aggregation state that is still valid, and agginfo_db everything newly
     # found in this run
