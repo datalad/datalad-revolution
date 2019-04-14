@@ -11,6 +11,7 @@
 
 
 import os.path as op
+from six import text_type
 
 from datalad.api import (
     query_metadata,
@@ -577,3 +578,22 @@ def test_partial_aggregation(path):
     #res = ds.rev_metadata(reporton='aggregates')
     #assert_result_count(res, 3)
     #assert_result_count(res, 1, path=sub2.path)
+
+
+@with_tempfile(mkdir=True)
+def test_aggregate_fail(path):
+    ds = Dataset(path).rev_create()
+    (ds.pathobj / 'dummy').write_text(text_type('blurb'))
+    assert_repo_status(ds.path, untracked=['dummy'])
+    # aggregation will not fail, untracked content is simply ignored
+    assert_status('ok', ds.rev_aggregate_metadata())
+    # but with staged changes it does
+    ds.repo.add(['dummy'])
+    assert_result_count(
+        ds.rev_aggregate_metadata(on_failure='ignore'),
+        1,
+        path=ds.path,
+        type='dataset',
+        status='error',
+        message="dataset has pending changes",
+    )

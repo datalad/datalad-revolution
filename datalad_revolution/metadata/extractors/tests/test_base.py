@@ -15,13 +15,16 @@ from pkg_resources import iter_entry_points
 from datalad.api import Dataset
 from datalad.api import rev_extract_metadata as extract_metadata
 from datalad.api import rev_save as save
+from datalad.support.gitrepo import GitRepo
 
 from nose import SkipTest
 from datalad.tests.utils import (
     assert_repo_status,
     assert_true,
+    assert_raises,
     assert_result_count,
     with_tree,
+    with_tempfile,
 )
 
 
@@ -76,3 +79,44 @@ def test_api_git():
 
 def test_api_annex():
     yield check_api, False
+
+
+@with_tempfile(mkdir=True)
+def test_plainest(path):
+    # blow on nothing
+    assert_raises(
+        ValueError,
+        extract_metadata, dataset=path, sources=['datalad_core'])
+    r = GitRepo(path, create=True)
+    # proper error, no crash, when there is the thinnest of all traces
+    # of a dataset: but nothing to describe
+    assert_result_count(
+        extract_metadata(
+            dataset=r.path,
+            sources=['datalad_core'],
+            on_failure='ignore',
+        ),
+        1,
+        status='error',
+        # message contains exception
+        type='dataset',
+        path=r.path,
+    )
+    # not we add some dummy content that does not count as metadata-relevant
+    # and we still fail
+    (r.pathobj / '.datalad').mkdir()
+    (r.pathobj / '.datalad' / 'dummy').write_text(text_type('stamp'))
+    ds = Dataset(r.path)
+    ds.rev_save()
+    assert_result_count(
+        extract_metadata(
+            dataset=ds.path,
+            sources=['datalad_core'],
+            on_failure='ignore',
+        ),
+        1,
+        status='error',
+        # message contains exception
+        type='dataset',
+        path=ds.path,
+    )

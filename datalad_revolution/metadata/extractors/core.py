@@ -227,6 +227,14 @@ def _get_commit_info(ds, status):
             Path(s['path']).relative_to(ds.pathobj).parts[0]
             for s in status))
     )
+    if refcommit is None or not len(status):
+        # this seems extreme, but without a single commit there is nothing
+        # we can have, or describe -> blow
+        # will turn into an error result upstairs
+        raise ValueError(
+            'No metadata-relevant repository content found. '
+            'Cannot determine reference commit for metadata ID'
+        )
 
     # grab the history until the refcommit
     stdout, stderr = ds.repo._git_custom_command(

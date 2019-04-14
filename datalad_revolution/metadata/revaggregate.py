@@ -284,6 +284,7 @@ class RevAggregateMetadata(Interface):
                     yield dict(
                         action='aggregate_metadata',
                         path=ds_candidate.path,
+                        type='dataset',
                         logger=lgr,
                         status='error' if ds_candidate == ds else 'impossible',
                         message='dataset has pending changes',
@@ -783,7 +784,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             # object store clean(er) -- although git won't care
             # catch error, in case there is more stuff in the dir
             obsolete_obj.parent.rmdir()
-        except OSError:
+        except OSError:  # pragma: no cover
             # this would be expected and nothing to make a fuzz about
             pass
     # store the updated DB
@@ -879,11 +880,11 @@ def _extract_metadata(fromds, tods):
             # extractor, which should be valid
             (k for k in res.get('metadata', {}) if not k.startswith('@')))
         if restype == 'dataset':
-            if meta['dataset'] is not None:
+            if meta['dataset'] is not None:  # pragma: no cover
                 res.update(
                     message=(
                         'Metadata extraction from %s yielded second dataset '
-                        'metadata set, ignored',
+                        'metadata set',
                         fromds),
                     status='error',
                 )
@@ -913,7 +914,10 @@ def _extract_metadata(fromds, tods):
     # instead of reporting what was enabled, report what was actually retrieved
     info['extractors'] = sorted(extracted_metadata_sources)
 
-    if meta.get('dataset', None) is None:
+    if meta.get('dataset', None) is None:  # pragma: no cover
+        # this is a double safety net, for any repository that has anything
+        # datalad_core should report something. If it doesn't, it should have
+        # blown already
         yield dict(
             path=fromds.path,
             type='dataset',
