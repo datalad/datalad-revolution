@@ -376,7 +376,7 @@ def _proc(ds, sources, status, extractors, process_type):
                     continue
 
             # we do not want to report info that there was no metadata
-            if not res['metadata']:
+            if not res['metadata']:  # pragma: no cover
                 lgr.debug(
                     'Skip %s %s metadata in record of %s: '
                     'extractor reported nothing',
@@ -462,8 +462,8 @@ def _run_extractor(extractor_cls, name, ds, status, process_type):
                     status=status,
                     process_type=process_type):
                 yield r
-        elif hasattr(extractor_cls, 'get_metadata'):
-            # old-style
+        elif hasattr(extractor_cls, 'get_metadata'):  # pragma: no cover
+            # old-style, keep around for a while, but don't sweat over it much
             for res in _yield_res_from_pre2019_extractor(
                     ds,
                     name,
@@ -499,7 +499,7 @@ def _run_extractor(extractor_cls, name, ds, status, process_type):
 
 
 def _yield_res_from_pre2019_extractor(
-        ds, name, extractor_cls, process_type, paths):
+        ds, name, extractor_cls, process_type, paths):  # pragma: no cover
     """This implements dealing with our first extractor class concept"""
 
     want_dataset_meta = process_type in ('all', 'dataset') \
@@ -703,23 +703,23 @@ def _ok_metadata(res, msrc, ds, loc):
     meta = res.get('metadata', None)
     if meta is None or isinstance(meta, dict):
         return True
+    else:  # pragma: no cover
+        # untested, needs broken extract
+        # extractor
+        msg = (
+            "Metadata extractor '%s' yielded something other than a "
+            "dictionary for dataset %s%s -- this is likely a bug, "
+            "please consider reporting it. "
+            "This type of native metadata will be ignored. Got: %s",
+            msrc,
+            ds,
+            '' if loc is None else ' content {}'.format(loc),
+            repr(meta))
+        if cfg.get('datalad.runtime.raiseonerror'):
+            raise RuntimeError(*msg)
 
-    # TODO untested, needs broken extract, implement with 'custom'
-    # extractor
-    msg = (
-        "Metadata extractor '%s' yielded something other than a dictionary "
-        "for dataset %s%s -- this is likely a bug, please consider "
-        "reporting it. "
-        "This type of native metadata will be ignored. Got: %s",
-        msrc,
-        ds,
-        '' if loc is None else ' content {}'.format(loc),
-        repr(meta))
-    if cfg.get('datalad.runtime.raiseonerror'):
-        raise RuntimeError(*msg)
-
-    lgr.error(*msg)
-    return False
+        lgr.error(*msg)
+        return False
 
 
 class ReadOnlyDict(Mapping):

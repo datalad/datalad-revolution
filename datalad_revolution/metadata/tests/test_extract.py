@@ -37,6 +37,14 @@ sample_dsmeta = {
 }
 sample_fmeta = {
     "something": "stupid",
+    "complextype": {
+        "entity": {
+            "some": "many",
+            "properties": "here",
+        },
+        "age": "young",
+        "numbers": [3, 2, 1, 0],
+    }
 }
 meta_tree = {
     '.datalad': {
@@ -44,11 +52,13 @@ meta_tree = {
         'custom_metadata': {
             'sub': {
                 'one.json': jsondumps(sample_fmeta),
+                'nothing.json': '{}',
             },
         },
     },
     'sub': {
         'one': '1',
+        'nothing': '2',
     },
 }
 
@@ -76,9 +86,9 @@ def test_ds_extraction(path):
     # by default we get core and annex reports
     res = extract_metadata(dataset=ds)
     # dataset, plus two file (payload, .gitattributes)
-    assert_result_count(res, 3)
+    assert_result_count(res, 4)
     assert_result_count(res, 1, type='dataset')
-    assert_result_count(res, 2, type='file')
+    assert_result_count(res, 3, type='file')
     # core has stuff on everythin
     assert(all('datalad_core' in r['metadata'] for r in res))
 
