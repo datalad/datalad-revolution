@@ -99,7 +99,6 @@ def test_plainest(path):
     assert_result_count(
         extract_metadata(
             dataset=r.path,
-            sources=['datalad_core'],
             on_failure='ignore',
         ),
         1,
@@ -130,9 +129,10 @@ def test_plainest(path):
 
 @with_tempfile
 @with_tree(tree={'file.dat': 'content'})
-def test_parts_report(path, orig):
+def test_report(path, orig):
     origds = Dataset(orig).rev_create(force=True)
     origds.rev_save()
+    origds.repo.set_metadata('file.dat', reset={'tag': ['one', 'two']})
     subds = origds.rev_create('sub')
     # now clone to a new place to ensure no content is present
     ds = install(source=origds.path, path=path)
@@ -149,6 +149,10 @@ def test_parts_report(path, orig):
         res[0]['metadata']['datalad_core']
     )
     res = extract_metadata(dataset=ds, process_type='content')
+    assert(any(
+        dict(tag=['one', 'two']) == r['metadata'].get('annex', None)
+        for r in res
+    ))
     # we have a bunch of reports on files
     assert(len(res) > 1)
     # but no subdataset reports
