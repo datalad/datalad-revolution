@@ -122,7 +122,8 @@ class DataladCoreExtractor(MetadataExtractor):
                 }
                 url = ds.config.get('remote.{}.url'.format(r), None)
                 # best effort to recode whatever is configured into a URL
-                url = ri2url(dsn.RI(url))
+                if url is not None:
+                    url = ri2url(dsn.RI(url))
                 if url:
                     info['url'] = url
                 # do we have information on the annex ID?
