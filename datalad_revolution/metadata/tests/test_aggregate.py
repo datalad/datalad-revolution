@@ -155,7 +155,10 @@ def test_aggregation(path):
     subsubds = subds.create('subsub', force=True)
     subsubds.config.add('datalad.metadata.nativetype', 'frictionless_datapackage',
                         where='dataset')
-    ds.rev_save(recursive=True)
+    assert_status('ok', ds.rev_save(recursive=True))
+    # while we are at it: dot it again, nothing should happen
+    assert_status('notneeded', ds.rev_save(recursive=True))
+
     assert_repo_status(ds.path)
     # aggregate metadata from all subdatasets into any superdataset, including
     # intermediate ones
