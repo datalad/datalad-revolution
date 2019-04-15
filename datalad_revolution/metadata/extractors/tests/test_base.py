@@ -32,6 +32,9 @@ from datalad.tests.utils import (
     with_tree,
     with_tempfile,
 )
+from ...tests import (
+    make_ds_hierarchy_with_metadata,
+)
 
 
 @with_tree(tree={'file.dat': ''})
@@ -128,12 +131,9 @@ def test_plainest(path):
 
 
 @with_tempfile
-@with_tree(tree={'file.dat': 'content'})
+@with_tempfile
 def test_report(path, orig):
-    origds = Dataset(orig).rev_create(force=True)
-    origds.rev_save()
-    origds.repo.set_metadata('file.dat', reset={'tag': ['one', 'two']})
-    subds = origds.rev_create('sub')
+    origds, subds = make_ds_hierarchy_with_metadata(orig)
     # now clone to a new place to ensure no content is present
     ds = install(source=origds.path, path=path)
     # only dataset-global metadata

@@ -100,7 +100,10 @@ def get_ds_aggregate_db_locations(dspath, version='default', warn_absent=True):
     agg_base_path = info_fpath.parent
     # not sure if this is the right place with these check, better move then to
     # a higher level
-    if warn_absent and not info_fpath.exists():
+    if warn_absent and not info_fpath.exists():  # pragma: no cover
+        # legacy code from a time when users could not be aware of whether
+        # they were doing metadata extraction, or querying aggregated metadata
+        # nowadays, and error is triggered long before it reaches this code
         if version == 'default':
             from datalad.consts import (
                 OLDMETADATA_DIR,
@@ -230,7 +233,6 @@ class QueryMetadata(Interface):
             constraints=EnsureStr() | EnsureNone()),
         reporton=Parameter(
             args=('--reporton',),
-            metavar='TYPE',
             constraints=EnsureChoice('all', 'datasets', 'files', 'aggregates'),
             doc="""choose on what type metadata to report on: dataset-global
             metadata only ('datasets'), metadata on dataset content/files only
@@ -284,15 +286,9 @@ class QueryMetadata(Interface):
         for p in assure_list(path):
             p = rev_resolve_path(p, dataset)
             if p != ds.pathobj and ds.pathobj not in p.parents:
-                yield dict(
-                    res_kwargs,
-                    path=p,
-                    status='error',
-                    message=(
-                        'given path %s is not underneath dataset %s',
-                        p, ds),
-                )
-                return
+                raise ValueError(
+                    'given path {} is not underneath dataset {}'.format(
+                        p, ds))
             resolved_paths.add(p)
 
         # sort paths into their containing dataset aggregate records

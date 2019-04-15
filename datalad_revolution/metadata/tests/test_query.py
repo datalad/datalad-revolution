@@ -1,4 +1,7 @@
 import os.path as op
+from six import (
+    text_type,
+)
 
 from datalad.support.gitrepo import GitRepo
 from datalad.support.annexrepo import AnnexRepo
@@ -7,6 +10,7 @@ from datalad.distribution.dataset import Dataset
 from datalad.api import (
     install,
     query_metadata,
+    rev_aggregate_metadata,
 )
 from datalad.utils import (
     chpwd,
@@ -17,7 +21,11 @@ from datalad.tests.utils import (
     assert_result_count,
     assert_true,
     assert_raises,
+    assert_repo_status,
     eq_,
+)
+from . import (
+    make_ds_hierarchy_with_metadata,
 )
 
 
@@ -32,7 +40,8 @@ def test_ignore_nondatasets(path):
         return meta
 
     ds = Dataset(path).create()
-    meta = _kill_time(ds.query_metadata(reporton='datasets', on_failure='ignore'))
+    meta = _kill_time(
+        ds.query_metadata(reporton='datasets', on_failure='ignore'))
     n_subm = 0
     # placing another repo in the dataset has no effect on metadata
     for cls, subpath in ((GitRepo, 'subm'), (AnnexRepo, 'annex_subm')):
@@ -43,11 +52,15 @@ def test_ignore_nondatasets(path):
         r.add('test')
         r.commit('some')
         assert_true(Dataset(subm_path).is_installed())
-        eq_(meta, _kill_time(ds.query_metadata(reporton='datasets', on_failure='ignore')))
+        eq_(meta,
+            _kill_time(
+                ds.query_metadata(reporton='datasets', on_failure='ignore')))
         # making it a submodule has no effect either
         ds.rev_save(subpath)
         eq_(len(ds.subdatasets()), n_subm + 1)
-        eq_(meta, _kill_time(ds.query_metadata(reporton='datasets', on_failure='ignore')))
+        eq_(meta,
+            _kill_time(
+                ds.query_metadata(reporton='datasets', on_failure='ignore')))
         n_subm += 1
 
 
@@ -75,3 +88,60 @@ def test_get_aggregates_fails(path):
     ds = Dataset(path).create()
     res = ds.query_metadata(reporton='aggregates', on_failure='ignore')
     assert_result_count(res, 1, path=ds.path, status='impossible')
+
+
+@with_tempfile(mkdir=True)
+def test_query_empty(path):
+    with chpwd(path), assert_raises(ValueError):
+        query_metadata()
+    ds = Dataset(path).create()
+    res = ds.query_metadata(on_failure='ignore')
+    assert_result_count(res, 1)
+    assert_result_count(
+        res, 1,
+        status='impossible',
+        message='metadata aggregation has never been performed '
+        'in this dataset',
+    )
+
+
+@with_tempfile
+@with_tempfile
+def test_query(path, orig):
+    origds, subds = make_ds_hierarchy_with_metadata(orig)
+    origds.rev_aggregate_metadata(recursive=True)
+    assert_repo_status(origds.path)
+    # now clone to a new place to ensure no content is present
+    ds = install(source=origds.path, path=path)
+    res = ds.query_metadata()
+    # we get identical results in the local, (initially) empty clone
+    # and the original dataset with all the real content and aggregated
+    # metadata
+    for remote, local in zip(res, origds.query_metadata()):
+        eq_(remote['metadata'], local['metadata'])
+    # we get nothing on the subdataset without recursion (see test below)
+    assert_result_count(res, 0, dsid=subds.id)
+    # make path-specific queries
+
+    # fails on queries outside the dataset
+    assert_raises(ValueError, ds.query_metadata, path=orig)
+    # asking for a file, we only get a report for this file
+    res = ds.query_metadata('file.dat', reporton='files')
+    assert_result_count(res, 1)
+    assert_result_count(
+        res, 1, dsid=origds.id, path=text_type(ds.pathobj / 'file.dat')
+    )
+
+    # now with "recursion" to get info on the subdatasets
+    res = ds.query_metadata(recursive=True)
+    # now we see the subdataset too
+    assert_result_count(res, 1, dsid=subds.id, type='dataset')
+
+    # same distinction re recursion hold for aggregate reporting
+    res = ds.query_metadata(reporton='aggregates')
+    assert_result_count(res, 1)
+    assert_result_count(res, 1, id=origds.id)
+    res = ds.query_metadata(reporton='aggregates', recursive=True)
+    assert_result_count(res, 2)
+    assert_result_count(res, 1, id=origds.id)
+    assert_result_count(res, 1, id=subds.id)
