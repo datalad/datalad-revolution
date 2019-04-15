@@ -12,17 +12,23 @@ from six import (
     text_type,
 )
 from pkg_resources import iter_entry_points
-from datalad.api import Dataset
-from datalad.api import rev_extract_metadata as extract_metadata
-from datalad.api import rev_save as save
+from datalad.api import (
+    Dataset,
+    rev_extract_metadata as extract_metadata,
+    rev_save as save,
+    install,
+)
 from datalad.support.gitrepo import GitRepo
 
 from nose import SkipTest
 from datalad.tests.utils import (
     assert_repo_status,
     assert_true,
+    assert_not_in,
+    assert_in,
     assert_raises,
     assert_result_count,
+    eq_,
     with_tree,
     with_tempfile,
 )
@@ -119,4 +125,40 @@ def test_plainest(path):
         # message contains exception
         type='dataset',
         path=ds.path,
+    )
+
+
+@with_tempfile
+@with_tree(tree={'file.dat': 'content'})
+def test_parts_report(path, orig):
+    origds = Dataset(orig).rev_create(force=True)
+    origds.rev_save()
+    subds = origds.rev_create('sub')
+    # now clone to a new place to ensure no content is present
+    ds = install(source=origds.path, path=path)
+    # only dataset-global metadata
+    res = extract_metadata(dataset=ds, process_type='dataset')
+    assert_result_count(res, 1)
+    assert_in(
+        {'@type': 'Dataset', 'identifier': subds.id, 'name': 'sub'},
+        res[0]['metadata']['datalad_core']['hasPart']
+    )
+    # has not seen the content
+    assert_not_in(
+        'contentbytesize',
+        res[0]['metadata']['datalad_core']
+    )
+    res = extract_metadata(dataset=ds, process_type='content')
+    # we have a bunch of reports on files
+    assert(len(res) > 1)
+    # but no subdataset reports
+    assert_result_count(res, 0, type='dataset')
+    content_size = sum(
+        r['metadata']['datalad_core']['contentbytesize'] for r in res)
+    # and now all together
+    res = extract_metadata(dataset=ds, process_type='all')
+    # got a content size report that sums up all individual sizes
+    eq_(
+        res[0]['metadata']['datalad_core']['contentbytesize'],
+        content_size
     )

@@ -36,7 +36,7 @@ class MetadataExtractor(object):
           There are only records on content within the given dataset, not
           about content of any existing subdatasets.
         """
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     def get_required_content(self, dataset, process_type, status):
         """Report records for dataset content that must be available locally
@@ -73,7 +73,9 @@ class MetadataExtractor(object):
         return []
 
 
-class BaseMetadataExtractor(object):
+# XXX this is the legacy interface, keep around for a bit more and then
+# remove
+class BaseMetadataExtractor(object):  # pragma: no cover
 
     NEEDS_CONTENT = True   # majority of the extractors need data content
 

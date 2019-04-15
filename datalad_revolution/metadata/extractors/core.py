@@ -22,6 +22,7 @@ import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
 from datalad.log import log_progress
 from datalad.distribution.dataset import Dataset
+import datalad.distribution.subdatasets
 from datalad.support.gitrepo import GitRepo
 from datalad.support.constraints import EnsureBool
 import datalad.support.network as dsn
@@ -93,12 +94,9 @@ class DataladCoreExtractor(MetadataExtractor):
             # relative path within dataset, always POSIX
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
             'identifier': _get_file_key(part) if part['type'] == 'file'
-            # TODO this is ugly (looking outside the dataset)
-            # but to do better, we need to RF `rev-save` to import a
-            # subdataset's ID into .gitmodules
-            else Dataset(part['path']).id
-            if GitRepo.is_valid_repo(part['path'])
-            else None,
+            else ds.subdatasets(
+                contains=part['path'],
+                return_type='item-or-list').get('gitmodule_datalad-id', None)
         }
             for part in status
             # if we are processing everything we do not need to know about
@@ -117,26 +115,26 @@ class DataladCoreExtractor(MetadataExtractor):
             known_uuids = {}
             # start with configured Git remotes
             for r in remote_names:
-                url = ds.config.get('remote.{}.url'.format(r), None)
-                if not url:
-                    continue
-                # best effort to recode whatever is configured into a URL
-                url = ri2url(dsn.RI(url))
-                if not url:
-                    continue
                 info = {
                     'name': r,
-                    'url': url,
                     # not very informative
                     #'description': 'DataLad dataset sibling',
                 }
+                url = ds.config.get('remote.{}.url'.format(r), None)
+                # best effort to recode whatever is configured into a URL
+                url = ri2url(dsn.RI(url))
+                if url:
+                    info['url'] = url
                 # do we have information on the annex ID?
                 annex_uuid = ds.config.get(
                     'remote.{}.annex-uuid'.format(r), None)
                 if annex_uuid is not None:
                     info['identifier'] = annex_uuid
                     known_uuids[annex_uuid] = info
-                distributions.append(info)
+                if 'url' in info or 'identifier' in info:
+                    # only record if we have any identifying information
+                    # otherwise it is pointless cruft
+                    distributions.append(info)
             # now look for annex info
             if hasattr(ds.repo, 'repo_info'):
                 info = ds.repo.repo_info(fast=True)
