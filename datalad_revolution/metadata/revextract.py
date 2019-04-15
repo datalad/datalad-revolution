@@ -49,7 +49,6 @@ from . import (
     exclude_from_metadata,
     get_metadata_type,
 )
-from datalad.metadata.definitions import version as vocabulary_version
 from datalad.utils import (
     assure_list,
     as_unicode,
@@ -415,13 +414,6 @@ def _proc(ds, sources, status, extractors, process_type):
         'metadataextractors',
         'Finished metadata extraction from %s', ds,
     )
-
-    if dsmeta:
-        # always identify the effective vocabulary - JSON-LD style
-        dsmeta['@context'] = {
-            '@vocab': 'http://docs.datalad.org/schema_v{}.json'.format(
-                vocabulary_version)}
-
     if process_type in (None, 'all', 'dataset') and \
             dsmeta and ds is not None and ds.is_installed():
         yield get_status_dict(
