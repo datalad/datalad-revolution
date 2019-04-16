@@ -168,7 +168,7 @@ def _diff_cmd(
             # content (e.g. 'ds/')
             # special case is the root dataset, always report its content
             # changes
-            orig_path = str(p)
+            orig_path = text_type(p)
             resolved_path = rev_resolve_path(p, dataset)
             p = \
                 resolved_path, \
@@ -262,7 +262,7 @@ def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
     except ValueError as e:
         msg_tmpl = "reference '{}' invalid"
         # not looking for a debug repr of the exception, just the message
-        estr = str(e)
+        estr = text_type(e)
         if msg_tmpl.format(fr) in estr or msg_tmpl.format(to) in estr:
             yield dict(
                 path=ds.path,
@@ -287,7 +287,7 @@ def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
                 key_prefix="prev_")
 
     for path, props in iteritems(diff_state):
-        pathinds = str(ds.pathobj / path.relative_to(repo_path))
+        pathinds = text_type(ds.pathobj / path.relative_to(repo_path))
         yield dict(
             props,
             path=pathinds,
