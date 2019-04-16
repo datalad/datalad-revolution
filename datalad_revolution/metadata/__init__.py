@@ -42,7 +42,10 @@ def get_metadata_type(ds):
 
 
 def get_refcommit(ds):
-    """Get most recent commit that changes any metadata-relevant content
+    """Get most recent commit that changes any metadata-relevant content.
+
+    This function should be executed in a clean dataset, with no uncommitted
+    changes (untracked is OK).
 
     Returns
     -------
@@ -65,7 +68,12 @@ def get_refcommit(ds):
                     cur,
                     # superfluous, but here to state the obvious
                     untracked='no',
-                    # TODO unclear if this is true
+                    # this should be OK, unit test covers the cases
+                    # of subdataset addition, modification and removal
+                    # refcommit evaluation only makes sense in a clean
+                    # dataset, and if that is true, any change in the
+                    # submodule record will be visible in the parent
+                    # already
                     eval_submodule_state='no'))
                 if props.get('state', None) != 'clean' \
                 and p not in exclude_paths \

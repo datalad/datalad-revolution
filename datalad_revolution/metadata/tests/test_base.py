@@ -82,14 +82,18 @@ def test_get_refcommit(path):
     ds.rev_save()
     eq_(get_refcommit(ds), ds.repo.get_hexsha('HEAD'))
     # subdataset addition
-    ds.rev_create('sub')
+    subds = ds.rev_create('sub')
     subds_addition = get_refcommit(ds)
     eq_(subds_addition, ds.repo.get_hexsha('HEAD'))
     # another irrelevant change, no change in refcommit, despite subds presence
     create_tree(ds.path, {'.datalad': {'ignored3': 'evenmorecontent'}})
     ds.rev_save()
     eq_(get_refcommit(ds), subds_addition)
+    # subdataset modification is a relevant change
+    create_tree(subds.path, {'real': 'real'})
+    ds.rev_save(recursive=True)
+    eq_(get_refcommit(ds), ds.repo.get_hexsha('HEAD'))
     # and subdataset removal
-    ds.remove('sub')
+    ds.remove('sub', check=False)
     assert_repo_status(ds.path)
     eq_(get_refcommit(ds), ds.repo.get_hexsha('HEAD'))
