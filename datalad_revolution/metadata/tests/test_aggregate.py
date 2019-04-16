@@ -613,7 +613,9 @@ def _prep_partial_update_ds(path):
     # add one more subds
     subds2 = ds.rev_create(op.join('down', 'sub'))
     # we need one real piece of content
-    (subds2.pathobj / 'real').write_text(text_type('real'))
+    # important to use a different name than the file in subds1
+    # so we have two metadata objects with different hashes
+    (subds2.pathobj / 'realsub2').write_text(text_type('real'))
     ds.rev_save(recursive=True)
     return ds, subds, subds2
 
@@ -632,9 +634,9 @@ def test_reaggregate(path):
     # and only re-extract from subds1 and the root dataset
     # as these are the only ones with changes
     res = ds.rev_aggregate_metadata(recursive=True)
-    # we should see two deletions for the replaced metadata blobs
-    # of the modified subdataset
-    assert_result_count(res, 2, action='delete')
+    # we should see three deletions, two for the replaced metadata blobs
+    # of the modified subdataset, and one for the dataset metadata of the super
+    assert_result_count(res, 3, action='delete')
     # four additions: two new blobs for the subdataset, one dataset
     # metadata blob for the root, due to a new modification date
     # and the aggregate catalog
