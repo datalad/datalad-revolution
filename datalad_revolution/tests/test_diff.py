@@ -352,7 +352,7 @@ def test_path_diff(_path, linkpath):
     # query for a deeply nested path from the top, should just work with a
     # variety of approaches
     rpath = op.join('subds_modified', 'subds_lvl1_modified',
-                    '{}_directory_untracked'.format(OBSCURE_FILENAME))
+                    u'{}_directory_untracked'.format(OBSCURE_FILENAME))
     apathobj = ds.pathobj / rpath
     apath = str(apathobj)
     for p in (rpath, apath, None):
