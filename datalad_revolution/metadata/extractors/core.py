@@ -14,6 +14,7 @@
 #   (repo mode, etc.) limit to description of dataset(-network)
 
 from .base import MetadataExtractor
+from .. import get_refcommit
 from datalad.utils import (
     Path,
 )
@@ -21,9 +22,7 @@ from datalad.utils import (
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
 from datalad.log import log_progress
-from datalad.distribution.dataset import Dataset
 import datalad.distribution.subdatasets
-from datalad.support.gitrepo import GitRepo
 from datalad.support.constraints import EnsureBool
 import datalad.support.network as dsn
 
@@ -217,15 +216,7 @@ def _get_commit_info(ds, status):
     #    present paths that may not have existed previously at all
 
     # determine the commit that we are describing
-    # build a compact path list (take all top-level paths)
-    # `status` will already not contain any to be ignored content
-    # but if we call git-log without paths, we do not get the
-    # desired answer
-    refcommit = ds.repo.get_last_commit_hash(
-        list(set(
-            Path(s['path']).relative_to(ds.pathobj).parts[0]
-            for s in status))
-    )
+    refcommit = get_refcommit(ds)
     if refcommit is None or not len(status):
         # this seems extreme, but without a single commit there is nothing
         # we can have, or describe -> blow

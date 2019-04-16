@@ -586,6 +586,9 @@ def test_partial_aggregation(path):
 @with_tempfile(mkdir=True)
 def test_aggregate_fail(path):
     ds = Dataset(path).rev_create()
+    # we need one real piece of content
+    (ds.pathobj / 'real').write_text(text_type('real'))
+    ds.rev_save()
     (ds.pathobj / 'dummy').write_text(text_type('blurb'))
     assert_repo_status(ds.path, untracked=['dummy'])
     # aggregation will not fail, untracked content is simply ignored

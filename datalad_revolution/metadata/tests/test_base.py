@@ -9,16 +9,26 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Test metadata """
 
+from six import text_type
+import os
 import os.path as op
 
 from datalad.distribution.dataset import Dataset
+from datalad.support.gitrepo import GitRepo
 from datalad.api import (
     rev_create,
+    rev_save,
+    remove,
 )
-from .. import get_metadata_type
+from .. import (
+    get_metadata_type,
+    get_refcommit,
+)
 from datalad.tests.utils import (
     with_tempfile,
     eq_,
+    create_tree,
+    assert_repo_status,
 )
 
 
@@ -42,3 +52,44 @@ def test_get_metadata_type_oldcfg(path):
     # minimal setting
     open(op.join(path, '.datalad', 'config'), 'w+').write('[metadata]\nnativetype = mamboschwambo\n')
     eq_(get_metadata_type(Dataset(path)), 'mamboschwambo')
+
+
+@with_tempfile(mkdir=True)
+def test_get_refcommit(path):
+    # # dataset without a single commit
+    ds = Dataset(GitRepo(path, create=True).path)
+    eq_(get_refcommit(ds), None)
+    # we get a commit via create
+    ds.rev_create(force=True)
+    # still not metadata-relevant changes
+    eq_(get_refcommit(ds), None)
+    # place irrelevant file and commit
+    create_tree(ds.path, {'.datalad': {'ignored': 'content'}})
+    ds.rev_save()
+    # no change to the previous run, irrelevant changes are ignored
+    eq_(get_refcommit(ds), None)
+    # a real change
+    create_tree(ds.path, {'real': 'othercontent'})
+    ds.rev_save()
+    real_change = get_refcommit(ds)
+    eq_(real_change, ds.repo.get_hexsha('HEAD'))
+    # another irrelevant change, no change in refcommit
+    create_tree(ds.path, {'.datalad': {'ignored2': 'morecontent'}})
+    ds.rev_save()
+    eq_(get_refcommit(ds), real_change)
+    # we can pick up deletions
+    os.unlink(text_type(ds.pathobj / 'real'))
+    ds.rev_save()
+    eq_(get_refcommit(ds), ds.repo.get_hexsha('HEAD'))
+    # subdataset addition
+    ds.rev_create('sub')
+    subds_addition = get_refcommit(ds)
+    eq_(subds_addition, ds.repo.get_hexsha('HEAD'))
+    # another irrelevant change, no change in refcommit, despite subds presence
+    create_tree(ds.path, {'.datalad': {'ignored3': 'evenmorecontent'}})
+    ds.rev_save()
+    eq_(get_refcommit(ds), subds_addition)
+    # and subdataset removal
+    ds.remove('sub')
+    assert_repo_status(ds.path)
+    eq_(get_refcommit(ds), ds.repo.get_hexsha('HEAD'))

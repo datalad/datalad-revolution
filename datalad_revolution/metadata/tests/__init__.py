@@ -1,3 +1,4 @@
+from six import text_type
 from datalad.api import (
     Dataset,
     rev_save as save,
@@ -18,4 +19,7 @@ def make_ds_hierarchy_with_metadata(path):
     ds.rev_save()
     ds.repo.set_metadata('file.dat', reset={'tag': ['one', 'two']})
     subds = ds.rev_create('sub')
+    # we need one real piece of content for metadata extraction
+    (subds.pathobj / 'real').write_text(text_type('real'))
+    ds.rev_save(recursive=True)
     return ds, subds
