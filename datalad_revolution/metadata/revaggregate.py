@@ -201,13 +201,17 @@ class RevAggregateMetadata(Interface):
             dataset (top)."""),
         force=Parameter(
             args=('--force',),
-            constraints=EnsureChoice('extraction', 'fromscratch', None),
+            constraints=EnsureChoice(
+                'extraction', 'fromscratch', 'ignoreextractorchange', None),
             doc="""Disable specific optimizations: 'extraction' overrides
             change detection and engages all enabled extractors regardless of
             whether an actual change in a dataset's state is detected with
             respect to any existing metadata aggregate; 'fromscratch' wipes out
             any existing metadata aggregates first, including aggregates for
-            unavailable datasets (implies 'extraction')."""),
+            unavailable datasets (implies 'extraction').
+            'ignoreextractorchange' disables comparison of current and
+            recorded extractor parametrization and avoids re-extraction
+            due to extractor changes alone."""),
     )
 
     @staticmethod
@@ -502,6 +506,26 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             'Aggregate from dataset %s', aggsrc,
             update=1,
             increment=True)
+        # get extractor change and compare to recorded state
+        # if there is a change, no diff'ing is needed and extraction
+        # can start right away
+        # TODO implies ignoreextractorchange force flag
+        exstate_cur = {
+            e['extractor']: e['state']
+            for e in ds.rev_extract_metadata(process_type='extractors')
+        }
+        exstate_rec = top_agginfo_db.get(
+            aggsrc.pathobj, {}).get('extractors', None)
+        if (
+                # old aggregate catalag with a plain extractor name list
+                not isinstance(exstate_rec, dict)
+                or sorted(exstate_cur.keys()) != sorted(exstate_rec.keys())
+                or any(exstate_cur[k] != exstate_rec[k]
+                       for k in exstate_cur)):
+            lgr.debug(
+                'Difference between recorded and current extractor detected, '
+                'force (re-)extraction')
+            force = 'extraction'
         # check extraction is actually needed, by running a diff on the
         # dataset against the last known refcommit, to see whether it had
         # any metadata relevant changes

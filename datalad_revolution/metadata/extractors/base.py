@@ -80,7 +80,8 @@ class MetadataExtractor(object):
         aggregate catalog in each dataset. Consequently, this information
         should be brief/compact and limited to essential facts on a
         comprehensive state of an extractor that "fully" determines its
-        behavior.
+        behavior. Only plain key-value items, with simple values, such a string
+        int, float, or lists thereof, are supported.
 
         Any change in the reported state in comparison to a recorded state for
         an existing metadata aggregate will cause a re-extraction of metadata.
