@@ -123,8 +123,7 @@ class RevExtractMetadata(Interface):
     @datasetmethod(name='rev_extract_metadata')
     @eval_results
     def __call__(dataset=None, path=None, sources=None, process_type=None):
-        # TODO verify that we need this ds vs dataset distinction
-        ds = dataset = require_dataset(
+        ds = require_dataset(
             dataset or curdir,
             purpose="extract metadata",
             check_installed=not path)
@@ -133,7 +132,7 @@ class RevExtractMetadata(Interface):
         # available
         if not sources:
             sources = ['datalad_core', 'annex'] \
-                + assure_list(get_metadata_type(dataset))
+                + assure_list(get_metadata_type(ds))
         # keep local, who knows what some extractors might pull in
         from pkg_resources import iter_entry_points  # delayed heavy import
         extractors = {}
@@ -211,7 +210,7 @@ class RevExtractMetadata(Interface):
         status = []
         if ds.is_installed():
             # we can make use of status
-            res_props.update(refds=dataset.path)
+            res_props.update(refds=ds.path)
 
             for r in ds.status(
                     # let status sort out all path arg handling
@@ -356,8 +355,6 @@ def _proc(ds, sources, status, extractors, process_type):
             # order to have such one, we need a mechanism to have the test
             # inject one on the fly MIH thinks that the code neeeded to do that
             # is more chances to be broken then the code it would test
-            # TODO verify that is has worked once by manually breaking an
-            # extractor
             if success_status_map.get(res['status'], False) != 'success':  # pragma: no cover
                 yield res
                 # no further processing of broken stuff
