@@ -42,6 +42,9 @@ from datalad.tests.utils import (
     eq_,
     skip_if_on_windows,
 )
+from . import (
+    make_ds_hierarchy_with_metadata,
+)
 
 
 def _assert_metadata_empty(meta):
@@ -603,3 +606,55 @@ def test_aggregate_fail(path):
         status='error',
         message="dataset has pending changes",
     )
+
+
+def _prep_partial_update_ds(path):
+    ds, subds = make_ds_hierarchy_with_metadata(path)
+    # add one more subds
+    subds2 = ds.rev_create(op.join('down', 'sub'))
+    # we need one real piece of content
+    (subds2.pathobj / 'real').write_text(text_type('real'))
+    ds.rev_save(recursive=True)
+    return ds, subds, subds2
+
+
+@with_tempfile(mkdir=True)
+def test_reaggregate(path):
+    ds, subds1, subds2 = _prep_partial_update_ds(path)
+    # the actual job
+    assert_status('ok', ds.rev_aggregate_metadata(recursive=True))
+    # nothing without a modification
+    assert_status('notneeded', ds.rev_aggregate_metadata(recursive=True))
+    # modify subds1
+    (subds1.pathobj / 'new').write_text(text_type('content'))
+    ds.rev_save(recursive=True)
+    # go for a full re-aggregation, it should do the right thing
+    # and only re-extract from subds1 and the root dataset
+    # as these are the only ones with changes
+    res = ds.rev_aggregate_metadata(recursive=True)
+    # we should see two deletions for the replaced metadata blobs
+    # of the modified subdataset
+    assert_result_count(res, 2, action='delete')
+    # four additions: two new blobs for the subdataset, one dataset
+    # metadata blob for the root, due to a new modification date
+    # and the aggregate catalog
+    assert_result_count(res, 4, action='add')
+    # partial reaggregation has tidied up everything nicely, so a
+    # full aggregation does nothing
+    good_state = ds.repo.get_hexsha()
+    assert_status('notneeded', ds.rev_aggregate_metadata(recursive=True))
+    # given a contraining path with also not trigger any further action
+    eq_(good_state, ds.repo.get_hexsha())
+    assert_status(
+        'notneeded',
+        ds.rev_aggregate_metadata(path='down', recursive=True)
+    )
+    eq_(good_state, ds.repo.get_hexsha())
+    # but we can force extraction and get a selective update for this one
+    # dataset only
+    # not pointing to a subdataset itself, but do recursion from a subdirectory
+    # downwards
+    # but without an actual dataset change, and no change to an extractor's
+    # output nothing will change in the dataset
+    ds.rev_aggregate_metadata(path='down', recursive=True, force='extraction')
+    eq_(good_state, ds.repo.get_hexsha())

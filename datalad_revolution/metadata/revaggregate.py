@@ -601,7 +601,10 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                     yield res
             # logic based on the idea that there will only be one
             # record per dataset (extracted or from pre-aggregate)
-            assert(aggsrc.pathobj not in agginfo_db)
+            if aggsrc.pathobj in agginfo_db:
+                lgr.debug(
+                    'Replace existing metadata aggregate for %s '
+                    'with new extract.', aggsrc)
             # place in DB under full path, needs to become relative
             # to any updated dataset later on
             agginfo_db[aggsrc.pathobj] = agginfo
@@ -959,10 +962,10 @@ def _extract_metadata(fromds, tods):
     refcommit = \
         meta['dataset'].get('datalad_core', {}).get('refcommit', None)
     if refcommit:
-        lgr.debug('Update refcommit to %s', refcommit)
+        lgr.debug('Update %s refcommit to %s', fromds, refcommit)
         info['refcommit'] = refcommit
     else:
-        lgr.warn(
+        lgr.debug(
             'Could not determine a reference commit for the metadata '
             'extracted from %s', fromds)
 
