@@ -74,6 +74,8 @@ from datalad.support.digests import Digester
 from datalad.utils import (
     assure_list,
     rmtree,
+    Path,
+    PurePosixPath,
 )
 from datalad.log import log_progress
 
@@ -491,6 +493,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
         label='Metadata aggregation',
         unit=' datasets',
     )
+    # start from the top the get a chance to load info on any existing
+    # metadata aggregates
     for aggsrc in sorted(extract_from_ds, key=lambda x: x.path):
         log_progress(
             lgr.info,
@@ -512,6 +516,14 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
         # metadata-relevant content
         # skip diff'ing when extraction is forced
         if not use_self_aggregate and force != 'extraction' and last_refcommit:
+            lgr.debug('Diff %s against refcommit %s', aggsrc, last_refcommit)
+            # the following diff duplicates the logic in get_refcommit()
+            # however, we need to look deeper into the diff against the
+            # refcommit to find removed subdatasets
+            exclude_paths = [
+                aggsrc.pathobj / PurePosixPath(e)
+                for e in exclude_from_metadata
+            ]
             for res in aggsrc.rev_diff(
                     fr=last_refcommit,
                     to='HEAD',
@@ -531,14 +543,15 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                 if res['state'] == 'clean':
                     # not an actual diff
                     continue
-                if not have_diff and all(
-                        not res['path'].startswith(
-                            op.join(res['parentds'], e) + op.sep)
-
-                        for e in exclude_from_metadata):
+                p = Path(res['path'])
+                if not have_diff and \
+                        p not in exclude_paths and \
+                        not any(e in p.parents for e in exclude_paths):
                     # this is a difference that could have an impact on
                     # metadata stop right here and proceed to extraction
                     have_diff = True
+                    lgr.debug('Found metadata relevant diff in %s: %s -- %s',
+                              aggsrc, res, exclude_paths)
                     # we cannot break, we have to keep looking for
                     # deleted subdatasets
                     #break
@@ -547,7 +560,10 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                 # the todo list, stage their objects for deletion, and
                 # remove them from the DB
                 if res['type'] == 'dataset' and res['state'] == 'deleted':
-                    rmdspath = ut.Path(res['path'])
+                    rmdspath = Path(res['path'])
+                    lgr.debug(
+                        'Found removed subdataset %s, stage metadata '
+                        'aggregates for deletion', rmdspath)
                     if rmdspath in top_agginfo_db:
                         # stage its metadata object files for deletion
                         for objtype in ('dataset_info', 'content_info'):
@@ -556,7 +572,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                             if obj_path is None:
                                 # nothing to act on
                                 continue
-                            obsolete_objs.add(ut.Path(obj_path))
+                            obsolete_objs.add(Path(obj_path))
                         # wipe out dataset entry from DB
                         del top_agginfo_db[rmdspath]
                     # prevent further processing of downward datasets
@@ -566,6 +582,11 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
 
         if not use_self_aggregate and (
                 force == 'extraction' or last_refcommit is None or have_diff):
+            lgr.debug(
+                'Extract metadata from %s '
+                '(use_self_aggregate=%s, force=%s, last_refcommit=%s, '
+                'have_diff=%s)',
+                aggsrc, use_self_aggregate, force, last_refcommit, have_diff)
             # really _extract_ metadata for aggsrc
             agginfo = {}
             for res in _extract_metadata(aggsrc, ds):
@@ -612,7 +633,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                 if obj_path is None:
                     # nothing to act on
                     continue
-                obsolete_objs.add(ut.Path(obj_path))
+                obsolete_objs.add(Path(obj_path))
             del top_agginfo_db[od]
 
         # if there is a path in aggsubjs match it against all datasets on
@@ -626,8 +647,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                     # TODO think about distinguishing a direct match
                     # vs this match of any parent (maybe the
                     # latter/current only with --recursive)
-                    if ut.Path(aggds) == subj \
-                    or subj in ut.Path(aggds).parents
+                    if Path(aggds) == subj \
+                    or subj in Path(aggds).parents
                 )
             else:
                 subjs.append(subj)
@@ -639,7 +660,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
 
         referenced_objs = set()
         # loop over aggsubjs and pull aggregated metadata for them
-        for dssubj in set(subjs):
+        # sorting is not really needed
+        for dssubj in sorted(set(subjs), key=lambda x: x.path):
             if dssubj.pathobj in agginfo_db:
                 # logic based on the idea that there can only be one
                 # record per dataset (extracted or from pre-aggregate)
@@ -657,7 +679,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             agginfo_db[dssubj.pathobj] = agginfo
             for objtype in ('dataset_info', 'content_info'):
                 if objtype in agginfo:
-                    referenced_objs.add(ut.Path(agginfo[objtype]))
+                    referenced_objs.add(Path(agginfo[objtype]))
         # make sure all referenced metadata objects are actually around
         # use a low-level report methods for speed, as we should know
         # that everything is local to aggsrc
@@ -699,7 +721,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             if obj_path is None:
                 # nothing to act on
                 continue
-            obj_path = ut.Path(obj_path)
+            obj_path = Path(obj_path)
 
             # TODO obtain file content, possibly in a concerted
             # effort for all source datasets at once
@@ -761,7 +783,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                     # delete it here instead we have to gather candidate
                     # for deletion and check that they are no longer
                     # referenced at the very end of the DB update
-                    obsolete_objs.add(ut.Path(old_srcds_info[objtype]))
+                    obsolete_objs.add(Path(old_srcds_info[objtype]))
         # replace the record
         top_agginfo_db[srcds] = agginfo_db[srcds]
 
@@ -898,7 +920,7 @@ def _extract_metadata(fromds, tods):
             meta['content'].append(
                 dict(
                     res['metadata'],
-                    path=text_type(ut.Path(res['path']).relative_to(
+                    path=text_type(Path(res['path']).relative_to(
                         fromds.pathobj))
                 )
             )
@@ -937,6 +959,7 @@ def _extract_metadata(fromds, tods):
     refcommit = \
         meta['dataset'].get('datalad_core', {}).get('refcommit', None)
     if refcommit:
+        lgr.debug('Update refcommit to %s', refcommit)
         info['refcommit'] = refcommit
     else:
         lgr.warn(
@@ -1007,8 +1030,8 @@ def _store_agginfo_db(ds, db):
     # make DB paths on disk always relative
     json_py.dump(
         {
-            text_type(ut.Path(p).relative_to(ds.pathobj)):
-            {k: text_type(ut.Path(v).relative_to(agg_base_path))
+            text_type(Path(p).relative_to(ds.pathobj)):
+            {k: text_type(Path(v).relative_to(agg_base_path))
              if k in location_keys else v
              for k, v in props.items()}
             for p, props in db.items()

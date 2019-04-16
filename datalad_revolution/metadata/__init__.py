@@ -77,7 +77,7 @@ def get_refcommit(ds):
                     eval_submodule_state='no'))
                 if props.get('state', None) != 'clean' \
                 and p not in exclude_paths \
-                and all(e not in p.parents for e in exclude_paths)
+                and not any(e in p.parents for e in exclude_paths)
             }
         except ValueError as e:
             # likely ran out of commits to check
