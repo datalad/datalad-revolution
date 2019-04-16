@@ -354,7 +354,7 @@ def test_path_diff(_path, linkpath):
     rpath = op.join('subds_modified', 'subds_lvl1_modified',
                     u'{}_directory_untracked'.format(OBSCURE_FILENAME))
     apathobj = ds.pathobj / rpath
-    apath = str(apathobj)
+    apath = text_type(apathobj)
     for p in (rpath, apath, None):
         if p is None:
             # change into the realpath of the dataset and
