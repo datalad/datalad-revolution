@@ -46,11 +46,14 @@ from datalad.interface.common_opts import (
 from datalad.interface.results import (
     success_status_map,
 )
+from . import (
+    exclude_from_metadata,
+    location_keys,
+)
+
 from .query import (
     get_ds_aggregate_db_locations,
     get_ds_aggregate_db,
-    exclude_from_metadata,
-    location_keys,
 )
 from ..dataset import (
     RevolutionDataset as Dataset,

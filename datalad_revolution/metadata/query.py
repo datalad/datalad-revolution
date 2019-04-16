@@ -52,17 +52,12 @@ from datalad.utils import (
     assure_list,
 )
 from datalad.ui import ui
+from . import (
+    aggregate_layout_version,
+    location_keys,
+)
 
 lgr = logging.getLogger('datalad.metadata.metadata')
-
-aggregate_layout_version = 1
-
-# relative paths which to exclude from any metadata processing
-# including anything underneath them
-exclude_from_metadata = ('.datalad', '.git', '.gitmodules', '.gitattributes')
-
-# TODO filepath_info is obsolete
-location_keys = ('dataset_info', 'content_info', 'filepath_info')
 
 
 def get_ds_aggregate_db_locations(dspath, version='default', warn_absent=True):
