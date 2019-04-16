@@ -72,6 +72,30 @@ class MetadataExtractor(object):
         # availability on its own
         return []
 
+    def get_state(self, dataset):
+        """Report on extractor-related state and configuration
+
+        Extractors can reimplement this method to report arbitrary information
+        in a dictionary. This information will be included in the metadata
+        aggregate catalog in each dataset. Consequently, this information
+        should be brief/compact and limited to essential facts on a
+        comprehensive state of an extractor that "fully" determines its
+        behavior.
+
+        Any change in the reported state in comparison to a recorded state for
+        an existing metadata aggregate will cause a re-extraction of metadata.
+        The nature of the state change does not matter, as the entire
+        dictionary will be compared.  Primarily, this is useful for reporting
+        per-extractor version information (such as a version for the extractor
+        output format, or critical version information on external software
+        components employed by the extractor), and potential configuration
+        settings that determine the behavior of on extractor.
+
+        State information can be dataset-specific. The respective Dataset
+        object instance is passed via the method's `dataset` argument.
+        """
+        return {}
+
 
 # XXX this is the legacy interface, keep around for a bit more and then
 # remove

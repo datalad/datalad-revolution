@@ -72,3 +72,17 @@ class AnnexMetadataExtractor(MetadataExtractor):
                     type='file',
                     status='ok',
                 )
+
+    def get_state(self, dataset):
+        #from datalad.support.external_versions import external_versions
+        return dict(
+            # report on the annex version used to report metadata
+            #gitannex_version=external_versions['cmd:annex']
+            # do not report on the git-annex version itself, as
+            # any git-annex update would trigger a re-extraction of metadata
+            # most likely without any change.
+            # Instead, increment/change this version whenever the extractor
+            # output would change in the further (maybe due to changes in
+            # git-annex, or for other reasons).
+            version=1,
+        )

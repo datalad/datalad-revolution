@@ -104,8 +104,11 @@ class RevExtractMetadata(Interface):
             If not specified, the dataset's configuration will determine
             the selection, and will default to 'all'. Note that not processing
             content can influence the dataset metadata content (e.g. report
-            of total size).""",
-            constraints=EnsureChoice(None, 'all', 'dataset', 'content')),
+            of total size). There is an additional category 'extractors' that
+            will cause all enabled extractors to be loaded, and reports
+            on their status and configuration.""",
+            constraints=EnsureChoice(
+                None, 'all', 'dataset', 'content', 'extractors')),
         path=Parameter(
             args=("path",),
             metavar="FILE",
@@ -179,7 +182,7 @@ class RevExtractMetadata(Interface):
             # load extractor implementation
             rec = extractors[msrc]
             rec['process_type'] = process_type \
-                if process_type \
+                if process_type and not process_type == 'extractors' \
                 else ds.config.obtain(
                     'datalad.metadata.extract-from-{}'.format(
                         msrc.replace('_', '-')),
@@ -197,6 +200,28 @@ class RevExtractMetadata(Interface):
             action='extract_metadata',
             logger=lgr,
         )
+
+        # build report on extractors and their state info
+        if process_type == 'extractors':
+            for ename, eprops in iteritems(extractors):
+                state = {}
+                # do not trip over old extractors
+                if hasattr(eprops['class'], 'get_state'):
+                    state.update(eprops['class']().get_state(ds))
+
+                yield dict(
+                    action='extract_metadata',
+                    path=ds.path,
+                    status='ok',
+                    logger=lgr,
+                    extractor=ename,
+                    state=dict(
+                        state,
+                        process_type=eprops['process_type'],
+                    )
+                )
+            return
+
 
         # build a representation of the dataset's content (incl subds
         # records)

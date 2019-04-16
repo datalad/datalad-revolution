@@ -195,6 +195,23 @@ class DataladCoreExtractor(MetadataExtractor):
         }
         return info
 
+    def get_state(self, dataset):
+        ds = dataset
+        return {
+            # increment when output format changes
+            'version': 1,
+            'unique_exclude': list(self._unique_exclude),
+            'remotes': ds.config.obtain(
+                'datalad.metadata.datalad-core.report-remotes',
+                True),
+            'contributors': ds.config.get(
+                'datalad.metadata.datalad-core.report-contributors',
+                True),
+            'modification-dates': ds.config.obtain(
+                'datalad.metadata.datalad-core.report-modification-dates',
+                True),
+        }
+
 
 def _get_file_key(rec):
     # prefer the annex key, but fall back on the git shasum that is

@@ -109,6 +109,17 @@ class CustomMetadataExtractor(MetadataExtractor):
             'Finished custom metadata extraction from %s', ds.path
         )
 
+    def get_state(self, dataset):
+        ds = dataset
+        return {
+            'dataset-source': ds.config.get(
+                'datalad.metadata.custom-dataset-source',
+                '.datalad/custom_metadata.json'),
+            'content-source': ds.config.get(
+                'datalad.metadata.custom-content-source',
+                '.datalad/custom_metadata/{freldir}/{fname}.json'),
+        }
+
 
 def _get_dsmeta_srcfiles(ds):
     # which files to look at
