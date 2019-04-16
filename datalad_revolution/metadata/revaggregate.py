@@ -939,8 +939,14 @@ def _extract_metadata(fromds, tods):
             continue
     # store esssential extraction config in dataset record
     info['datalad_version'] = datalad.__version__
-    # instead of reporting what was enabled, report what was actually retrieved
-    info['extractors'] = sorted(extracted_metadata_sources)
+    # inject extractor state information
+    # report on all enabled extractors, even if they did not report
+    # anything, so we can act on configuration changes relevant
+    # to them
+    info['extractors'] = {
+        e['extractor']: e['state']
+        for e in fromds.rev_extract_metadata(process_type='extractors')
+    }
 
     if meta.get('dataset', None) is None:  # pragma: no cover
         # this is a double safety net, for any repository that has anything
