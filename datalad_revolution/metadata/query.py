@@ -6,7 +6,7 @@
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
-"""Set and query metadata of datasets and their components"""
+"""Query a dataset's aggregated metadata"""
 
 __docformat__ = 'restructuredtext'
 
@@ -37,9 +37,6 @@ from datalad.support.json_py import (
     load as json_load,
     load_stream as json_streamload,
 )
-from datalad.interface.common_opts import (
-    recursion_flag,
-)
 from datalad.distribution.dataset import (
     Dataset,
     EnsureDataset,
@@ -57,7 +54,7 @@ from . import (
     location_keys,
 )
 
-lgr = logging.getLogger('datalad.metadata.metadata')
+lgr = logging.getLogger('datalad.metadata.query')
 
 
 def get_ds_aggregate_db_locations(dspath, version='default', warn_absent=True):
@@ -172,7 +169,7 @@ def get_ds_aggregate_db(dspath, version='default', warn_absent=True):
 
 @build_doc
 class QueryMetadata(Interface):
-    """Metadata reporting for files and entire datasets
+    """Query a dataset's aggregated metadata for dataset and file metadata
 
     Two types of metadata are supported:
 
@@ -180,34 +177,35 @@ class QueryMetadata(Interface):
 
     2. metadata for files in a dataset (content metadata).
 
-    Both types can be accessed with this command.
+    Both types can be queried with this command, and a specific type is
+    requested via the `--reporton` argument.
 
     Examples:
 
-      Report the metadata of a single file, as aggregated into the closest
-      locally available dataset, containing the query path::
+      Report the metadata of a single file, the queried dataset is determined
+      based on the current working directory::
 
-        % datalad metadata somedir/subdir/thisfile.dat
+        % datalad query-metadata somedir/subdir/thisfile.dat
 
-      Sometimes it is helpful to get metadata records formatted in a more accessible
-      form, here as pretty-printed JSON::
+      Sometimes it is helpful to get metadata records formatted in a more
+      accessible form, here as pretty-printed JSON::
 
-        % datalad -f json_pp metadata somedir/subdir/thisfile.dat
+        % datalad -f json_pp query-metadata somedir/subdir/thisfile.dat
 
       Same query as above, but specify which dataset to query (must be
       containing the query path)::
 
-        % datalad metadata -d . somedir/subdir/thisfile.dat
+        % datalad query-metadata -d . somedir/subdir/thisfile.dat
 
       Report any metadata record of any dataset known to the queried dataset::
 
-        % datalad metadata --recursive --reporton datasets 
+        % datalad query-metadata --recursive --reporton datasets
 
-      Get a JSON-formatted report of aggregated metadata in a dataset, incl.
-      information on enabled metadata extractors, dataset versions, dataset IDs,
-      and dataset paths::
+      Get a JSON-formatted report of metadata aggregates in a dataset, incl.
+      information on enabled metadata extractors, dataset versions, dataset
+      IDs, and dataset paths::
 
-        % datalad -f json metadata --reporton aggregates
+        % datalad -f json query-metadata --reporton aggregates
     """
     # make the custom renderer the default, path reporting isn't the top
     # priority here
@@ -216,9 +214,8 @@ class QueryMetadata(Interface):
     _params_ = dict(
         dataset=Parameter(
             args=("-d", "--dataset"),
-            doc="""dataset to query. If given, metadata will be reported
-            as stored in this dataset. Otherwise, the closest available
-            dataset containing a query path will be consulted.""",
+            doc="""dataset to query. If not given, a dataset will be determined
+            based on the current working directory.""",
             constraints=EnsureDataset() | EnsureNone()),
         path=Parameter(
             args=("path",),
@@ -229,13 +226,20 @@ class QueryMetadata(Interface):
         reporton=Parameter(
             args=('--reporton',),
             constraints=EnsureChoice('all', 'datasets', 'files', 'aggregates'),
-            doc="""choose on what type metadata to report on: dataset-global
+            doc="""what type of metadata to report on: dataset-global
             metadata only ('datasets'), metadata on dataset content/files only
-            ('files'), or both ('all', default). There is an additional
-            category 'aggregates' that reports on which datasets aggregate
-            metadata is recorded in the queried dataset."""),
-        recursive=recursion_flag)
-        # what kind of metadata to report
+            ('files'), or both ('all', default). There is an auxiliary
+            category 'aggregates' that reports on which metadata aggregates
+            are present in the queried dataset."""),
+        recursive=Parameter(
+            args=("-r", "--recursive",),
+            action="store_true",
+            doc="""if set, recursively report on any matching metadata based
+            on given paths or reference dataset. Note, setting this option
+            does not cause any recursion into potential subdataset on the
+            filesystem. It merely determined what metadata is being reported
+            from the given/discovered reference dataset."""),
+    )
 
     @staticmethod
     @datasetmethod(name='query_metadata')
