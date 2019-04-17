@@ -60,19 +60,20 @@ from datalad.log import log_progress
 # API commands needed
 from datalad.core.local import status as _status
 
-lgr = logging.getLogger('datalad.metadata.metadata')
+lgr = logging.getLogger('datalad.metadata.extract')
 
 
 @build_doc
 class RevExtractMetadata(Interface):
-    """Run one or more of DataLad's metadata extractors on a dataset or file.
+    """Run one or more metadata extractors on a dataset or file.
 
-    This command does not modified a dataset, but may initiate required data
+    This command does not modify a dataset, but may initiate required data
     transfers to perform metadata extraction that requires local file content
-    availability.
+    availability. This command does not support recursion into subdataset.
 
     The result(s) are structured like the metadata DataLad would extract
-    during metadata aggregation. There is one result per dataset/file.
+    during metadata aggregation (in fact, this command is employed during
+    aggregation). There is one result per dataset/file.
 
     Examples:
 
@@ -84,6 +85,21 @@ class RevExtractMetadata(Interface):
       Extract XMP metadata from a single PDF that is not part of any dataset::
 
         $ datalad extract-metadata --source xmp Downloads/freshfromtheweb.pdf
+
+
+    Customization of extraction:
+
+    The following configuration settings can be used to customize extractor
+    behavior
+
+    ``datalad.metadata.extract-from-<extractorname> = {all|dataset|content}``
+       which type of information an enabled extractor will be operating on
+       (see --process-type argument for details)
+
+    ``datalad.metadata.generate-unique-<extractorname> = {yes|no}``
+       whether to auto-generate a summary of unique content metadata values
+       in the dataset metadata. This requires 'content'-type metadata
+       processing to be in effect.
     """
 
     _params_ = dict(
@@ -96,15 +112,16 @@ class RevExtractMetadata(Interface):
             If none is given, a set of default configured extractors,
             plus any extractors enabled in a dataset's configuration
             and invoked.
-            [CMD: This option can be given more than once CMD]"""),
+            [CMD: This option can be given more than once CMD][PY: Multiple
+            extractors can be given as a list PY]."""),
         process_type=Parameter(
             args=("--process-type",),
-            doc="""dataset component type to process. If 'all',
+            doc="""type of information to process. If 'all',
             metadata will be extracted for the entire dataset and its content.
             If not specified, the dataset's configuration will determine
             the selection, and will default to 'all'. Note that not processing
-            content can influence the dataset metadata content (e.g. report
-            of total size). There is an additional category 'extractors' that
+            content can influence the dataset metadata composition (e.g. report
+            of total size). There is an auxiliary category 'extractors' that
             will cause all enabled extractors to be loaded, and reports
             on their status and configuration.""",
             constraints=EnsureChoice(
@@ -117,8 +134,9 @@ class RevExtractMetadata(Interface):
             constraints=EnsureStr() | EnsureNone()),
         dataset=Parameter(
             args=("-d", "--dataset"),
-            doc=""""Dataset to extract metadata from. If no path is given,
-            metadata is extracted from all files of the dataset.""",
+            doc=""""Dataset to extract metadata from. If no further
+            constraining path is given, metadata is extracted from all files
+            of the dataset.""",
             constraints=EnsureDataset() | EnsureNone()),
     )
 
