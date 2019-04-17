@@ -6,7 +6,7 @@
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
-"""Interface for aggregating metadata
+"""Interface for aggregating metadata from (sub)dataset into (super)datasets
 """
 
 __docformat__ = 'restructuredtext'
@@ -62,7 +62,6 @@ from ..dataset import (
     require_rev_dataset as require_dataset,
     sort_paths_by_datasets,
 )
-from .. import utils as ut
 from datalad.support.param import Parameter
 from datalad.support.constraints import (
     EnsureStr,
@@ -84,32 +83,29 @@ lgr = logging.getLogger('datalad.metadata.aggregate')
 
 @build_doc
 class RevAggregateMetadata(Interface):
-    """Aggregate metadata of one or more datasets for later query.
+    """Aggregate metadata of one or more (sub)datasets for later query.
 
     Metadata aggregation refers to a procedure that extracts metadata present
-    in a dataset into a portable representation that is stored a single
-    standardized format. Moreover, metadata aggregation can also extract
-    metadata in this format from one dataset and store it in another
-    (super)dataset. Based on such collections of aggregated metadata it is
-    possible to discover particular datasets and specific parts of their
-    content, without having to obtain the target datasets first (see the
-    DataLad 'search' command).
+    in a dataset into a portable representation that is stored in a
+    standardized (internal) format. Moreover, metadata aggregation can also
+    extract metadata in this format from one dataset and store it in another
+    (super)dataset. Based on such collections of aggregated metadata it is then
+    possible to discover particular (sub)datasets and individual files in them,
+    without having to obtain the actual dataset repositories first (see the
+    DataLad 'query-metadata' command).
 
     To enable aggregation of metadata that are contained in files of a dataset,
     one has to enable one or more metadata extractor for a dataset. DataLad
     supports a number of common metadata standards, such as the Exchangeable
     Image File Format (EXIF), Adobe's Extensible Metadata Platform (XMP), and
     various audio file metadata systems like ID3. DataLad extension packages
-    can provide metadata data extractors for additional metadata sources. For
-    example, the neuroimaging extension provides extractors for scientific
-    (meta)data standards like BIDS, DICOM, and NIfTI1.  Some metadata
-    extractors depend on particular 3rd-party software. The list of metadata
-    extractors available to a particular DataLad installation is reported by
-    the 'wtf' command ('datalad wtf').
+    can provide metadata data extractors for additional metadata sources.
+    The list of metadata extractors available to a particular DataLad
+    installation is reported by the 'wtf' command ('datalad wtf').
 
-    Enabling a metadata extractor for a dataset is done by adding its name to the
-    'datalad.metadata.nativetype' configuration variable -- typically in the
-    dataset's configuration file (.datalad/config), e.g.::
+    Enabling a metadata extractor for a dataset is done by adding its name to
+    the 'datalad.metadata.nativetype' configuration variable in the dataset's
+    configuration file (.datalad/config), e.g.::
 
       [datalad "metadata"]
         nativetype = exif
@@ -121,73 +117,37 @@ class RevAggregateMetadata(Interface):
 
     Enabling multiple extractors is supported. In this case, metadata are
     extracted by each extractor individually, and stored alongside each other.
-    Metadata aggregation will also extract DataLad's own metadata (extractors
-    'datalad_core', and 'annex').
+    Metadata aggregation will also extract DataLad's internal metadata
+    ('datalad_core'), and git-annex file metadata ('annex').
 
-    Metadata aggregation can be performed recursively, in order to aggregate all
-    metadata across all subdatasets, for example, to be able to search across
-    any content in any dataset of a collection. Aggregation can also be performed
-    for subdatasets that are not available locally. In this case, pre-aggregated
-    metadata from the closest available superdataset will be considered instead.
+    Metadata aggregation can be performed recursively, in order to aggregate
+    all metadata from all subdatasets. By default, re-aggregation of metadata
+    inspects modifications of datasets and metadata extractor parameterization
+    with respect to the last aggregated state. For performance reasons,
+    re-aggregation will be automatically skipped, if no relevant change is
+    detected. This default behavior can be altered via the ``--force``
+    argument.
 
-    Depending on the versatility of the present metadata and the number of dataset
-    or files, aggregated metadata can grow prohibitively large. A number of
-    configuration switches are provided to mitigate such issues.
-
-    datalad.metadata.aggregate-content-<extractor-name>
-      If set to false, content metadata aggregation will not be performed for
-      the named metadata extractor (a potential underscore '_' in the extractor name must
-      be replaced by a dash '-'). This can substantially reduce the runtime for
-      metadata extraction, and also reduce the size of the generated metadata
-      aggregate. Note, however, that some extractors may not produce any metadata
-      when this is disabled, because their metadata might come from individual
-      file headers only. 'datalad.metadata.store-aggregate-content' might be
-      a more appropriate setting in such cases.
-
-    datalad.metadata.aggregate-ignore-fields
-      Any metadata key matching any regular expression in this configuration setting
-      is removed prior to generating the dataset-level metadata summary (keys
-      and their unique values across all dataset content), and from the dataset
-      metadata itself. This switch can also be used to filter out sensitive
-      information prior aggregation.
-
-    datalad.metadata.generate-unique-<extractor-name>
-      If set to false, DataLad will not auto-generate a summary of unique content
-      metadata values for a particular extractor as part of the dataset-global metadata
-      (a potential underscore '_' in the extractor name must be replaced by a dash '-').
-      This can be useful if such a summary is bloated due to minor uninformative (e.g.
-      numerical) differences, or when a particular extractor already provides a
-      carefully designed content metadata summary.
-
-    datalad.metadata.maxfieldsize
-      Any metadata value that exceeds the size threshold given by this configuration
-      setting (in bytes/characters) is removed.
-
-    datalad.metadata.store-aggregate-content
-      If set, extracted content metadata are still used to generate a dataset-level
-      summary of present metadata (all keys and their unique values across all
-      files in a dataset are determined and stored as part of the dataset-level
-      metadata aggregate, see datalad.metadata.generate-unique-<extractor-name>),
-      but metadata on individual files are not stored.
-      This switch can be used to avoid prohibitively large metadata files. Discovery
-      of datasets containing content matching particular metadata properties will
-      still be possible, but such datasets would have to be obtained first in order
-      to discover which particular files in them match these properties.
+    Depending on the versatility of the present metadata and the number of
+    dataset or files, aggregated metadata can grow prohibitively large or take
+    a long time to process. See the documentation of the ``extract-metadata``
+    command for a number of configuration settings that can be used to tailor
+    this process on a per-dataset basis.
     """
     _params_ = dict(
         dataset=Parameter(
             args=("-d", "--dataset"),
-            doc="""topmost dataset metadata will be aggregated into. All dataset
-            between this dataset and any given path will receive updated
-            aggregated metadata from all given paths.""",
+            doc="""topmost dataset metadata will be aggregated into. If no
+            dataset is specified, a datasets will be discovered based on the
+            current working directory.""",
             constraints=EnsureDataset() | EnsureNone()),
         path=Parameter(
             args=("path",),
             metavar="PATH",
-            doc="""path to datasets that shall be aggregated.
-            When a given path is pointing into a dataset, the metadata of the
-            containing dataset will be aggregated.  If no paths given, current
-            dataset metadata is aggregated.""",
+            doc="""path to (sub)datasets whose metadata shall be
+            aggregated. When a given path is pointing into a dataset (instead of
+            to its root), the metadata of the containing dataset will be
+            aggregated.""",
             nargs="*",
             constraints=EnsureStr() | EnsureNone()),
         recursive=recursion_flag,
@@ -258,8 +218,6 @@ class RevAggregateMetadata(Interface):
         ds_with_pending_changes = set()
         # note that depending on the recursion settings, we may not
         # actually get a report on each dataset in question
-        # TODO implement an alternative detector that uses rev-diff to
-        # find datasets that have changes since the last recorded refcommit
         detector = Status()(
             # pass arg in as-is to get proper argument semantics
             dataset=dataset,
