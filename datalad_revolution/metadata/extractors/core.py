@@ -32,7 +32,7 @@ import os.path as op
 class DataladCoreExtractor(MetadataExtractor):
     # reporting unique file sizes has no relevant use case that I can think of
     # identifiers are included explicitly
-    _unique_exclude = {'contentbytesize', 'identifier'}
+    _unique_exclude = {'contentbytesize', }
 
     def __call__(self, dataset, process_type, status):
         # shortcut
@@ -86,8 +86,14 @@ class DataladCoreExtractor(MetadataExtractor):
     def _get_dsmeta(self, ds, status, process_type):
         meta = {
             # the desired ID
-            'identifier': ds.id,
-            '@context': "http://schema.org",
+            '@id': ds.id,
+            '@context': {
+                # schema.org definitions by default
+                "@vocab": "http://schema.org/",
+                # resolve non-compact/absolute identifiers to the DataLad
+                # resolver
+                "@base": "http://dx.datalad.org/",
+            },
             '@type': 'Dataset',
         }
         meta.update(_get_commit_info(ds, status))
@@ -98,7 +104,7 @@ class DataladCoreExtractor(MetadataExtractor):
             else 'Thing' if part['type'] == 'symlink' else 'DigitalDocument',
             # relative path within dataset, always POSIX
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
-            'identifier': _get_file_key(part) if part['type'] == 'file'
+            '@id': _get_file_key(part) if part['type'] == 'file'
             else ds.subdatasets(
                 contains=part['path'],
                 return_type='item-or-list').get('gitmodule_datalad-id', None)
@@ -135,9 +141,9 @@ class DataladCoreExtractor(MetadataExtractor):
                 annex_uuid = ds.config.get(
                     'remote.{}.annex-uuid'.format(r), None)
                 if annex_uuid is not None:
-                    info['identifier'] = annex_uuid
+                    info['@id'] = annex_uuid
                     known_uuids[annex_uuid] = info
-                if 'url' in info or 'identifier' in info:
+                if 'url' in info or '@id' in info:
                     # only record if we have any identifying information
                     # otherwise it is pointless cruft
                     distributions.append(info)
@@ -157,7 +163,7 @@ class DataladCoreExtractor(MetadataExtractor):
                         # avoid duplicates, but record all sources, even
                         # if not URLs are around
                         if r['uuid'] not in known_uuids:
-                            distributions.append(dict(identifier=r['uuid']))
+                            distributions.append({'@id': r['uuid']})
             if len(distributions):
                 meta['distribution'] = distributions
         return meta
@@ -180,7 +186,7 @@ class DataladCoreExtractor(MetadataExtractor):
 
     def _describe_file(self, rec):
         info = {
-            'identifier': _get_file_key(rec),
+            '@id': _get_file_key(rec),
             # schema.org doesn't have a useful term, only contentSize
             # and fileSize which seem to be geared towards human consumption
             # not numerical accuracy

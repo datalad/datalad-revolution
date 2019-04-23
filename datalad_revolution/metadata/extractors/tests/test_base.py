@@ -70,7 +70,7 @@ def check_api(no_annex, path):
             # every single report comes with an identifier
             assert_true(all(
                 r['metadata']['datalad_core'].get(
-                    'identifier', None) is not None
+                    '@id', None) is not None
                 for r in res))
         processed_extractors.append(extractor_ep.name)
     assert "datalad_core" in processed_extractors, \
@@ -140,7 +140,7 @@ def test_report(path, orig):
     res = extract_metadata(dataset=ds, process_type='dataset')
     assert_result_count(res, 1)
     assert_in(
-        {'@type': 'Dataset', 'identifier': subds.id, 'name': 'sub'},
+        {'@type': 'Dataset', '@id': subds.id, 'name': 'sub'},
         res[0]['metadata']['datalad_core']['hasPart']
     )
     # has not seen the content
