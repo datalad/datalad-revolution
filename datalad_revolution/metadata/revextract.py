@@ -53,6 +53,7 @@ from datalad.utils import (
     assure_list,
     as_unicode,
     Path,
+    PurePosixPath,
 )
 from datalad.dochelpers import exc_str
 from datalad.log import log_progress
@@ -100,6 +101,11 @@ class RevExtractMetadata(Interface):
        whether to auto-generate a summary of unique content metadata values
        in the dataset metadata. This requires 'content'-type metadata
        processing to be in effect.
+
+    ``datalad.metadata.exclude-path = <path>``
+      ignore all content underneath the given path for metadata extraction,
+      must be relative to the root of the dataset and in POSIX convention,
+      and can be given multiple times
     """
 
     _params_ = dict(
@@ -251,6 +257,13 @@ class RevExtractMetadata(Interface):
         # TODO this could be a dict, but MIH cannot think of an access
         # pattern that does not involve iteration over all items
         status = []
+        exclude_paths = [
+            ds.pathobj / PurePosixPath(e)
+            for e in (
+                list(exclude_from_metadata) + assure_list(
+                    ds.config.get('datalad.metadata.exclude-path', []))
+            )
+        ]
         if ds.is_installed():
             # we can make use of status
             res_props.update(refds=ds.path)
@@ -277,8 +290,9 @@ class RevExtractMetadata(Interface):
                     result_renderer='disabled'):
                 # path reports are always absolute and anchored on the dataset
                 # (no repo) path
-                if any(r['path'].startswith(str(ds.pathobj / e) + op.sep)
-                       for e in exclude_from_metadata):
+                p = Path(r['path'])
+                if p in exclude_paths or \
+                        any(e in p.parents for e in exclude_paths):
                     # this needs to be ignore for any further processing
                     continue
                 # strip useless context information

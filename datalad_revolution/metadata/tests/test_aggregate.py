@@ -213,8 +213,8 @@ def test_aggregation(path):
     cloneres = clone.query_metadata()
     # basic sanity check
     assert_result_count(cloneres, 1, type='dataset')
-    # payload file, .gitattr, .gitmodule
-    assert_result_count(cloneres, 3, type='file')
+    # payload file
+    assert_result_count(cloneres, 1, type='file')
 
     # now loop over the previous results from the direct metadata query of
     # origin and make sure we get the extact same stuff from the clone

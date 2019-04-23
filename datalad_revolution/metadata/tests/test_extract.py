@@ -80,15 +80,17 @@ def test_error(path):
 @with_tree(meta_tree)
 def test_ds_extraction(path):
     ds = Dataset(path).rev_create(force=True)
+    ds.config.add('datalad.metadata.exclude-path', '.metadata',
+                  where='dataset')
     ds.rev_save()
     assert_repo_status(ds.path)
 
     # by default we get core and annex reports
     res = extract_metadata(dataset=ds)
-    # dataset, plus two file (payload, .gitattributes)
-    assert_result_count(res, 4)
+    # dataset, plus two files (payload)
+    assert_result_count(res, 3)
     assert_result_count(res, 1, type='dataset')
-    assert_result_count(res, 3, type='file')
+    assert_result_count(res, 2, type='file')
     # core has stuff on everythin
     assert(all('datalad_core' in r['metadata'] for r in res))
 

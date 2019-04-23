@@ -504,7 +504,10 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             # refcommit to find removed subdatasets
             exclude_paths = [
                 aggsrc.pathobj / PurePosixPath(e)
-                for e in exclude_from_metadata
+                for e in (
+                    list(exclude_from_metadata) + assure_list(
+                        aggsrc.config.get('datalad.metadata.exclude-path', []))
+                )
             ]
             for res in aggsrc.rev_diff(
                     fr=last_refcommit,

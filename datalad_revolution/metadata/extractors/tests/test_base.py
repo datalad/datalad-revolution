@@ -153,8 +153,8 @@ def test_report(path, orig):
         dict(tag=['one', 'two']) == r['metadata'].get('annex', None)
         for r in res
     ))
-    # we have a bunch of reports on files
-    assert(len(res) > 1)
+    # we have a report on file(s)
+    assert(len(res) > 0)
     # but no subdataset reports
     assert_result_count(res, 0, type='dataset')
     content_size = sum(
