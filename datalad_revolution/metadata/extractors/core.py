@@ -203,13 +203,13 @@ class DataladCoreExtractor(MetadataExtractor):
             'unique_exclude': list(self._unique_exclude),
             'remotes': ds.config.obtain(
                 'datalad.metadata.datalad-core.report-remotes',
-                True),
-            'contributors': ds.config.get(
+                True, valtype=EnsureBool()),
+            'contributors': ds.config.obtain(
                 'datalad.metadata.datalad-core.report-contributors',
-                True),
+                True, valtype=EnsureBool()),
             'modification-dates': ds.config.obtain(
                 'datalad.metadata.datalad-core.report-modification-dates',
-                True),
+                True, valtype=EnsureBool()),
         }
 
 
