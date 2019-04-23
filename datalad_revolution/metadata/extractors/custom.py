@@ -10,7 +10,7 @@
 
 One or more source files with metadata can be specified via the
 'datalad.metadata.custom-dataset-source' configuration variable.
-The content of these files must e a JSON object, and a metadata
+The content of these files must be a JSON object, and a metadata
 dictionary is built by updating it with the content of the JSON
 objects in the order in which they are given.
 

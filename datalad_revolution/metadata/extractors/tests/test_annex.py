@@ -31,12 +31,10 @@ def test_annex_contentmeta(path):
     mfile_path.write_text(u'nothing')
     (ds.pathobj / 'ignored').write_text(u'nometa')
     ds.rev_save()
-    # TODO strip this list() wrapper when
-    # https://github.com/datalad/datalad/pull/3298 is merged
-    list(ds.repo.set_metadata(
+    ds.repo.set_metadata(
         text_type(mfile_path.relative_to(ds.pathobj)),
         init={'tag': 'mytag', 'fancy': 'this?'}
-    ))
+    )
     res = ds.rev_extract_metadata(sources=['annex'], process_type='content')
     # there are only results on files with annex metadata, nothing else
     #  dataset record, no records on files without annex metadata

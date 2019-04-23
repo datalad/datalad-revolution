@@ -147,7 +147,7 @@ def get_ds_aggregate_db(dspath, version='default', warn_absent=True):
     Returns
     -------
     dict
-      A dictionary with the database content is return. All paths in the
+      A dictionary with the database content is returned. All paths in the
       dictionary (datasets, metadata object archives) are
       absolute.
     """
@@ -236,8 +236,8 @@ class QueryMetadata(Interface):
             action="store_true",
             doc="""if set, recursively report on any matching metadata based
             on given paths or reference dataset. Note, setting this option
-            does not cause any recursion into potential subdataset on the
-            filesystem. It merely determined what metadata is being reported
+            does not cause any recursion into potential subdatasets on the
+            filesystem. It merely determines what metadata is being reported
             from the given/discovered reference dataset."""),
     )
 

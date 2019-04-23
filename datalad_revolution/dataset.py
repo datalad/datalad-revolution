@@ -3,6 +3,7 @@ __docformat__ = 'restructuredtext'
 
 import os.path as op
 from collections import OrderedDict
+from six import text_type
 
 from . import utils as ut
 
@@ -15,6 +16,9 @@ from datalad.distribution.dataset import (
     rev_get_dataset_root,
     rev_resolve_path,
 )
+
+import logging
+lgr = logging.getLogger('datalad.dataset')
 
 # remove deprecated method from API
 setattr(RevolutionDataset, 'get_subdatasets', ut.nothere)
@@ -48,7 +52,7 @@ def sort_paths_by_datasets(orig_dataset_arg, paths):
     OrderedDict, list
       The dictionary contains all to-be-sorted paths as values to
       their respective containing datasets paths (as keys). The second
-      list contains status dicts for any errors that may have occurs
+      list contains status dicts for any errors that may have occurred
       during processing. They can be yielded in the context of
       the calling command.
     """
@@ -59,9 +63,9 @@ def sort_paths_by_datasets(orig_dataset_arg, paths):
         # it is important to capture the exact form of the
         # given path argument, before any normalization happens
         # for further decision logic below
-        orig_path = str(p)
+        orig_path = text_type(p)
         p = rev_resolve_path(p, orig_dataset_arg)
-        root = rev_get_dataset_root(str(p))
+        root = rev_get_dataset_root(text_type(p))
         if root is None:
             # no root, not possibly underneath the refds
             errors.append(dict(
@@ -72,7 +76,7 @@ def sort_paths_by_datasets(orig_dataset_arg, paths):
                 logger=lgr))
             continue
         else:
-            if orig_dataset_arg and root == str(p) and \
+            if orig_dataset_arg and root == text_type(p) and \
                     not orig_path.endswith(op.sep):
                 # the given path is pointing to a dataset
                 # distinguish rsync-link syntax to identify

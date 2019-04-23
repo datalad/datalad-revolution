@@ -51,6 +51,12 @@ class DataladCoreExtractor(MetadataExtractor):
             for res in self._get_contentmeta(ds, status):
                 total_content_bytesize += res['metadata'].get(
                     'contentbytesize', 0)
+                log_progress(
+                    lgr.info,
+                    'extractordataladcore',
+                    'Extracted core metadata from %s', res['path'],
+                    update=1,
+                    increment=True)
                 yield dict(
                     res,
                     type='file',
@@ -164,12 +170,6 @@ class DataladCoreExtractor(MetadataExtractor):
         generator((location, metadata_dict))
         """
         for rec in status:
-            log_progress(
-                lgr.info,
-                'extractordataladcore',
-                'Extracted core metadata from %s', rec['path'],
-                update=1,
-                increment=True)
             if rec['type'] == 'dataset':
                 # subdatasets have been dealt with in the dataset metadata
                 continue
@@ -247,16 +247,16 @@ def _get_commit_info(ds, status):
     stdout, stderr = ds.repo._git_custom_command(
         None,
         # name, email, timestamp, shasum
-        ['git', 'log', '--pretty=format:%aN%x00%aE%x00%aI%x00%H', refcommit],
-        expect_fail=True)
+        ['git', 'log', '--pretty=format:%aN%x00%aE%x00%aI%x00%H', refcommit]
+    )
     commits = [line.split('\0') for line in stdout.splitlines()]
     # version, always anchored on the first commit (tags could move and
     # make the integer commit count ambigous, and subtantially complicate
     # version comparisons
     version = '0-{}-g{}'.format(
         len(commits),
-        # first seven chars of the shasum (like git-describe)
-        commits[0][3][:7],
+        # abbreviated shasum (like git-describe)
+        ds.repo.get_hexsha(commits[0][3], short=True),
     )
     meta = {
         'version': version,

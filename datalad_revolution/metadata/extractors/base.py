@@ -12,7 +12,6 @@
 class MetadataExtractor(object):
     # ATM this doesn't do anything, but inheritance from this class enables
     # detection of new-style extractor API
-    pass
 
     def __call__(self, dataset, process_type, status):
         """Run metadata extraction

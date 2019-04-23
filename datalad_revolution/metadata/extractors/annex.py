@@ -11,7 +11,7 @@
 This extractor only deals with the metadata that can be assigned to annexed
 files via git-annex's `metadata` command. It does not deal with other implicit
 git-annex metadata, such as file availability information. This is already
-handles by the `datalad_core` extractor.
+handled by the `datalad_core` extractor.
 
 There is no standard way to define a vocabulary that is used for this kind of
 metadata.
@@ -82,7 +82,7 @@ class AnnexMetadataExtractor(MetadataExtractor):
             # any git-annex update would trigger a re-extraction of metadata
             # most likely without any change.
             # Instead, increment/change this version whenever the extractor
-            # output would change in the further (maybe due to changes in
+            # output would change in the future (maybe due to changes in
             # git-annex, or for other reasons).
             version=1,
         )
