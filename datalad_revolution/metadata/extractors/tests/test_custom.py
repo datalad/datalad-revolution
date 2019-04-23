@@ -91,8 +91,8 @@ testmeta = {
 
 @with_tree(
     tree={
-        '.datalad': {
-            'custom_metadata.json': jsondumps(sample_jsonld)},
+        '.metadata': {
+            'dataset.json': jsondumps(sample_jsonld)},
         'down': {
             'customloc': jsondumps(testmeta)}})
 def test_custom_dsmeta(path):
@@ -153,7 +153,7 @@ def test_custom_dsmeta(path):
     ds.config.add(
         'datalad.metadata.custom-dataset-source',
         # put back default
-        '.datalad/custom_metadata.json',
+        '.metadata/dataset.json',
         where='dataset')
     ds.rev_save()
     ds.rev_aggregate_metadata(force='fromscratch')
@@ -194,8 +194,8 @@ def test_custom_contentmeta(path):
 
 @with_tree(
     tree={
-        '.datalad': {
-            'custom_metadata': {
+        '.metadata': {
+            'content': {
                 'sub': {
                     'one.json': 'not JSON',
                 },

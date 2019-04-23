@@ -14,7 +14,7 @@ The content of these files must be a JSON object, and a metadata
 dictionary is built by updating it with the content of the JSON
 objects in the order in which they are given.
 
-By default a single file is read: '.datalad/custom_metadata.json'
+By default a single file is read: '.metadata/dataset.json'
 """
 
 from .base import MetadataExtractor
@@ -114,10 +114,8 @@ class CustomMetadataExtractor(MetadataExtractor):
         return {
             'dataset-source': ds.config.get(
                 'datalad.metadata.custom-dataset-source',
-                '.datalad/custom_metadata.json'),
-            'content-source': ds.config.get(
-                'datalad.metadata.custom-content-source',
-                '.datalad/custom_metadata/{freldir}/{fname}.json'),
+                '.metadata/dataset.json'),
+            'content-source': _get_fmeta_expr(ds),
         }
 
 
@@ -128,7 +126,7 @@ def _get_dsmeta_srcfiles(ds):
         [])
     cfg_srcfiles = assure_list(cfg_srcfiles)
     # OK to be always POSIX
-    srcfiles = ['.datalad/custom_metadata.json'] \
+    srcfiles = ['.metadata/dataset.json'] \
         if not cfg_srcfiles else cfg_srcfiles
     return srcfiles, cfg_srcfiles
 
@@ -136,7 +134,7 @@ def _get_dsmeta_srcfiles(ds):
 def _get_fmeta_expr(ds):
     return ds.config.obtain(
         'datalad.metadata.custom-content-source',
-        '.datalad/custom_metadata/{freldir}/{fname}.json')
+        '.metadata/content/{freldir}/{fname}.json')
 
 
 def _get_fmeta_objpath(ds, expr, rec):

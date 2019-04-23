@@ -47,9 +47,9 @@ sample_fmeta = {
     }
 }
 meta_tree = {
-    '.datalad': {
-        'custom_metadata.json': jsondumps(sample_dsmeta),
-        'custom_metadata': {
+    '.metadata': {
+        'dataset.json': jsondumps(sample_dsmeta),
+        'content': {
             'sub': {
                 'one.json': jsondumps(sample_fmeta),
                 'nothing.json': '{}',
