@@ -18,6 +18,10 @@ from .. import get_refcommit
 from datalad.utils import (
     Path,
 )
+from six import (
+    iteritems,
+    string_types,
+)
 
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.datalad_core')
@@ -175,13 +179,48 @@ class DataladCoreExtractor(MetadataExtractor):
         -------
         generator((location, metadata_dict))
         """
+        # start batched 'annex whereis' and query for availability info
+        # there is no need to make sure a batched command is terminated
+        # properly, the harness in extract_metadata will do this
+        wic = whereis_file if hasattr(ds.repo, 'repo_info') \
+            else lambda x, y: dict(status='error')
         for rec in status:
             if rec['type'] == 'dataset':
                 # subdatasets have been dealt with in the dataset metadata
                 continue
+            md = self._describe_file(rec)
+            wi = wic(ds.repo, rec['path'])
+            if wi['status'] != 'ok':
+                yield dict(
+                    path=rec['path'],
+                    metadata=md,
+                )
+                continue
+            urls = _get_urls_from_whereis(wi)
+            # urls we the actual file content can be obtained
+            # directly
+            dist = [url for url in urls if url.startswith('http')]
+            if dist:
+                md['distribution'] = dict(url=dist)
+
+            ispart = []
+            for arxiv_url in [url for url in urls
+                              if url.startswith('dl+archive:')]:
+                key = arxiv_url[11:].split('#')[0]
+                arxiv_urls = _get_urls_from_whereis(
+                    ds.repo.whereis(key, key=True, output='full'))
+                if arxiv_urls:
+                    ispart.append({
+                        '@id': key,
+                        'distribution': {
+                            'url': arxiv_urls,
+                        },
+                    })
+            if ispart:
+                md['isPartOf'] = ispart
             yield dict(
                 path=rec['path'],
-                metadata=self._describe_file(rec),
+                metadata=md,
             )
 
     def _describe_file(self, rec):
@@ -217,6 +256,17 @@ class DataladCoreExtractor(MetadataExtractor):
                 'datalad.metadata.datalad-core.report-modification-dates',
                 True, valtype=EnsureBool()),
         }
+
+
+def _get_urls_from_whereis(wi, prefixes=('http', 'dl+archive:')):
+    """Extract a list of URLs starting with any of the given prefixes
+    from "whereis" output"""
+    return [
+        url
+        for remote, rprops in iteritems(wi.get('remotes', {}) if 'status' in wi else wi)
+        for url in rprops.get('urls', [])
+        if any(url.startswith(pref) for pref in prefixes)
+    ]
 
 
 def _get_file_key(rec):
@@ -306,3 +356,57 @@ def ri2url(ri):
         # this has no chance of being resolved outside this machine
         # not work reporting
         return None
+
+
+# The following function pair should be part of AnnexRepo, but a PR was
+# rejected, because there is already an old whereis() -- but with an
+# overcomplicated API and no batch-mode support -- going solo...
+def whereis_file(self, path):
+    """Same as `whereis_file_()`, but for a single path and return-dict"""
+    #return list(self.whereis_file_([path]))[0]
+    return list(whereis_file_(self, [path]))[0]
+
+
+def whereis_file_(self, paths):
+    """
+    Parameters
+    ----------
+    paths : iterable
+        Paths of files to query for, either absolute paths matching the
+        repository root (self.path), or paths relative to the root of the
+        repository
+
+    Yields
+    ------
+    dict
+        A response dictionary to each query path with the following keys:
+        'path' with the queried path in the same form t was provided;
+        'status' {ok|error} indicating whether git annex was queried
+        successfully for a path; 'key' with the annex key for the file;
+        'remotes' with a dictionary of remotes that have a copy of the
+        respective file (annex UUIDs are keys, and values are dictionaries
+        with keys: 'description', 'here', 'urls' (list) that contain
+        the values of the respective 'git annex whereis' response.
+    """
+    if isinstance(paths, string_types):
+        raise ValueError('whereis_file(paths): paths must be '
+                         'iterable, not a string type')
+
+    cmd = self._batched.get('whereis', json=True, path=self.path)
+    for path in paths:
+        r = cmd(path)
+        # give path back in the same shape as it came in
+        res = dict(path=path)
+        if not r:
+            yield dict(res, status='error')
+            continue
+        yield dict(
+            res,
+            status='ok' if r.get('success', False) else 'error',
+            key=r['key'],
+            remotes={
+                remote['uuid']:
+                {x: remote.get(x, None)
+                 for x in ('description', 'here', 'urls')}
+                for remote in r['whereis']},
+        )
