@@ -31,8 +31,7 @@ from .revextract import RevExtractMetadata
 from datalad.core.local.status import Status
 from datalad.core.local.save import Save
 from ..revdiff import (
-    RevDiff as Diff,
-    PRE_INIT_COMMIT_SHA,
+    _diff_ds,
 )
 
 import datalad
@@ -334,10 +333,12 @@ class RevAggregateMetadata(Interface):
         # metadata objects
         vanished_datasets = set()
 
+        # the content info lookup cache
+        cache = {}
         # HERE IS WHERE THE "INTO" MODES NEED TO BE TREATED DIFFERENTLY
         if into == 'top':
             for res in _do_top_aggregation(
-                    ds, extract_from_ds, force, vanished_datasets):
+                    ds, extract_from_ds, force, vanished_datasets, cache):
                 yield res
         elif into == 'all':
             # which datasets have we dealt with already
@@ -398,7 +399,8 @@ class RevAggregateMetadata(Interface):
                         topds,
                         task,
                         force,
-                        vanished_datasets):
+                        vanished_datasets,
+                        cache):
                     # recode results to it becomes clear via which dataset
                     # aggregation was invoked
                     res['refds'] = ds.path
@@ -414,7 +416,7 @@ class RevAggregateMetadata(Interface):
                 into))
 
 
-def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
+def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
     """Internal helper
 
     Performs non-recursive aggergation for a single dataset.
@@ -431,6 +433,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
       Path instances of datasets that are known to have been removed
       from any inspected dataset since the last aggregated state. This
       is modified in-place!
+    cache: dict
+      content into lookup cache
     """
     if force == 'fromscratch':
         # all we have to do is to remove the directory from the working
@@ -523,19 +527,20 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                         aggsrc.config.get('datalad.metadata.exclude-path', []))
                 )
             ]
-            for res in aggsrc.rev_diff(
+            for res in _diff_ds(
+                    ds=aggsrc,
                     fr=last_refcommit,
                     to='HEAD',
+                    constant_refs=False,
+                    recursion_level=0,
                     # query on all paths to get desired result with
                     # recursion enables
-                    path=None,
-                    # not possible here, but turn off detection anyways
+                    origpaths=None,
                     untracked='no',
-                    recursive=False,
-                    result_renderer='disabled',
-                    return_type='generator',
-                    # let the top-level caller handle failure
-                    on_failure='ignore'):
+                    annexinfo=None,
+                    # not possible here, but turn off detection anyways
+                    eval_file_type=False,
+                    cache=cache):
                 if res.get('action', None) != 'diff':  # pragma: no cover
                     # something unexpected, send upstairs
                     yield res

@@ -151,7 +151,8 @@ def _diff_cmd(
         annex=None,
         untracked='normal',
         recursive=False,
-        recursion_limit=None):
+        recursion_limit=None,
+        eval_file_type=True):
     """Internal helper to actually run the command"""
     # we cannot really perform any sorting of paths into subdatasets
     # or rejecting paths based on the state of the filesystem, as
@@ -226,6 +227,7 @@ def _diff_cmd(
             origpaths=None if not path else OrderedDict(path),
             untracked=untracked,
             annexinfo=annex,
+            eval_file_type=True,
             cache=content_info_cache):
         res.update(
             refds=ds.path,
@@ -236,7 +238,7 @@ def _diff_cmd(
 
 
 def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
-             annexinfo, cache):
+             annexinfo, eval_file_type, cache):
     if not ds.repo:
         # asked to query a subdataset that is not available
         lgr.debug("Skip diff of unavailable subdataset: %s", ds)
@@ -258,6 +260,7 @@ def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
             to,
             paths=None if not paths else [p for p in paths],
             untracked=untracked,
+            eval_file_type=eval_file_type,
             _cache=cache)
     except ValueError as e:
         msg_tmpl = "reference '{}' invalid"

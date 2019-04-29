@@ -76,6 +76,9 @@ def get_refcommit(ds):
                     # submodule record will be visible in the parent
                     # already
                     eval_submodule_state='no',
+                    # boost performance, we don't care about file types
+                    # here
+                    eval_file_type=False,
                     _cache=diff_cache))
                 if props.get('state', None) != 'clean' \
                 and p not in exclude_paths \
