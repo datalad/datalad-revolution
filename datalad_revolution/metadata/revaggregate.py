@@ -1160,7 +1160,7 @@ def _finalize_unique_cm(unique_cm, dsmeta):
         for ename, ucm in iteritems(unique_cm)
     }
     # only report on extractors with any report
-    return {k: v for k, v in iteritems(out) if v}
+    return {k: v for k, v in iteritems(out) if v or v is None}
 
 
 def _val2hashable(val):
