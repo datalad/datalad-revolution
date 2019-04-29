@@ -20,6 +20,14 @@ always use this mode by running:
 Command(s) currently provided by this extension
 
 - `rev-diff` -- sibling of `rev-status` for any state comparison, now also on Windows
+- `rev-extract-metadata` -- new and improved dedicated command to run any and all of
+  DataLad's metadata extractors. Much improved versions of the core extractor
+  implementations also ship with this extension.
+- `rev-aggregate-metadata` -- complete reimplementation of metadata aggregation, with
+  stellar performance benefits, in particular on large dataset hierarchies.
+- `query-metadata` -- new command to specifically access the aggregated metadata
+  present in a dataset, much faster and more predictable behavior than the
+  `metadata` command in datalad-core.
 
 ## Installation
 
