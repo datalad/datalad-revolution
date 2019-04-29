@@ -54,7 +54,11 @@ setup(
             'revolution=datalad_revolution',
         ],
         'datalad.metadata.extractors': [
-            'custom=datalad_revolution.metadata.extractors.custom:MetadataExtractor',
+            # keep the name from -core for the first two will install ours as
+            # replacements
+            'datalad_core=datalad_revolution.metadata.extractors.core:DataladCoreExtractor',
+            'annex=datalad_revolution.metadata.extractors.annex:AnnexMetadataExtractor',
+            'custom=datalad_revolution.metadata.extractors.custom:CustomMetadataExtractor',
         ],
     },
 )

@@ -8,12 +8,15 @@
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Test custom metadata extractor"""
 
-from ....dataset import RevolutionDataset as Dataset
+from six import text_type
+
+from datalad.distribution.dataset import Dataset
 # API commands needed
 from datalad.api import (
     rev_create,
     rev_save,
-    aggregate_metadata,
+    query_metadata,
+    rev_aggregate_metadata,
 )
 from datalad.tests.utils import (
     with_tree,
@@ -22,8 +25,6 @@ from datalad.tests.utils import (
     assert_result_count,
     assert_in,
     assert_not_in,
-)
-from datalad.tests.utils import (
     assert_repo_status,
 )
 from simplejson import dumps as jsondumps
@@ -90,21 +91,20 @@ testmeta = {
 
 @with_tree(
     tree={
-        '.datalad': {
-            'metadata': {
-                'custom.json': jsondumps(sample_jsonld)}},
+        '.metadata': {
+            'dataset.json': jsondumps(sample_jsonld)},
         'down': {
             'customloc': jsondumps(testmeta)}})
-def test_custom(path):
+def test_custom_dsmeta(path):
     ds = Dataset(path).rev_create(force=True)
     # enable custom extractor
     # use default location
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
     ds.rev_save()
     assert_repo_status(ds.path)
-    res = ds.aggregate_metadata()
+    res = ds.rev_aggregate_metadata()
     assert_status('ok', res)
-    res = ds.metadata(reporton='datasets')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     dsmeta = res[0]['metadata']
     assert_in('custom', dsmeta)
@@ -117,10 +117,25 @@ def test_custom(path):
         'datalad.metadata.custom-dataset-source',
         'nothere',
         where='dataset')
-    ds.aggregate_metadata()
-    res = ds.metadata(reporton='datasets')
+    ds.rev_save()
+    # we could argue that any config change should lead
+    # to a reaggregation automatically, but that would mean
+    # that we are willing to pay a hefty performance price
+    # in many situation that do not need re-aggregation
+    res = ds.rev_aggregate_metadata(
+        force='fromscratch',
+        on_failure='ignore')
+    assert_result_count(
+        res, 1, action='extract_metadata', type='dataset', status='impossible',
+        path=ds.path,
+        message=(
+            'configured custom metadata source is not available in %s: %s',
+            ds, 'nothere'),
+    )
+
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
-    assert_not_in('custom', res[0]['metadata'])
+    eq_(res[0]['metadata'].get('custom', {}), {})
 
     # overwrite default source location within something existing
     ds.config.set(
@@ -129,8 +144,8 @@ def test_custom(path):
         'down/customloc',
         where='dataset')
     ds.rev_save()
-    ds.aggregate_metadata()
-    res = ds.metadata(reporton='datasets')
+    ds.rev_aggregate_metadata(force='fromscratch')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(testmeta, res[0]['metadata']['custom'])
 
@@ -138,14 +153,71 @@ def test_custom(path):
     ds.config.add(
         'datalad.metadata.custom-dataset-source',
         # put back default
-        '.datalad/metadata/custom.json',
+        '.metadata/dataset.json',
         where='dataset')
     ds.rev_save()
-    ds.aggregate_metadata()
-    res = ds.metadata(reporton='datasets')
+    ds.rev_aggregate_metadata(force='fromscratch')
+    res = ds.query_metadata(reporton='datasets')
     assert_result_count(res, 1)
     eq_(
         # merge order: testmeta <- sample_jsonld
         dict(testmeta, **sample_jsonld),
         res[0]['metadata']['custom']
+    )
+
+
+@with_tree(
+    tree={
+        'sub': {
+            'one': '1',
+            '_one.dl.json': '{"some":"thing"}',
+        }
+    })
+def test_custom_contentmeta(path):
+    ds = Dataset(path).rev_create(force=True)
+    ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
+    # use custom location
+    ds.config.add('datalad.metadata.custom-content-source',
+                  '{freldir}/_{fname}.dl.json',
+                  where='dataset')
+    ds.rev_save()
+    res = ds.rev_extract_metadata(sources=['custom'], process_type='content')
+    assert_result_count(
+        res, 1,
+        path=text_type(ds.pathobj / 'sub' / 'one'),
+        type='file',
+        status='ok',
+        metadata={'custom': {'some': 'thing'}},
+        action='extract_metadata'
+    )
+
+
+@with_tree(
+    tree={
+        '.metadata': {
+            'content': {
+                'sub': {
+                    'one.json': 'not JSON',
+                },
+            },
+        },
+        'sub': {
+            'one': '1',
+        }
+    })
+def test_custom_content_broken(path):
+    ds = Dataset(path).rev_create(force=True)
+    ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
+    ds.rev_save()
+    res = ds.rev_extract_metadata(sources=['custom'], process_type='content',
+                                  on_failure='ignore')
+    assert_result_count(res, 1)
+    assert_result_count(
+        res, 1,
+        path=text_type(ds.pathobj / 'sub' / 'one'),
+        type='file',
+        # specific message does vary a lot across platforms
+        #message=
+        status='error',
+        action='extract_metadata'
     )

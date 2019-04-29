@@ -40,6 +40,16 @@ before_install:
   - bash <(wget -q -O- http://neuro.debian.net/_files/neurodebian-travis.sh)
   - travis_retry sudo apt-get update -qq
   - travis_retry sudo apt-get install eatmydata  # to speedup some installations
+  # prep for SSH network access
+  - sudo bash -c 'echo "127.0.0.1  datalad-test" >> /etc/hosts'
+  - travis_retry sudo eatmydata apt-get install openssh-client
+  - mkdir -p ~/.ssh
+  - echo -e "Host localhost\n\tStrictHostKeyChecking no\n\tIdentityFile /tmp/dl-test-ssh-id\nHost datalad-test\n\tStrictHostKeyChecking no\n\tIdentityFile /tmp/dl-test-ssh-id\n" >> ~/.ssh/config
+  - ssh-keygen -f /tmp/dl-test-ssh-id -N ""
+  - cat /tmp/dl-test-ssh-id.pub >> ~/.ssh/authorized_keys
+  - bash -c 'eval $(ssh-agent) && ssh-add /tmp/dl-test-ssh-id'
+  - ssh -v localhost exit
+  - ssh -v datalad-test exit
   # install git-annex with the relevant bits
   # no recommends to avoid inheriting the entire multimedia stack
   - travis_retry sudo eatmydata apt-get install --no-install-recommends git-annex-standalone aria2 git-remote-gcrypt lsof gnupg nocache

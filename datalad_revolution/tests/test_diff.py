@@ -34,6 +34,7 @@ from datalad.tests.utils import (
     assert_in,
     chpwd,
     assert_result_count,
+    OBSCURE_FILENAME,
 )
 
 import datalad.utils as ut
@@ -351,9 +352,9 @@ def test_path_diff(_path, linkpath):
     # query for a deeply nested path from the top, should just work with a
     # variety of approaches
     rpath = op.join('subds_modified', 'subds_lvl1_modified',
-                    'directory_untracked')
+                    u'{}_directory_untracked'.format(OBSCURE_FILENAME))
     apathobj = ds.pathobj / rpath
-    apath = str(apathobj)
+    apath = text_type(apathobj)
     for p in (rpath, apath, None):
         if p is None:
             # change into the realpath of the dataset and
