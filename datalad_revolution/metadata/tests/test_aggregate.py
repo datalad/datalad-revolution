@@ -12,6 +12,7 @@
 
 import os.path as op
 from six import text_type
+from simplejson import dumps as jsondumps
 
 from datalad.api import (
     query_metadata,
@@ -660,3 +661,91 @@ def test_reaggregate(path):
     # output nothing will change in the dataset
     ds.rev_aggregate_metadata(path='down', recursive=True, force='extraction')
     eq_(good_state, ds.repo.get_hexsha())
+
+
+sample_fmeta1 = {
+    "something": "stupid",
+    "complextype": {
+        "entity": {
+            "some": "many",
+            "properties": "here",
+        },
+        "age": "young",
+        "numbers": [3, 2, 1, 0],
+    }
+}
+sample_fmeta2 = {
+    # same as above
+    "something": "stupid",
+    # different complex type
+    "complextype": {
+        "entity": {
+            "some": "few",
+            "properties": "here",
+        },
+    }
+}
+custom_metadata_tree = {
+    '.metadata': {
+        'content': {
+            'sub': {
+                'one.json': jsondumps(sample_fmeta1),
+                'two.json': jsondumps(sample_fmeta2),
+            },
+        },
+    },
+    'sub': {
+        'one': '1',
+        'two': '2',
+    },
+}
+
+
+@with_tree(custom_metadata_tree)
+def test_unique_values(path):
+    ds = Dataset(path).rev_create(force=True)
+    ds.config.add('datalad.metadata.exclude-path', '.metadata',
+                  where='dataset', reload=False)
+    ds.config.add('datalad.metadata.nativetype', 'custom',
+                  where='dataset')
+    ds.rev_save()
+    assert_repo_status(ds.path)
+
+    # all on default
+    ds.rev_aggregate_metadata()
+    # all good, we get a report on this one dataset
+    res = ds.query_metadata(reporton='datasets')
+    assert_result_count(res, 1)
+    ucm = res[0]['metadata']['datalad_unique_content_properties']
+    eq_(
+        ucm,
+        {
+            "custom": {
+                # complex types do not get shmooshed together
+                "complextype": [
+                    {
+                        "age": "young",
+                        "entity": {
+                            "properties": "here",
+                            "some": "many"
+                        },
+                        "numbers": [
+                            3,
+                            2,
+                            1,
+                            0
+                        ]
+                    },
+                    {
+                        "entity": {
+                            "properties": "here",
+                            "some": "few"
+                        }
+                    }
+                ],
+                # simple type get unique'd as expected
+                "something": [
+                    "stupid"
+                ]
+            }
+        })

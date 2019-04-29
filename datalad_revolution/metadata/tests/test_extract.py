@@ -122,11 +122,6 @@ def test_ds_extraction(path):
         parentds=ds.path)
     for r in res:
         assert_in('custom', r['metadata'])
-    # we have a unique value report
-    eq_(
-        res[0]['metadata']["datalad_unique_content_properties"]['custom']["something"],
-        ["stupid"]
-    )
     # and lastly, if we disable extraction via config, we get nothing
     ds.config.add('datalad.metadata.extract-from-custom', 'dataset',
                   where='dataset')
