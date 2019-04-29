@@ -127,7 +127,9 @@ def _get_dsmeta_srcfiles(ds):
     cfg_srcfiles = assure_list(cfg_srcfiles)
     # OK to be always POSIX
     srcfiles = ['.metadata/dataset.json'] \
-        if not cfg_srcfiles else cfg_srcfiles
+        if not cfg_srcfiles and op.lexists(
+            text_type(ds.pathobj / '.metadata' / 'dataset.json')) \
+        else cfg_srcfiles
     return srcfiles, cfg_srcfiles
 
 
