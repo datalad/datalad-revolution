@@ -691,12 +691,14 @@ custom_metadata_tree = {
             'sub': {
                 'one.json': jsondumps(sample_fmeta1),
                 'two.json': jsondumps(sample_fmeta2),
+                'three.json': jsondumps(sample_fmeta1),
             },
         },
     },
     'sub': {
         'one': '1',
         'two': '2',
+        'three': '3',
     },
 }
 
