@@ -179,6 +179,9 @@ class DataladCoreExtractor(MetadataExtractor):
         -------
         generator((location, metadata_dict))
         """
+        # cache whereis info of tarball/zip/archives, tend to be used
+        # more than once, can save a chunk of runtime
+        arxiv_whereis = {}
         # start batched 'annex whereis' and query for availability info
         # there is no need to make sure a batched command is terminated
         # properly, the harness in extract_metadata will do this
@@ -207,8 +210,11 @@ class DataladCoreExtractor(MetadataExtractor):
             for arxiv_url in [url for url in urls
                               if url.startswith('dl+archive:')]:
                 key = arxiv_url[11:].split('#')[0]
-                arxiv_urls = _get_urls_from_whereis(
-                    ds.repo.whereis(key, key=True, output='full'))
+                arxiv_urls = arxiv_whereis.get(key, None)
+                if arxiv_urls is None:
+                    arxiv_urls = _get_urls_from_whereis(
+                        ds.repo.whereis(key, key=True, output='full'))
+                    arxiv_whereis[key] = arxiv_urls
                 if arxiv_urls:
                     ispart.append({
                         '@id': key,
