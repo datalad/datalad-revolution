@@ -189,6 +189,7 @@ class DataladCoreExtractor(MetadataExtractor):
         wic = whereis_file if hasattr(ds.repo, 'repo_info') \
             else lambda x, y: dict(status='error')
         for rec in status:
+            recorded_archive_keys = set()
             if rec['type'] == 'dataset':
                 # subdatasets have been dealt with in the dataset metadata
                 continue
@@ -209,12 +210,11 @@ class DataladCoreExtractor(MetadataExtractor):
 
             ispart = []
             for arxiv_url in [url for url in urls
-                              if url.startswith('dl+archive:') and
+                              if url.startswith('dl+archive:') and \
                               '#' in url]:
                 key = _get_archive_key(arxiv_url)
-                if not key:
-                    # nothing we can work with
-                    print("PUFF", arxiv_url)
+                if not key or key in recorded_archive_keys:
+                    # nothing we can work with, or all done
                     continue
                 arxiv_urls = arxiv_whereis.get(key, None)
                 if arxiv_urls is None:
@@ -234,6 +234,7 @@ class DataladCoreExtractor(MetadataExtractor):
                             'url': arxiv_urls,
                         },
                     })
+                    recorded_archive_keys.add(key)
             if ispart:
                 md['isPartOf'] = ispart
             yield dict(
