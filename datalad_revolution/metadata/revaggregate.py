@@ -17,7 +17,10 @@ from six import (
     iteritems,
     text_type,
 )
-from collections import OrderedDict
+from collections import (
+    Mapping,
+    OrderedDict,
+)
 
 import os.path as op
 
@@ -66,6 +69,7 @@ from datalad.support.param import Parameter
 from datalad.support.constraints import (
     EnsureStr,
     EnsureNone,
+    EnsureBool,
 )
 from datalad.support.constraints import EnsureChoice
 from datalad.support import json_py
@@ -75,6 +79,7 @@ from datalad.utils import (
     rmtree,
     Path,
     PurePosixPath,
+    as_unicode,
 )
 from datalad.log import log_progress
 
@@ -468,18 +473,27 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
         # if there is a change, no diff'ing is needed and extraction
         # can start right away
         # TODO implies ignoreextractorchange force flag
-        exstate_cur = {
-            e['extractor']: e['state']
+        exinfo = {
+            e['extractor']: dict(
+                e,
+                # check if unique value aggregation was disabled in the
+                # receiving dataset
+                unique=ds.config.obtain(
+                    'datalad.metadata.aggregate-unique-{}'.format(
+                        e['extractor'].replace('_', '-')),
+                    default=True,
+                    valtype=EnsureBool())
+            )
             for e in ds.rev_extract_metadata(process_type='extractors')
         }
         exstate_rec = top_agginfo_db.get(
             aggsrc.pathobj, {}).get('extractors', None)
         if (
                 # old aggregate catalag with a plain extractor name list
-                not isinstance(exstate_rec, dict)
-                or sorted(exstate_cur.keys()) != sorted(exstate_rec.keys())
-                or any(exstate_cur[k] != exstate_rec[k]
-                       for k in exstate_cur)):
+                not isinstance(exstate_rec, dict) \
+                or sorted(exinfo.keys()) != sorted(exstate_rec.keys()) \
+                or any(exinfo[k]['state'] != exstate_rec[k]
+                       for k in exinfo)):
             lgr.debug(
                 'Difference between recorded and current extractor detected, '
                 'force (re-)extraction')
@@ -574,7 +588,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                 aggsrc, use_self_aggregate, force, last_refcommit, have_diff)
             # really _extract_ metadata for aggsrc
             agginfo = {}
-            for res in _extract_metadata(aggsrc, ds):
+            for res in _extract_metadata(aggsrc, ds, exinfo):
                 if res.get('action', None) == 'extract_metadata' \
                         and res.get('status', None) == 'ok' \
                         and 'info' in res:
@@ -848,7 +862,7 @@ def _get_aggtmp_basedir(ds, mkdir=False):
     return tmp_basedir
 
 
-def _extract_metadata(fromds, tods):
+def _extract_metadata(fromds, tods, exinfo):
     """Extract metadata from a dataset into a temporary location in a dataset
 
     Parameters
@@ -857,14 +871,16 @@ def _extract_metadata(fromds, tods):
       To extract from
     tods : Dataset
       Aggregate into
-    info : dict
-      Will be modified in-place and receive the info on the aggregation
-      (version, extractors, dataset and content metadata object file locations)
+    exinfo : dict
+      Extractor information, as reported by
+      rev_extract(process_type=extractors)
 
     Yields
     ------
     dict
-      Any extraction error status results will be re-yielded
+      Any extraction error status results will be re-yielded, otherwise
+      result dict 'info' key will contain version, extractors, dataset and
+      content metadata object file locations.
     """
     # this will gather information on the extraction result
     info = {}
@@ -873,6 +889,8 @@ def _extract_metadata(fromds, tods):
         'content': [],
     }
     extracted_metadata_sources = set()
+
+    unique_cm = {}
 
     # perform the actual extraction
     for res in fromds.rev_extract_metadata(
@@ -905,9 +923,13 @@ def _extract_metadata(fromds, tods):
                 continue
             meta['dataset'] = res['metadata']
         elif restype == 'file':
+            fmeta = res['metadata']
+            # build-up unique values
+            _update_unique_cm(unique_cm, fmeta, exinfo)
+
             meta['content'].append(
                 dict(
-                    res['metadata'],
+                    fmeta,
                     path=text_type(Path(res['path']).relative_to(
                         fromds.pathobj))
                 )
@@ -922,6 +944,12 @@ def _extract_metadata(fromds, tods):
             )
             yield res
             continue
+    # inject unique values into dataset metadata
+    if unique_cm:
+        # produce final unique record in dsmeta for this extractor
+        meta['dataset']['datalad_unique_content_properties'] = \
+            _finalize_unique_cm(unique_cm, meta['dataset'])
+
     # store esssential extraction config in dataset record
     info['datalad_version'] = datalad.__version__
     # inject extractor state information
@@ -1032,3 +1060,182 @@ def _store_agginfo_db(ds, db):
         },
         text_type(agginfo_path)
     )
+
+
+def _update_unique_cm(unique_cm, cnmeta, exinfo):
+    """Sift through a new content metadata set and update the unique value
+    record
+
+    Parameters
+    ----------
+    unique_cm : dict
+      unique value records for all extractors, modified in place
+    cnmeta : dict
+      Metadata for a content item to sift through.
+    exinfo : dict
+      Extractor information dict
+    """
+    # go through content metadata and inject report of unique keys
+    # and values into `dsmeta`
+    for msrc_key in cnmeta:
+        msrc_info = exinfo[msrc_key]
+        ucm = unique_cm.get(msrc_key, {})
+        if not msrc_info['unique']:
+            # unique value aggregation disabled for this extractor
+            # next please
+            continue
+        for k, v in iteritems(cnmeta[msrc_key]):
+            if k in msrc_info.get('state', {}).get('unique_exclude', []):
+                # XXX this is untested ATM and waiting for
+                # https://github.com/datalad/datalad/issues/3135
+                #
+                # the extractor thinks this key is worthless for the purpose
+                # of discovering whole datasets
+                # we keep the key (so we know that some file is providing this
+                # key), but ignore any value it came with
+                val = None
+            else:
+                val = _val2hashable(v)
+            vset = ucm.get(k, set())
+            vset.add(val)
+            ucm[k] = vset
+        if ucm:
+            unique_cm[msrc_key] = ucm
+
+
+def _finalize_unique_cm(unique_cm, dsmeta):
+    """Convert harvested unique values in a serializable, ordered
+    representation
+
+    Parameters
+    ----------
+    unique_cm : dict
+      unique value records for all extractors
+    dsmeta : dict
+      dataset metadata
+
+    Returns
+    -------
+    dict
+    """
+    # important: we want to have a stable order regarding
+    # the unique values (a list). we cannot guarantee the
+    # same order of discovery, hence even when not using a
+    # set above we would still need sorting. the callenge
+    # is that any value can be an arbitrarily complex nested
+    # beast
+    # we also want to have each unique value set always come
+    # in a top-level list, so we know if some unique value
+    # was a list, os opposed to a list of unique values
+
+    def _ensure_serializable(val):
+        # XXX special cases are untested, need more convoluted metadata
+        if isinstance(val, ReadOnlyDict):
+            return {k: _ensure_serializable(v) for k, v in iteritems(val)}
+        if isinstance(val, (tuple, list)):
+            return [_ensure_serializable(v) for v in val]
+        else:
+            return val
+
+    out = {
+        ename: {
+            k: [_ensure_serializable(i)
+                for i in sorted(
+                    v,
+                    key=_unique_value_key)] if v is not None else None
+            for k, v in iteritems(ucm)
+            # v == None (disable unique, but there was a value at some point)
+            # otherwise we only want actual values, and also no
+            # single-item-lists of a non-value
+            # those contribute no information, but bloat the operation
+            # (inflated number of keys, inflated storage, inflated search
+            # index, ...)
+            # also strip any keys that conflict with a key in the actual
+            # dataset metadata -- the dataset clearly has a better idea
+            # than a blindly generated unique value list
+            if v is None or (v and not (
+                v == {''} or k in dsmeta.get(ename, {})
+            ))
+        }
+        for ename, ucm in iteritems(unique_cm)
+    }
+    # only report on extractors with any report
+    return {k: v for k, v in iteritems(out) if v}
+
+
+def _val2hashable(val):
+    """Small helper to convert incoming mutables to something hashable
+
+    The goal is to be able to put the return value into a set, while
+    avoiding conversions that would result in a change of representation
+    in a subsequent JSON string.
+    """
+    # XXX special cases are untested, need more convoluted metadata
+    if isinstance(val, dict):
+        return ReadOnlyDict(val)
+    elif isinstance(val, list):
+        return tuple(map(_val2hashable, val))
+    else:
+        return val
+
+
+def _unique_value_key(x):
+    """Small helper for sorting unique content metadata values"""
+    if isinstance(x, ReadOnlyDict):
+        # XXX special case untested, needs more convoluted metadata
+        #
+        # turn into an item tuple with keys sorted and values plain
+        # or as a hash if *dicts
+        x = [(k,
+              hash(x[k])
+              if isinstance(x[k], ReadOnlyDict) else x[k])
+             for k in sorted(x)]
+    # we need to force str, because sorted in PY3 refuses to compare
+    # any heterogeneous type combinations, such as str/int,
+    # tuple(int)/tuple(str)
+    return as_unicode(x)
+
+
+
+class ReadOnlyDict(Mapping):
+    # Taken from https://github.com/slezica/python-frozendict
+    # License: MIT
+
+    # XXX entire class is untested
+
+    """
+    An immutable wrapper around dictionaries that implements the complete
+    :py:class:`collections.Mapping` interface. It can be used as a drop-in
+    replacement for dictionaries where immutability is desired.
+    """
+    dict_cls = dict
+
+    def __init__(self, *args, **kwargs):
+        self._dict = self.dict_cls(*args, **kwargs)
+        self._hash = None
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __contains__(self, key):
+        return key in self._dict
+
+    def copy(self, **add_or_replace):
+        return self.__class__(self, **add_or_replace)
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def __repr__(self):
+        return '<%s %r>' % (self.__class__.__name__, self._dict)
+
+    def __hash__(self):
+        if self._hash is None:
+            h = 0
+            for key, value in iteritems(self._dict):
+                h ^= hash((key, _val2hashable(value)))
+            self._hash = h
+        return self._hash

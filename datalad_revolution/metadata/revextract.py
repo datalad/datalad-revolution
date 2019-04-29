@@ -17,10 +17,6 @@ from six import (
     iteritems,
     text_type,
 )
-from collections import (
-    Mapping,
-)
-
 from datalad import cfg
 from datalad.interface.base import Interface
 from datalad.interface.base import build_doc
@@ -37,7 +33,6 @@ from ..dataset import (
 )
 from .extractors.base import MetadataExtractor
 
-from datalad.support.annexrepo import AnnexRepo
 from datalad.support.param import Parameter
 from datalad.support.constraints import (
     EnsureNone,
@@ -51,7 +46,6 @@ from . import (
 )
 from datalad.utils import (
     assure_list,
-    as_unicode,
     Path,
     PurePosixPath,
 )
@@ -96,11 +90,6 @@ class RevExtractMetadata(Interface):
     ``datalad.metadata.extract-from-<extractorname> = {all|dataset|content}``
        which type of information an enabled extractor will be operating on
        (see --process-type argument for details)
-
-    ``datalad.metadata.generate-unique-<extractorname> = {yes|no}``
-       whether to auto-generate a summary of unique content metadata values
-       in the dataset metadata. This requires 'content'-type metadata
-       processing to be in effect.
 
     ``datalad.metadata.exclude-path = <path>``
       ignore all content underneath the given path for metadata extraction,
@@ -373,19 +362,6 @@ def _proc(ds, sources, status, extractors, process_type):
             update=1,
             increment=True)
 
-        # TODO consider moving the entire unique procedure into aggregation
-        # desired setup for generation of unique metadata values
-        want_unique = ds.config.obtain(
-            'datalad.metadata.generate-unique-{}'.format(
-                msrc_key.replace('_', '-')),
-            default=True,
-            valtype=EnsureBool())
-        unique_cm = {}
-        extractor_unique_exclude = getattr(
-            extractor['class'],
-            "_unique_exclude",
-            set())
-
         # actually pull the metadata records out of the extractor
         for res in _run_extractor(
                 extractor['class'],
@@ -447,21 +423,6 @@ def _proc(ds, sources, status, extractors, process_type):
                 loc_dict = contentmeta.get(res['path'], {})
                 loc_dict[msrc_key] = res['metadata']
                 contentmeta[res['path']] = loc_dict
-                if want_unique:
-                    # go through content metadata and inject report of
-                    # unique keys and values into `unique_cm`
-                    _update_unique_cm(
-                        unique_cm,
-                        msrc_key,
-                        dsmeta,
-                        res['metadata'],
-                        extractor_unique_exclude,
-                    )
-        if unique_cm:
-            # produce final unique record in dsmeta for this extractor
-            ucp = dsmeta.get('datalad_unique_content_properties', {})
-            ucp[msrc_key] = _finalize_unique_cm(unique_cm)
-            dsmeta['datalad_unique_content_properties'] = ucp
 
     log_progress(
         lgr.info,
@@ -607,135 +568,6 @@ def _yield_res_from_pre2019_extractor(
     )
 
 
-def _update_unique_cm(unique_cm, msrc_key, dsmeta, cnmeta, exclude_keys):
-    """Sift through a new content metadata set and update the unique value
-    record
-
-    Parameters
-    ----------
-    unique_cm : dict
-      unique value records for an individual extractor, modified
-      in place
-    msrc_key : str
-      key of the extractor currently processed
-    dsmeta : dict
-      dataset metadata record. To lookup conflicting field.
-    cnmeta : dict
-      Metadata to sift through.
-    exclude_keys : iterable
-      Keys of fields to exclude from processing.
-    """
-    # go through content metadata and inject report of unique keys
-    # and values into `dsmeta`
-    for k, v in iteritems(cnmeta):
-        if k in dsmeta.get(msrc_key, {}):  # pragma: no cover
-            # untested, needs a provoked conflict of content and dsmeta
-            # relatively hard to fake in a test
-            #
-            # if the dataset already has a dedicated idea
-            # about a key, we skip it from the unique list
-            # the point of the list is to make missing info about
-            # content known in the dataset, not to blindly
-            # duplicate metadata. Example: list of samples data
-            # were recorded from. If the dataset has such under
-            # a 'sample' key, we should prefer that, over an
-            # aggregated list of a hopefully-kinda-ok structure
-            continue
-        elif k in exclude_keys:
-            # XXX this is untested ATM and waiting for
-            # https://github.com/datalad/datalad/issues/3135
-            #
-            # the extractor thinks this key is worthless for the purpose
-            # of discovering whole datasets
-            # we keep the key (so we know that some file is providing this
-            # key), but ignore any value it came with
-            unique_cm[k] = None
-            continue
-        vset = unique_cm.get(k, set())
-        vset.add(_val2hashable(v))
-        unique_cm[k] = vset
-
-
-def _finalize_unique_cm(unique_cm):
-    """Convert harvested unique values in a serializable, ordered
-    representation
-
-    Parameters
-    ----------
-    unique_cm : dict
-      unique value records for an individual extractor
-
-    Returns
-    -------
-    dict
-    """
-    # important: we want to have a stable order regarding
-    # the unique values (a list). we cannot guarantee the
-    # same order of discovery, hence even when not using a
-    # set above we would still need sorting. the callenge
-    # is that any value can be an arbitrarily complex nested
-    # beast
-    # we also want to have each unique value set always come
-    # in a top-level list, so we known if some unique value
-    # was a list, os opposed to a list of unique values
-
-    def _ensure_serializable(val):
-        # XXX special cases are untested, need more convoluted metadata
-        if isinstance(val, ReadOnlyDict):
-            return {k: _ensure_serializable(v) for k, v in iteritems(val)}
-        if isinstance(val, (tuple, list)):
-            return [_ensure_serializable(v) for v in val]
-        else:
-            return val
-
-    return {
-        k: [_ensure_serializable(i)
-            for i in sorted(
-                v,
-                key=_unique_value_key)] if v is not None else None
-        for k, v in iteritems(unique_cm)
-        # v == None (disable unique, but there was a value at some point)
-        # otherwise we only want actual values, and also no single-item-lists
-        # of a non-value
-        # those contribute no information, but bloat the operation
-        # (inflated number of keys, inflated storage, inflated search index,
-        # ...)
-        if v is None or (v and not v == {''})}
-
-
-def _val2hashable(val):
-    """Small helper to convert incoming mutables to something hashable
-
-    The goal is to be able to put the return value into a set, while
-    avoiding conversions that would result in a change of representation
-    in a subsequent JSON string.
-    """
-    # XXX special cases are untested, need more convoluted metadata
-    if isinstance(val, dict):
-        return ReadOnlyDict(val)
-    elif isinstance(val, list):
-        return tuple(map(_val2hashable, val))
-    else:
-        return val
-
-
-def _unique_value_key(x):
-    """Small helper for sorting unique content metadata values"""
-    if isinstance(x, ReadOnlyDict):
-        # XXX special case untested, needs more convoluted metadata
-        #
-        # turn into an item tuple with keys sorted and values plain
-        # or as a hash if *dicts
-        x = [(k,
-              hash(x[k])
-              if isinstance(x[k], ReadOnlyDict) else x[k])
-             for k in sorted(x)]
-    # we need to force str, because sorted in PY3 refuses to compare
-    # any heterogeneous type combinations, such as str/int,
-    # tuple(int)/tuple(str)
-    return as_unicode(x)
-
-
 def _ok_metadata(res, msrc, ds, loc):
     restype = res.get('type', None)
     if restype not in ('dataset', 'file'):  # pragma: no cover
@@ -766,47 +598,3 @@ def _ok_metadata(res, msrc, ds, loc):
 
         lgr.error(*msg)
         return False
-
-
-class ReadOnlyDict(Mapping):
-    # Taken from https://github.com/slezica/python-frozendict
-    # License: MIT
-
-    # XXX entire class is untested
-
-    """
-    An immutable wrapper around dictionaries that implements the complete
-    :py:class:`collections.Mapping` interface. It can be used as a drop-in
-    replacement for dictionaries where immutability is desired.
-    """
-    dict_cls = dict
-
-    def __init__(self, *args, **kwargs):
-        self._dict = self.dict_cls(*args, **kwargs)
-        self._hash = None
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __contains__(self, key):
-        return key in self._dict
-
-    def copy(self, **add_or_replace):
-        return self.__class__(self, **add_or_replace)
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def __repr__(self):
-        return '<%s %r>' % (self.__class__.__name__, self._dict)
-
-    def __hash__(self):
-        if self._hash is None:
-            h = 0
-            for key, value in iteritems(self._dict):
-                h ^= hash((key, _val2hashable(value)))
-            self._hash = h
-        return self._hash
