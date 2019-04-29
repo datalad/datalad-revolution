@@ -29,6 +29,7 @@ from datalad.log import log_progress
 import datalad.distribution.subdatasets
 from datalad.support.constraints import EnsureBool
 import datalad.support.network as dsn
+from datalad.dochelpers import exc_str
 
 import os.path as op
 
@@ -208,12 +209,23 @@ class DataladCoreExtractor(MetadataExtractor):
 
             ispart = []
             for arxiv_url in [url for url in urls
-                              if url.startswith('dl+archive:')]:
-                key = arxiv_url[11:].split('#')[0]
+                              if url.startswith('dl+archive:') and
+                              '#' in url]:
+                key = _get_archive_key(arxiv_url)
+                if not key:
+                    # nothing we can work with
+                    print("PUFF", arxiv_url)
+                    continue
                 arxiv_urls = arxiv_whereis.get(key, None)
                 if arxiv_urls is None:
-                    arxiv_urls = _get_urls_from_whereis(
-                        ds.repo.whereis(key, key=True, output='full'))
+                    try:
+                        arxiv_urls = _get_urls_from_whereis(
+                            ds.repo.whereis(key, key=True, output='full'))
+                    except Exception as e:
+                        lgr.debug(
+                            'whereis query failed for key %s: %s',
+                            key, exc_str(e))
+                        arxiv_urls = []
                     arxiv_whereis[key] = arxiv_urls
                 if arxiv_urls:
                     ispart.append({
@@ -273,6 +285,17 @@ def _get_urls_from_whereis(wi, prefixes=('http', 'dl+archive:')):
         for url in rprops.get('urls', [])
         if any(url.startswith(pref) for pref in prefixes)
     ]
+
+
+def _get_archive_key(whereis):
+    """trying to decode the various flavors of whereis info for archives"""
+    if whereis.startswith(u'dl+archive:'):
+        whereis = whereis[11:]
+        if u'tar#path' in whereis or 'zip#path' in whereis:
+            return whereis.split('#')[0]
+        elif u'.zip/' in whereis:
+            # key will not have a slash
+            return whereis.split('/')[0]
 
 
 def _get_file_key(rec):
