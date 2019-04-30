@@ -31,8 +31,7 @@ from .revextract import RevExtractMetadata
 from datalad.core.local.status import Status
 from datalad.core.local.save import Save
 from ..revdiff import (
-    RevDiff as Diff,
-    PRE_INIT_COMMIT_SHA,
+    _diff_ds,
 )
 
 import datalad
@@ -334,10 +333,12 @@ class RevAggregateMetadata(Interface):
         # metadata objects
         vanished_datasets = set()
 
+        # the content info lookup cache
+        cache = {}
         # HERE IS WHERE THE "INTO" MODES NEED TO BE TREATED DIFFERENTLY
         if into == 'top':
             for res in _do_top_aggregation(
-                    ds, extract_from_ds, force, vanished_datasets):
+                    ds, extract_from_ds, force, vanished_datasets, cache):
                 yield res
         elif into == 'all':
             # which datasets have we dealt with already
@@ -398,7 +399,8 @@ class RevAggregateMetadata(Interface):
                         topds,
                         task,
                         force,
-                        vanished_datasets):
+                        vanished_datasets,
+                        cache):
                     # recode results to it becomes clear via which dataset
                     # aggregation was invoked
                     res['refds'] = ds.path
@@ -414,7 +416,7 @@ class RevAggregateMetadata(Interface):
                 into))
 
 
-def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
+def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
     """Internal helper
 
     Performs non-recursive aggergation for a single dataset.
@@ -431,6 +433,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
       Path instances of datasets that are known to have been removed
       from any inspected dataset since the last aggregated state. This
       is modified in-place!
+    cache: dict
+      content into lookup cache
     """
     if force == 'fromscratch':
         # all we have to do is to remove the directory from the working
@@ -496,7 +500,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                        for k in exinfo)):
             lgr.debug(
                 'Difference between recorded and current extractor detected, '
-                'force (re-)extraction')
+                'force (re-)extraction (was: %s; is: %s)',
+                exstate_rec, exinfo.get('state', {}))
             force = 'extraction'
         # check extraction is actually needed, by running a diff on the
         # dataset against the last known refcommit, to see whether it had
@@ -523,19 +528,20 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                         aggsrc.config.get('datalad.metadata.exclude-path', []))
                 )
             ]
-            for res in aggsrc.rev_diff(
+            for res in _diff_ds(
+                    ds=aggsrc,
                     fr=last_refcommit,
                     to='HEAD',
+                    constant_refs=False,
+                    recursion_level=0,
                     # query on all paths to get desired result with
                     # recursion enables
-                    path=None,
-                    # not possible here, but turn off detection anyways
+                    origpaths=None,
                     untracked='no',
-                    recursive=False,
-                    result_renderer='disabled',
-                    return_type='generator',
-                    # let the top-level caller handle failure
-                    on_failure='ignore'):
+                    annexinfo=None,
+                    # not possible here, but turn off detection anyways
+                    eval_file_type=False,
+                    cache=cache):
                 if res.get('action', None) != 'diff':  # pragma: no cover
                     # something unexpected, send upstairs
                     yield res
@@ -608,8 +614,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
             # to any updated dataset later on
             agginfo_db[aggsrc.pathobj] = agginfo
         else:
-            # we already have what we need in the toplevel dataset
-            # for this locally available dataset
+            # we already have what we need for this locally available dataset
             yield dict(
                 action="extract_metadata",
                 path=aggsrc.path,
@@ -670,10 +675,20 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
                 # if we have one already, it was extracted.
                 # we can get here during recursion
                 lgr.debug(
-                    'Prefer extraction metadata record over pre-aggregated '
+                    'Prefer extracted metadata record over pre-aggregated '
                     'one for %s', dssubj.pathobj)
                 continue
-            agginfo = src_agginfo_db.get(dssubj.pathobj, None)
+            # at this point two things can be the case (simultaneously):
+            # - we have aggregated metadata in the topds
+            # - we have aggregated metadata in the srcds
+            # both of which can be different degrees of outdated
+            # -> we prefer the topds record, because we diff'ed against
+            # its refcommit, and the fact that agginfo_db does not have an
+            # update means that there was no change
+            # if topds does not have anything, we fall back on the srcds
+            agginfo = top_agginfo_db.get(dssubj.pathobj, None)
+            if agginfo is None:
+                agginfo = src_agginfo_db.get(dssubj.pathobj, None)
             if agginfo is None:
                 # TODO proper error/warning result: we don't have metadata
                 # for a locally unavailable dataset
@@ -685,15 +700,21 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets):
         # make sure all referenced metadata objects are actually around
         # use a low-level report methods for speed, as we should know
         # that everything is local to aggsrc
-        if hasattr(aggsrc, 'get'):
+        # only attempt, if anything is referenced at all
+        if referenced_objs and hasattr(aggsrc, 'get'):
             lgr.debug('Ensure availability of referenced metadata objects: %s',
                       referenced_objs)
-            res = aggsrc.repo.get(
-                [text_type(o.relative_to(aggsrc.pathobj))
-                 for o in referenced_objs]
-            )
-            # TODO evaluate the results, but ATM get() output is not
-            # very helpful. Do when it gives proper results
+            # only query for objects in the src repo (we might also reference
+            # up-to-date ones in the topds)
+            togetobjs = [
+                text_type(o.relative_to(aggsrc.pathobj))
+                for o in referenced_objs
+                if aggsrc.pathobj in o.parents
+            ]
+            if togetobjs:
+                res = aggsrc.repo.get(togetobjs)
+                # TODO evaluate the results, but ATM get() output is not
+                # very helpful. Do when it gives proper results
     log_progress(
         lgr.info,
         'metadataaggregation',
@@ -956,10 +977,7 @@ def _extract_metadata(fromds, tods, exinfo):
     # report on all enabled extractors, even if they did not report
     # anything, so we can act on configuration changes relevant
     # to them
-    info['extractors'] = {
-        e['extractor']: e['state']
-        for e in fromds.rev_extract_metadata(process_type='extractors')
-    }
+    info['extractors'] = {k: v['state'] for k, v in iteritems(exinfo)}
 
     if meta.get('dataset', None) is None:  # pragma: no cover
         # this is a double safety net, for any repository that has anything
@@ -1160,7 +1178,7 @@ def _finalize_unique_cm(unique_cm, dsmeta):
         for ename, ucm in iteritems(unique_cm)
     }
     # only report on extractors with any report
-    return {k: v for k, v in iteritems(out) if v}
+    return {k: v for k, v in iteritems(out) if v or v is None}
 
 
 def _val2hashable(val):

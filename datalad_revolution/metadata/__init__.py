@@ -57,6 +57,7 @@ def get_refcommit(ds):
         for e in exclude_from_metadata
     ]
     count = 0
+    diff_cache = {}
     while True:
         cur = 'HEAD~{:d}'.format(count)
         try:
@@ -74,7 +75,11 @@ def get_refcommit(ds):
                     # dataset, and if that is true, any change in the
                     # submodule record will be visible in the parent
                     # already
-                    eval_submodule_state='no'))
+                    eval_submodule_state='no',
+                    # boost performance, we don't care about file types
+                    # here
+                    eval_file_type=False,
+                    _cache=diff_cache))
                 if props.get('state', None) != 'clean' \
                 and p not in exclude_paths \
                 and not any(e in p.parents for e in exclude_paths)
