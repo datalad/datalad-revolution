@@ -691,7 +691,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
         # make sure all referenced metadata objects are actually around
         # use a low-level report methods for speed, as we should know
         # that everything is local to aggsrc
-        if hasattr(aggsrc, 'get'):
+        # only attempt, if anything is referenced at all
+        if referenced_objs and hasattr(aggsrc, 'get'):
             lgr.debug('Ensure availability of referenced metadata objects: %s',
                       referenced_objs)
             res = aggsrc.repo.get(
