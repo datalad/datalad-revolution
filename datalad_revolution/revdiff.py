@@ -329,6 +329,7 @@ def _diff_ds(ds, fr, to, constant_refs, recursion_level, origpaths, untracked,
                         origpaths=origpaths,
                         untracked=untracked,
                         annexinfo=annexinfo,
+                        eval_file_type=eval_file_type,
                         cache=cache):
                     yield r
             else:
