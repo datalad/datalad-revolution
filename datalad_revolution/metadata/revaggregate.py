@@ -500,7 +500,8 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
                        for k in exinfo)):
             lgr.debug(
                 'Difference between recorded and current extractor detected, '
-                'force (re-)extraction')
+                'force (re-)extraction (was: %s; is: %s)',
+                exstate_rec, exinfo.get('state', {}))
             force = 'extraction'
         # check extraction is actually needed, by running a diff on the
         # dataset against the last known refcommit, to see whether it had
@@ -961,10 +962,7 @@ def _extract_metadata(fromds, tods, exinfo):
     # report on all enabled extractors, even if they did not report
     # anything, so we can act on configuration changes relevant
     # to them
-    info['extractors'] = {
-        e['extractor']: e['state']
-        for e in fromds.rev_extract_metadata(process_type='extractors')
-    }
+    info['extractors'] = {k: v['state'] for k, v in iteritems(exinfo)}
 
     if meta.get('dataset', None) is None:  # pragma: no cover
         # this is a double safety net, for any repository that has anything
