@@ -552,6 +552,8 @@ def test_partial_aggregation(path):
     assert_result_count(res, 0, path=sub2.path)
 
     ds.rev_aggregate_metadata(recursive=True)
+    origsha = ds.repo.get_hexsha()
+    assert_repo_status(ds.path)
     # baseline, recursive aggregation gets us something for all three datasets
     res = ds.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 3)
@@ -560,9 +562,16 @@ def test_partial_aggregation(path):
     # as this would be a problem any time anything in a dataset
     # subtree is missing: not installed, too expensive to reaggregate, ...
     ds.rev_aggregate_metadata(path='sub1')
+    eq_(origsha, ds.repo.get_hexsha())
     res = ds.query_metadata(reporton='aggregates', recursive=True)
     assert_result_count(res, 3)
     assert_result_count(res, 1, path=sub2.path)
+    # nothing changes, so no commit
+    ds.rev_aggregate_metadata(path='sub1')
+    eq_(origsha, ds.repo.get_hexsha())
+    # and the same thing again, doesn't ruin the state either
+    ds.rev_aggregate_metadata(path='sub1')
+    eq_(origsha, ds.repo.get_hexsha())
     # from-scratch aggregation kills datasets that where not listed
     # note the trailing separator that indicated that path refers
     # to the content of the subdataset, not the subdataset record
