@@ -57,7 +57,11 @@ class AnnexMetadataExtractor(MetadataExtractor):
             for fpath, meta in repo.get_metadata(
                     query_paths,
                     # no timestamps, we are describing the status quo
-                    timestamps=False):
+                    timestamps=False,
+                    # because we have filtered the query to only contained
+                    # annexed files, we can use batch mode and deal with
+                    # many files
+                    batch=True):
                 meta = {
                     k:
                     v[0] if isinstance(v, list) and len(v) == 1 else v
