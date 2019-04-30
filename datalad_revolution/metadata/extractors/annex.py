@@ -23,6 +23,7 @@ from .base import MetadataExtractor
 from six import text_type
 import logging
 lgr = logging.getLogger('datalad.metadata.extractors.annexmeta')
+from datalad.log import log_progress
 from datalad.utils import (
     Path,
     PurePosixPath,
@@ -52,10 +53,18 @@ class AnnexMetadataExtractor(MetadataExtractor):
             text_type(Path(s['path']).relative_to(ds.pathobj))
             for s in status
             # anything that looks like an annexed file
-            if s.get('type', None) == 'file'
+            if s.get('type', None) == 'file' \
             and s.get('key', None) is not None
         ]
 
+        log_progress(
+            lgr.info,
+            'extractorannex',
+            'Start annex metadata extraction from %s', ds,
+            total=len(query_paths),
+            label='Annex metadata extraction',
+            unit=' Files',
+        )
         for fpath, meta in repo.get_metadata(
                 query_paths,
                 # no timestamps, we are describing the status quo
@@ -64,6 +73,12 @@ class AnnexMetadataExtractor(MetadataExtractor):
                 # annexed files, we can use batch mode and deal with
                 # many files
                 batch=True):
+            log_progress(
+                lgr.info,
+                'extractorannex',
+                'Extracted annex metadata from %s', fpath,
+                update=1,
+                increment=True)
             meta = {
                 k:
                 v[0] if isinstance(v, list) and len(v) == 1 else v
@@ -78,6 +93,11 @@ class AnnexMetadataExtractor(MetadataExtractor):
                 type='file',
                 status='ok',
             )
+        log_progress(
+            lgr.info,
+            'extractorannex',
+            'Finished annex metadata extraction from %s', ds,
+        )
 
     def get_state(self, dataset):
         #from datalad.support.external_versions import external_versions
