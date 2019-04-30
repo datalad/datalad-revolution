@@ -19,7 +19,6 @@ always use this mode by running:
 
 Command(s) currently provided by this extension
 
-- `rev-diff` -- sibling of `rev-status` for any state comparison, now also on Windows
 - `rev-extract-metadata` -- new and improved dedicated command to run any and all of
   DataLad's metadata extractors. Much improved versions of the core extractor
   implementations also ship with this extension.
