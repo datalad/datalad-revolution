@@ -614,8 +614,7 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
             # to any updated dataset later on
             agginfo_db[aggsrc.pathobj] = agginfo
         else:
-            # we already have what we need in the toplevel dataset
-            # for this locally available dataset
+            # we already have what we need for this locally available dataset
             yield dict(
                 action="extract_metadata",
                 path=aggsrc.path,
@@ -676,10 +675,20 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
                 # if we have one already, it was extracted.
                 # we can get here during recursion
                 lgr.debug(
-                    'Prefer extraction metadata record over pre-aggregated '
+                    'Prefer extracted metadata record over pre-aggregated '
                     'one for %s', dssubj.pathobj)
                 continue
-            agginfo = src_agginfo_db.get(dssubj.pathobj, None)
+            # at this point two things can be the case (simultaneously):
+            # - we have aggregated metadata in the topds
+            # - we have aggregated metadata in the srcds
+            # both of which can be different degrees of outdated
+            # -> we prefer the topds record, because we diff'ed against
+            # its refcommit, and the fact that agginfo_db does not have an
+            # update means that there was no change
+            # if topds does not have anything, we fall back on the srcds
+            agginfo = top_agginfo_db.get(dssubj.pathobj, None)
+            if agginfo is None:
+                agginfo = src_agginfo_db.get(dssubj.pathobj, None)
             if agginfo is None:
                 # TODO proper error/warning result: we don't have metadata
                 # for a locally unavailable dataset
@@ -695,12 +704,17 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
         if referenced_objs and hasattr(aggsrc, 'get'):
             lgr.debug('Ensure availability of referenced metadata objects: %s',
                       referenced_objs)
-            res = aggsrc.repo.get(
-                [text_type(o.relative_to(aggsrc.pathobj))
-                 for o in referenced_objs]
-            )
-            # TODO evaluate the results, but ATM get() output is not
-            # very helpful. Do when it gives proper results
+            # only query for objects in the src repo (we might also reference
+            # up-to-date ones in the topds)
+            togetobjs = [
+                text_type(o.relative_to(aggsrc.pathobj))
+                for o in referenced_objs
+                if aggsrc.pathobj in o.parents
+            ]
+            if togetobjs:
+                res = aggsrc.repo.get(togetobjs)
+                # TODO evaluate the results, but ATM get() output is not
+                # very helpful. Do when it gives proper results
     log_progress(
         lgr.info,
         'metadataaggregation',
