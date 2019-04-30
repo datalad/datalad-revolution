@@ -190,7 +190,7 @@ class RevExtractMetadata(Interface):
                 # we said that we want to fail, rather then just moan about
                 # less metadata
                 raise ValueError(
-                    'Enabled metadata extractor %s not available'.format(msrc),
+                    "Enabled metadata extractor '{}' not available".format(msrc),
                 )
             # load extractor implementation
             rec = extractors[msrc]
