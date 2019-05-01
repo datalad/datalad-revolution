@@ -760,3 +760,18 @@ def test_unique_values(path):
                 ]
             }
         })
+
+
+# smoke test for https://github.com/datalad/datalad-revolution/issues/113
+@with_tree({'subds': custom_metadata_tree})
+def test_heterogenous_extractors(path):
+    ds = Dataset(path).rev_create(force=True)
+    subds = ds.rev_create('subds', force=True)
+    # only the subds has 'custom' extractor enabled
+    subds.config.add('datalad.metadata.exclude-path', '.metadata',
+                     where='dataset', reload=False)
+    subds.config.add('datalad.metadata.nativetype', 'custom',
+                     where='dataset')
+    ds.rev_save(recursive=True)
+    assert_repo_status(ds.path)
+    ds.rev_aggregate_metadata(recursive=True)
