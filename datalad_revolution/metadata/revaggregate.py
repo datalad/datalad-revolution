@@ -488,7 +488,10 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
                     default=True,
                     valtype=EnsureBool())
             )
-            for e in ds.rev_extract_metadata(process_type='extractors')
+            # important to get this info from the source dataset and not the
+            # receiver, there is no reason to assume that both have the same
+            # extractors enabled
+            for e in aggsrc.rev_extract_metadata(process_type='extractors')
         }
         exstate_rec = top_agginfo_db.get(
             aggsrc.pathobj, {}).get('extractors', None)
