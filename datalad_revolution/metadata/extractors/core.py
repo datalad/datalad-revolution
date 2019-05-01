@@ -170,7 +170,10 @@ class DataladCoreExtractor(MetadataExtractor):
                         if r['uuid'] not in known_uuids:
                             distributions.append({'@id': r['uuid']})
             if len(distributions):
-                meta['distribution'] = distributions
+                meta['distribution'] = sorted(
+                    distributions,
+                    key=lambda x: x.get('@id', None)
+                )
         return meta
 
     def _get_contentmeta(self, ds, status):
@@ -204,7 +207,7 @@ class DataladCoreExtractor(MetadataExtractor):
             urls = _get_urls_from_whereis(wi)
             # urls we the actual file content can be obtained
             # directly
-            dist = [url for url in urls if url.startswith('http')]
+            dist = sorted([url for url in urls if url.startswith('http')])
             if dist:
                 md['distribution'] = dict(url=dist)
 
@@ -231,12 +234,15 @@ class DataladCoreExtractor(MetadataExtractor):
                     ispart.append({
                         '@id': key,
                         'distribution': {
-                            'url': arxiv_urls,
+                            'url': sorted(arxiv_urls),
                         },
                     })
                     recorded_archive_keys.add(key)
             if ispart:
-                md['isPartOf'] = ispart
+                md['isPartOf'] = sorted(
+                    ispart,
+                    key=lambda x: x['@id']
+                )
             yield dict(
                 path=rec['path'],
                 metadata=md,
