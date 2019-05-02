@@ -491,7 +491,9 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
             # important to get this info from the source dataset and not the
             # receiver, there is no reason to assume that both have the same
             # extractors enabled
-            for e in aggsrc.rev_extract_metadata(process_type='extractors')
+            for e in aggsrc.rev_extract_metadata(
+                process_type='extractors',
+                result_renderer='disabled')
         }
         exstate_rec = top_agginfo_db.get(
             aggsrc.pathobj, {}).get('extractors', None)
@@ -925,7 +927,8 @@ def _extract_metadata(fromds, tods, exinfo):
             process_type=None,
             # error handlingis done upstairs
             on_failure='ignore',
-            return_type='generator'):
+            return_type='generator',
+            result_renderer='disabled'):
         if success_status_map.get(res['status'], False) != 'success':
             yield res
             continue
