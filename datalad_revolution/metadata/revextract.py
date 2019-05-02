@@ -51,6 +51,8 @@ from datalad.utils import (
 )
 from datalad.dochelpers import exc_str
 from datalad.log import log_progress
+from datalad.ui import ui
+import datalad.support.ansi_colors as ac
 
 # API commands needed
 from datalad.core.local import status as _status
@@ -96,6 +98,7 @@ class RevExtractMetadata(Interface):
       must be relative to the root of the dataset and in POSIX convention,
       and can be given multiple times
     """
+    result_renderer = 'tailored'
 
     _params_ = dict(
         sources=Parameter(
@@ -338,6 +341,49 @@ class RevExtractMetadata(Interface):
             # dataset(which would have a similar sanitization effect)
             if ds.repo:
                 ds.repo.precommit()
+
+    @staticmethod
+    def custom_result_renderer(res, **kwargs):
+        if res['status'] != 'ok' or \
+                not res.get('action', None) == 'extract_metadata':
+            # logging complained about this already
+            return
+        if 'state' in res and 'extractor' in res:
+            # extractor report, special treatment
+            ui.message('{name}({state})'.format(
+                name=ac.color_word(res['extractor'], ac.BOLD),
+                state=','.join('{}{}{}{}'.format(
+                    # boolean states get a + or - prefix
+                    '+' if v is True else '-' if v is False else '',
+                    k,
+                    '=' if not isinstance(v, bool) else '',
+                    v if not isinstance(v, bool) else '')
+                    for k, v in iteritems(res['state'])
+                    # this is an extractor property, and mostly serves
+                    # internal purposes
+                    if k not in ('unique_exclude',)),
+            ))
+            return
+        # list the path, available metadata keys, and tags
+        path = op.relpath(
+            res['path'],
+            res['refds']) if res.get('refds', None) else res['path']
+        meta = res.get('metadata', {})
+        ui.message('{path}{type}:{spacer}{meta}{tags}'.format(
+            path=ac.color_word(path, ac.BOLD),
+            type=' ({})'.format(
+                ac.color_word(res['type'], ac.MAGENTA))
+            if 'type' in res else '',
+            spacer=' ' if len([m for m in meta if m != 'tag']) else '',
+            meta=','.join(k for k in sorted(meta.keys())
+                          if k not in ('tag', '@context', '@id'))
+                 if meta else ' -' if 'metadata' in res else
+                 ' {}'.format(
+                     ','.join(e for e in res['extractors']
+                              if e not in ('datalad_core', 'annex'))
+                 ) if 'extractors' in res else '',
+            tags='' if 'tag' not in meta else ' [{}]'.format(
+                 ','.join(assure_list(meta['tag'])))))
 
 
 def _proc(ds, sources, status, extractors, process_type):
