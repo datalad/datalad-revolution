@@ -21,6 +21,15 @@ Concept
   everything touched by the "activity". This info can then be used
   to look up which file was created by which activity and report
   that in the content metadata
+
+- each run-record is expressed as a PROV bundle, which is stored in the
+  'bundles' dict of the PROV record, its key is the recorded commit SHA
+  (think: 'run' observed a command do its thing
+
+- for each file there should be a relation declaration (e.g. wasGeneratedBy)
+  that links it with an activity in a bundle
+  it is still unclear to me how to best compose the per-file record
+
 """
 
 
@@ -81,7 +90,7 @@ class RunProvenanceExtractor(MetadataExtractor):
             # to load the file and report its content
             r['run'] = jsonloads(rec)
         yield dict(
-            metadata=dict(records=records),
+            metadata=dict(bundles=records),
             type='dataset',
             status='ok',
         )
@@ -104,3 +113,21 @@ def _split_record_message(lines):
 
 
 # TODO report runrecord directory as content-needed
+
+"""
+General PROV document structure
+
+{
+    "entity": { // Map of entities by entities' IDs
+    },
+    "activity": { // Map of activities by IDs
+    },
+    "agent": { // Map of agents by IDs
+    },
+    <relationName>: { // A map of relations of type relationName by their IDs
+    },
+    ...
+    "bundle": { // Map of named bundles by IDs
+    }
+}
+"""
