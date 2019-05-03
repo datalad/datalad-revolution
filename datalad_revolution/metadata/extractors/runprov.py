@@ -30,6 +30,64 @@ Concept
   that links it with an activity in a bundle
   it is still unclear to me how to best compose the per-file record
 
+
+Make any extractor be able to return a list of any number of documents
+(for dataset metadata) to be able to describe more than files and datasets
+as entities. Examples are people, run records, measurements...
+Give each of them a '@type' by which we can filter.
+
+Enhance extract_metadata/query_metadata to return an @graph list of nodes/documents
+with some kind of 'describedBy' properties that encode what extractor was responsible
+
+Here is a draft of a meaningful structure
+{
+  # prov terms
+  "@context": "http://openprovenance.org/prov.jsonld",
+  # every record needs an ID, for us this is the dataset ID (or refcommit SHA?)
+  # or a file key/sha
+  "@id": "ex:uuid",
+  # we know datasets and files, and have to say which one this is about
+  "@type": "ex:dataset",
+  # the rest a PROV concepts via @reverse properties
+  # this needs to be read from inside to outside, hence here we declare that
+  # some person is attributed to the thing described in this document (a dataset)
+  # by means of being an author.
+  "entity_attributed": [
+    {"@id": "email", "@type": "ex:person", "hadRole": "ex:author"}
+  ],
+  # each run command is an activity that is known to have "influenced"
+  # this dataset (or a file). This is the most generic association, as it is
+  # harder to be more specific (generation/derivation) at the level of an
+  # entire dataset
+  "influencee": [
+    { "@id": "ex:sha1", "@type": "prov:Activity",
+ "startedAtTime": "2012-03-31T09:21:00.000+01:00",
+ "endedAtTime": "2012-04-01T15:21:00.000+01:00"
+ },
+    { "@id": "ex:sha2", "@type": "prov:Activity",
+ "startedAtTime": "2012-03-31T09:21:00.000+01:00",
+ "endedAtTime": "2012-04-01T15:21:00.000+01:00"
+ }
+]
+}
+
+
+{
+  "@context": {
+    "@base": "http://dx.datalad.org/",
+    "@vocab": "http://schema.org/",
+      "hasContributors": {"@reverse": "contributor"}
+  },
+  "@id": "7bec74da-6bf1-11e9-bb11-f0d5bf7b5561",
+  "@type": "Dataset",
+  "hasContributors": {
+    "@id": "michael.hanke@gmail.com",
+    "@type": "Person",
+    "name": "Michael Hanke",
+    "email": "michael.hanke@gmail.com",
+    "contributor": {"@id": "7bec74da-6bf1-11e9-bb11-f0d5bf7b5561"}
+  }
+}
 """
 
 
@@ -98,8 +156,10 @@ class RunProvenanceExtractor(MetadataExtractor):
                         status='ok',
                     )
                 else:
-                    # TODO we don't known an activity that made this file, but we
+                    # we don't know an activity that made this file, but we
                     # could still report who has last modified it
+                    # no we should not, this is the RUN provenance extractor
+                    # this stuff can be done by the core extractor
                     pass
 
         if process_type in ('all', 'dataset'):
