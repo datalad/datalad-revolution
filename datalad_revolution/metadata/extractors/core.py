@@ -172,7 +172,7 @@ class DataladCoreExtractor(MetadataExtractor):
             if len(distributions):
                 meta['distribution'] = sorted(
                     distributions,
-                    key=lambda x: x.get('@id', None)
+                    key=lambda x: x.get('@id', x.get('url', None))
                 )
         return meta
 
