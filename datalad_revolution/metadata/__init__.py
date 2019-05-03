@@ -4,6 +4,7 @@ from six import iteritems
 from datalad.utils import (
     PurePosixPath,
 )
+from datalad.consts import PRE_INIT_COMMIT_SHA
 
 aggregate_layout_version = 1
 
@@ -58,6 +59,7 @@ def get_refcommit(ds):
     ]
     count = 0
     diff_cache = {}
+    precommit = False
     while True:
         cur = 'HEAD~{:d}'.format(count)
         try:
@@ -65,7 +67,9 @@ def get_refcommit(ds):
             diff = {
                 p.relative_to(ds.repo.pathobj): props
                 for p, props in iteritems(ds.repo.diffstatus(
-                    'HEAD~{:d}'.format(count + 1),
+                    PRE_INIT_COMMIT_SHA
+                    if precommit
+                    else 'HEAD~{:d}'.format(count + 1),
                     cur,
                     # superfluous, but here to state the obvious
                     untracked='no',
@@ -86,7 +90,13 @@ def get_refcommit(ds):
             }
         except ValueError as e:
             # likely ran out of commits to check
-            return None
+            if precommit:
+                # end of things
+                return None
+            else:
+                # one last round, taking in the entire history
+                precommit = True
+                continue
         if diff:
             return ds.repo.get_hexsha(cur)
         # next pair
