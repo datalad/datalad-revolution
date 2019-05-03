@@ -71,7 +71,7 @@ def test_error(path):
             ValueError,
             extract_metadata, sources=['bogus__'], path=[path])
     # fails also on unavailable metadata extractor
-    ds = Dataset(path).rev_create()
+    ds = Dataset(path).create()
     assert_raises(
         ValueError,
         extract_metadata, dataset=ds, sources=['bogus__'])
@@ -79,7 +79,7 @@ def test_error(path):
 
 @with_tree(meta_tree)
 def test_ds_extraction(path):
-    ds = Dataset(path).rev_create(force=True)
+    ds = Dataset(path).create(force=True)
     ds.config.add('datalad.metadata.exclude-path', '.metadata',
                   where='dataset')
     ds.rev_save()
