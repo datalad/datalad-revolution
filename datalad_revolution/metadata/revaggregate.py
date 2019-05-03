@@ -30,7 +30,7 @@ import shutil
 from .revextract import RevExtractMetadata
 from datalad.core.local.status import Status
 from datalad.core.local.save import Save
-from ..revdiff import (
+from datalad.core.local.diff import (
     _diff_ds,
 )
 
