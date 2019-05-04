@@ -14,7 +14,10 @@
 #   (repo mode, etc.) limit to description of dataset(-network)
 
 from .base import MetadataExtractor
-from .. import get_refcommit
+from .. import (
+    get_refcommit,
+    default_context,
+)
 from datalad.utils import (
     Path,
 )
@@ -68,17 +71,21 @@ class DataladCoreExtractor(MetadataExtractor):
                     status='ok',
                 )
         if process_type in ('all', 'dataset'):
-            dsmeta = self._get_dsmeta(ds, status, process_type)
             log_progress(
                 lgr.info,
                 'extractordataladcore',
                 'Extracted core metadata from %s', ds.path,
                 update=1,
                 increment=True)
-            if total_content_bytesize:
-                dsmeta['contentbytesize'] = total_content_bytesize
+            dsmeta = [
+                r for r in self._yield_dsmeta(
+                    ds, status, process_type, total_content_bytesize)
+            ]
             yield dict(
-                metadata=dsmeta,
+                metadata={
+                    '@context': default_context,
+                    '@graph': dsmeta,
+                },
                 type='dataset',
                 status='ok',
             )
@@ -88,20 +95,29 @@ class DataladCoreExtractor(MetadataExtractor):
             'Finished core metadata extraction from %s', ds
         )
 
-    def _get_dsmeta(self, ds, status, process_type):
+    def _yield_dsmeta(self, ds, status, process_type, total_content_bytesize):
+        commitinfo = _get_commit_info(ds, status)
+        contributor_ids = []
+        for contributor in commitinfo.pop('contributors', []):
+            contributor_id = '{} <{}>'.format(*contributor)
+            yield {
+                # use RFC822-style address as ID
+                '@id': '{} <{}>'.format(*contributor),
+                # we cannot distinguish real people from machine-committers
+                '@type': 'agent',
+                'name': contributor[0],
+                'email': contributor[1],
+            }
+            contributor_ids.append(contributor_id)
         meta = {
             # the desired ID
             '@id': ds.id,
-            '@context': {
-                # schema.org definitions by default
-                "@vocab": "http://schema.org/",
-                # resolve non-compact/absolute identifiers to the DataLad
-                # resolver
-                "@base": "http://dx.datalad.org/",
-            },
             '@type': 'Dataset',
         }
-        meta.update(_get_commit_info(ds, status))
+        if contributor_ids:
+            c = [{'@id': i} for i in contributor_ids]
+            meta['hasContributor'] = c[0] if len(c) == 1 else c
+        meta.update(commitinfo)
         parts = [{
             '@type': 'Dataset' if part['type'] == 'dataset'
             # schema.org doesn't have anything good for a symlink, as it could
@@ -174,7 +190,9 @@ class DataladCoreExtractor(MetadataExtractor):
                     distributions,
                     key=lambda x: x.get('@id', x.get('url', None))
                 )
-        return meta
+        if total_content_bytesize:
+            meta['contentbytesize'] = total_content_bytesize
+        yield meta
 
     def _get_contentmeta(self, ds, status):
         """Get ALL metadata for all dataset content.
@@ -359,8 +377,7 @@ def _get_commit_info(ds, status):
             'datalad.metadata.datalad-core.report-contributors',
             True, valtype=EnsureBool()):
         meta.update(
-            contributors=sorted(set('{} <{}>'.format(
-                c[0], c[1]) for c in commits)))
+            contributors=sorted(set(tuple(c[:2]) for c in commits)))
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-modification-dates',
             True, valtype=EnsureBool()):
