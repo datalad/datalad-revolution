@@ -99,10 +99,12 @@ class DataladCoreExtractor(MetadataExtractor):
         commitinfo = _get_commit_info(ds, status)
         contributor_ids = []
         for contributor in commitinfo.pop('contributors', []):
-            contributor_id = '{} <{}>'.format(*contributor)
+            # use RFC822 inspired style as ID
+            contributor_id = '{}<{}>'.format(
+                contributor[0].replace(' ', '_'),
+                contributor[1])
             yield {
-                # use RFC822-style address as ID
-                '@id': '{} <{}>'.format(*contributor),
+                '@id': contributor_id,
                 # we cannot distinguish real people from machine-committers
                 '@type': 'agent',
                 'name': contributor[0],
