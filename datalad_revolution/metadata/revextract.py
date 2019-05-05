@@ -43,6 +43,8 @@ from datalad.support.constraints import (
 from . import (
     exclude_from_metadata,
     get_metadata_type,
+    default_context,
+    ReadOnlyDict,
 )
 from datalad.utils import (
     assure_list,
@@ -136,12 +138,23 @@ class RevExtractMetadata(Interface):
             constraining path is given, metadata is extracted from all files
             of the dataset.""",
             constraints=EnsureDataset() | EnsureNone()),
+        format=Parameter(
+            args=('--format',),
+            doc="""format to use for the 'metadata' result property. 'native'
+            will report the output of extractors as separate metadata
+            properties that are stored under the name of the associated
+            extractor; 'jsonld' composes a JSON-LD graph document, while
+            stripping any information that does not appear to be properly
+            typed linked data.""",
+            constraints=EnsureChoice(
+                'native', 'jsonld')),
     )
 
     @staticmethod
     @datasetmethod(name='rev_extract_metadata')
     @eval_results
-    def __call__(dataset=None, path=None, sources=None, process_type=None):
+    def __call__(dataset=None, path=None, sources=None, process_type=None,
+                 format='native'):
         ds = require_dataset(
             dataset or curdir,
             purpose="extract metadata",
@@ -323,6 +336,8 @@ class RevExtractMetadata(Interface):
                         # online complain when something goes wrong
                         yield r
 
+        contexts = {}
+        nodes_by_context = {}
         try:
             for res in _proc(
                     ds,
@@ -330,8 +345,35 @@ class RevExtractMetadata(Interface):
                     status,
                     extractors,
                     process_type):
-                res.update(**res_props)
-                yield res
+                if format == 'native':
+                    # that is what we pass around internally
+                    res.update(**res_props)
+                    yield res
+                elif format == 'jsonld':
+                    if res['type'] == 'dataset':
+                        _native_metadata_to_graph_nodes(
+                            res['metadata'],
+                            nodes_by_context,
+                            contexts,
+                        )
+                    else:
+                        fmeta = res['metadata']
+                        fid = fmeta['datalad_core']['@id']
+                        _native_metadata_to_graph_nodes(
+                            fmeta,
+                            nodes_by_context,
+                            contexts,
+                            defaults={
+                                '@id': fid,
+                                '@type': "DigitalDocument",
+                                # maybe we need something more fitting than
+                                # name
+                                'name': Path(res['path']).relative_to(
+                                    ds.pathobj).as_posix(),
+                            },
+                        )
+                        # TODO extend 'hasPart' of the mother dataset with each
+                        # file content node ID
         finally:
             # extractors can come from any source with no guarantee for
             # proper implementation. Let's make sure that we bring the
@@ -341,6 +383,12 @@ class RevExtractMetadata(Interface):
             # dataset(which would have a similar sanitization effect)
             if ds.repo:
                 ds.repo.precommit()
+        if format == 'jsonld':
+            yield dict(
+                status='ok',
+                type='dataset',
+                metadata=_nodes_by_context_to_jsonld(nodes_by_context),
+                **res_props)
 
     @staticmethod
     def custom_result_renderer(res, **kwargs):
@@ -475,6 +523,8 @@ def _proc(ds, sources, status, extractors, process_type):
         'metadataextractors',
         'Finished metadata extraction from %s', ds,
     )
+    # top-level code relies on the fact that any dataset metadata
+    # is yielded before content metadata
     if process_type in (None, 'all', 'dataset') and \
             dsmeta and ds is not None and ds.is_installed():
         yield get_status_dict(
@@ -644,3 +694,73 @@ def _ok_metadata(res, msrc, ds, loc):
 
         lgr.error(*msg)
         return False
+
+
+def _native_metadata_to_graph_nodes(
+        md, nodes_by_context, contexts, defaults=None):
+    """Turn our native metadata format into a true JSON-LD syntax
+
+    This is not necessarily a lossless conversion, all garbage will be
+    stripped.
+    """
+    for extractor, report in iteritems(md):
+        if '@context' in report:
+            # this is linked data!
+            context = ReadOnlyDict(report['@context'])
+            if extractor in contexts \
+                    and context != contexts[extractor]:
+                raise RuntimeError(
+                    '{} metadata reports contains conflicting contexts, '
+                    'not supported'.format(extractor))
+            else:
+                # this is extractor was known, or is now known to talk LD
+                contexts[extractor] = context
+        else:
+            # no context reported, either we already have a context on record
+            # or this report is not usable as JSON-LD
+            context = contexts.get(extractor, None)
+        if context is None:
+            # unusable
+            continue
+
+        # harvest documents in the report
+        # TODO add some kind of "describedBy" to the graph nodes
+        nodes = nodes_by_context.get(context, [])
+        if '@graph' not in report:
+            # not a multi-document graph, remove context and treat as
+            # a single-node graph
+            report.pop('@context', None)
+            if defaults is not None:
+                # this will typically happen for content/file reports
+                report = dict(
+                    defaults,
+                    **report)
+            nodes.extend([report])
+        else:
+            # we are not applying `defaults` assuming this is a full-blown
+            # report and nothing trimmed by datalad internally for
+            # space-saving reasons
+            nodes.extend(report['@graph'])
+        nodes_by_context[context] = nodes
+
+
+def _nodes_by_context_to_jsonld(nbc):
+    ro_default_context = ReadOnlyDict(default_context)
+    # build the full graph
+    graph = []
+    # for all contexts and their documents
+    for k, v in iteritems(nbc):
+        if k == ro_default_context:
+            # if the context matches the default, extend the top-level graph
+            graph.extend(v)
+        else:
+            # document with a different context: add as a sub graph
+            graph.append({
+                '@context': dict(k),
+                '@graph': v,
+            })
+    jsonld = {
+        '@context': default_context,
+        '@graph': graph,
+    }
+    return jsonld

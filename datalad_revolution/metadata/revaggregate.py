@@ -18,7 +18,6 @@ from six import (
     text_type,
 )
 from collections import (
-    Mapping,
     OrderedDict,
 )
 
@@ -51,6 +50,8 @@ from datalad.interface.results import (
 from . import (
     exclude_from_metadata,
     location_keys,
+    ReadOnlyDict,
+    _val2hashable,
 )
 
 from .query import (
@@ -1187,22 +1188,6 @@ def _finalize_unique_cm(unique_cm, dsmeta):
     return {k: v for k, v in iteritems(out) if v or v is None}
 
 
-def _val2hashable(val):
-    """Small helper to convert incoming mutables to something hashable
-
-    The goal is to be able to put the return value into a set, while
-    avoiding conversions that would result in a change of representation
-    in a subsequent JSON string.
-    """
-    # XXX special cases are untested, need more convoluted metadata
-    if isinstance(val, dict):
-        return ReadOnlyDict(val)
-    elif isinstance(val, list):
-        return tuple(map(_val2hashable, val))
-    else:
-        return val
-
-
 def _unique_value_key(x):
     """Small helper for sorting unique content metadata values"""
     if isinstance(x, ReadOnlyDict):
@@ -1218,48 +1203,3 @@ def _unique_value_key(x):
     # any heterogeneous type combinations, such as str/int,
     # tuple(int)/tuple(str)
     return as_unicode(x)
-
-
-
-class ReadOnlyDict(Mapping):
-    # Taken from https://github.com/slezica/python-frozendict
-    # License: MIT
-
-    # XXX entire class is untested
-
-    """
-    An immutable wrapper around dictionaries that implements the complete
-    :py:class:`collections.Mapping` interface. It can be used as a drop-in
-    replacement for dictionaries where immutability is desired.
-    """
-    dict_cls = dict
-
-    def __init__(self, *args, **kwargs):
-        self._dict = self.dict_cls(*args, **kwargs)
-        self._hash = None
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __contains__(self, key):
-        return key in self._dict
-
-    def copy(self, **add_or_replace):
-        return self.__class__(self, **add_or_replace)
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def __repr__(self):
-        return '<%s %r>' % (self.__class__.__name__, self._dict)
-
-    def __hash__(self):
-        if self._hash is None:
-            h = 0
-            for key, value in iteritems(self._dict):
-                h ^= hash((key, _val2hashable(value)))
-            self._hash = h
-        return self._hash
