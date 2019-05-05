@@ -145,7 +145,7 @@ class RevExtractMetadata(Interface):
             properties that are stored under the name of the associated
             extractor; 'jsonld' composes a JSON-LD graph document, while
             stripping any information that does not appear to be properly
-            typed linked data.""",
+            typed linked data (extractor reports no '@context' field).""",
             constraints=EnsureChoice(
                 'native', 'jsonld')),
     )
