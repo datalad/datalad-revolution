@@ -365,7 +365,10 @@ class RevExtractMetadata(Interface):
                             contexts,
                             defaults={
                                 '@id': fid,
-                                '@type': "DigitalDocument",
+                                # do not have a @type default here, it would
+                                # duplicate across all extractor records
+                                # let the core extractor deal with this
+                                #'@type': "DigitalDocument",
                                 # maybe we need something more fitting than
                                 # name
                                 'name': Path(res['path']).relative_to(
@@ -730,6 +733,10 @@ def _native_metadata_to_graph_nodes(
             # not a multi-document graph, remove context and treat as
             # a single-node graph
             report.pop('@context', None)
+            if not report:
+                # there is no other information, and we have the context
+                # covered already
+                continue
             if defaults is not None:
                 # this will typically happen for content/file reports
                 report = dict(
@@ -753,7 +760,7 @@ def _nodes_by_context_to_jsonld(nbc):
         if k == ro_default_context:
             # if the context matches the default, extend the top-level graph
             graph.extend(v)
-        else:
+        elif v:
             # document with a different context: add as a sub graph
             graph.append({
                 '@context': dict(k),
