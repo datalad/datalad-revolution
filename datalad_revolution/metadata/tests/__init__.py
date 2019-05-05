@@ -23,3 +23,14 @@ def make_ds_hierarchy_with_metadata(path):
     (subds.pathobj / 'real').write_text(text_type('real'))
     ds.rev_save(recursive=True)
     return ds, subds
+
+
+def _get_dsid_from_core_metadata(md):
+    return _get_dsmeta_from_core_metadata(md)['@id']
+
+
+def _get_dsmeta_from_core_metadata(md):
+    docs = md['@graph'] if '@graph' in md else [md]
+    for doc in docs:
+        if doc.get('@type', None) == 'Dataset':
+            return doc

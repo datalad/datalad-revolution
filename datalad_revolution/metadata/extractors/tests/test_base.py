@@ -34,6 +34,8 @@ from datalad.tests.utils import (
 )
 from ...tests import (
     make_ds_hierarchy_with_metadata,
+    _get_dsid_from_core_metadata,
+    _get_dsmeta_from_core_metadata,
 )
 
 
@@ -69,8 +71,10 @@ def check_api(no_annex, path):
                 all('datalad_core' in r.get('metadata', {}) for r in res))
             # every single report comes with an identifier
             assert_true(all(
-                r['metadata']['datalad_core'].get(
-                    '@id', None) is not None
+                (_get_dsid_from_core_metadata(r['metadata']['datalad_core'])
+                    if r.get('type', None) == 'dataset'
+                    else r['metadata']['datalad_core'].get('@id', None)) \
+                is not None
                 for r in res))
         processed_extractors.append(extractor_ep.name)
     assert "datalad_core" in processed_extractors, \
@@ -139,14 +143,17 @@ def test_report(path, orig):
     # only dataset-global metadata
     res = extract_metadata(dataset=ds, process_type='dataset')
     assert_result_count(res, 1)
+    core_dsmeta = _get_dsmeta_from_core_metadata(
+        res[0]['metadata']['datalad_core']
+    )
     assert_in(
         {'@type': 'Dataset', '@id': subds.id, 'name': 'sub'},
-        res[0]['metadata']['datalad_core']['hasPart']
+        core_dsmeta['hasPart']
     )
     # has not seen the content
     assert_not_in(
         'contentbytesize',
-        res[0]['metadata']['datalad_core']
+        core_dsmeta
     )
     res = extract_metadata(dataset=ds, process_type='content')
     assert(any(
@@ -158,11 +165,17 @@ def test_report(path, orig):
     # but no subdataset reports
     assert_result_count(res, 0, type='dataset')
     content_size = sum(
-        r['metadata']['datalad_core']['contentbytesize'] for r in res)
+        (_get_dsmeta_from_core_metadata(
+            r['metadata']['datalad_core'])
+         if r['type'] == 'dataset'
+         else r['metadata']['datalad_core'])['contentbytesize'] for r in res)
     # and now all together
     res = extract_metadata(dataset=ds, process_type='all')
     # got a content size report that sums up all individual sizes
     eq_(
-        res[0]['metadata']['datalad_core']['contentbytesize'],
+        (_get_dsmeta_from_core_metadata(
+            res[0]['metadata']['datalad_core'])
+         if res[0]['type'] == 'dataset'
+         else res[0]['metadata']['datalad_core'])['contentbytesize'],
         content_size
     )

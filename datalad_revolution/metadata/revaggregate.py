@@ -52,6 +52,7 @@ from . import (
     location_keys,
     ReadOnlyDict,
     _val2hashable,
+    get_refcommit_from_metadata,
 )
 
 from .query import (
@@ -1003,8 +1004,7 @@ def _extract_metadata(fromds, tods, exinfo):
 
     # place recorded refcommit in info dict to facilitate subsequent
     # change detection
-    refcommit = \
-        meta['dataset'].get('datalad_core', {}).get('refcommit', None)
+    refcommit = get_refcommit_from_metadata(meta['dataset'])
     if refcommit:
         lgr.debug('Update %s refcommit to %s', fromds, refcommit)
         info['refcommit'] = refcommit
