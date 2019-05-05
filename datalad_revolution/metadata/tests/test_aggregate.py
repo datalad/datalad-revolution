@@ -527,7 +527,7 @@ def _kill_time(iter):
     for r in iter:
         # TODO why is it two of them?
         r.pop('refcommit', None)
-        for k in ('refcommit', 'dateModified', 'version'):
+        for k in ('@id', 'dateModified', 'version'):
             if '@graph' in r['metadata']['datalad_core']:
                 for doc in r['metadata']['datalad_core']['@graph']:
                     doc.pop(k, None)

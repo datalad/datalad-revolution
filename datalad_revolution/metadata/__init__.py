@@ -116,8 +116,8 @@ def get_refcommit_from_metadata(md):
     dcmd = md.get('datalad_core', {})
     docs = dcmd['@graph'] if '@graph' in dcmd else [dcmd]
     for doc in docs:
-        if doc.get('@type', None) == 'Dataset' and 'refcommit' in doc:
-            return doc['refcommit']
+        if doc.get('@type', None) == 'Dataset' and '@id' in doc:
+            return doc['@id']
 
 
 class ReadOnlyDict(Mapping):

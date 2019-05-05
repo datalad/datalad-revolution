@@ -112,14 +112,18 @@ class DataladCoreExtractor(MetadataExtractor):
             }
             contributor_ids.append(contributor_id)
         meta = {
-            # the desired ID
-            '@id': ds.id,
+            # the uniquest ID for this metadata record is the refcommit SHA
+            '@id': commitinfo['refcommit'],
+            # the dataset UUID is the main identifier
+            'identifier': ds.id,
             '@type': 'Dataset',
         }
+        # refcommit is already in
+        commitinfo.pop('refcommit', None)
+        meta.update(commitinfo)
         if contributor_ids:
             c = [{'@id': i} for i in contributor_ids]
             meta['hasContributor'] = c[0] if len(c) == 1 else c
-        meta.update(commitinfo)
         parts = [{
             '@type': 'Dataset' if part['type'] == 'dataset'
             # schema.org doesn't have anything good for a symlink, as it could
