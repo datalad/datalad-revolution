@@ -5,6 +5,7 @@ from collections import (
 
 from six import iteritems
 from datalad.utils import (
+    Path,
     PurePosixPath,
 )
 
@@ -165,3 +166,120 @@ def _val2hashable(val):
         return tuple(map(_val2hashable, val))
     else:
         return val
+
+
+def collect_jsonld_metadata(dspath, res, nodes_by_context, contexts):
+    """Sift through a metadata result and gather JSON-LD documents
+
+    Parameters
+    ----------
+    dspath : str or Path
+      Native absolute path of the dataset on which the results are.
+    res : dict
+      Result dictionary as produced by `extract_metadata()` or
+      `query_metadata()`.
+    nodes_by_context : dict
+      JSON-LD documented are collected in this dict, using their context
+      as keys.
+    contexts : dict
+      Holds a previously discovered context for any extractor.
+    """
+    if res['type'] == 'dataset':
+        _native_metadata_to_graph_nodes(
+            res['metadata'],
+            nodes_by_context,
+            contexts,
+        )
+    else:
+        fmeta = res['metadata']
+        fid = fmeta['datalad_core']['@id']
+        _native_metadata_to_graph_nodes(
+            fmeta,
+            nodes_by_context,
+            contexts,
+            defaults={
+                '@id': fid,
+                # do not have a @type default here, it would
+                # duplicate across all extractor records
+                # let the core extractor deal with this
+                #'@type': "DigitalDocument",
+                # maybe we need something more fitting than
+                # name
+                'name': Path(res['path']).relative_to(
+                    dspath).as_posix(),
+            },
+        )
+
+
+def _native_metadata_to_graph_nodes(
+        md, nodes_by_context, contexts, defaults=None):
+    """Turn our native metadata format into a true JSON-LD syntax
+
+    This is not necessarily a lossless conversion, all garbage will be
+    stripped.
+    """
+    for extractor, report in iteritems(md):
+        if '@context' in report:
+            # this is linked data!
+            context = ReadOnlyDict(report['@context'])
+            if extractor in contexts \
+                    and context != contexts[extractor]:
+                raise RuntimeError(
+                    '{} metadata reports contains conflicting contexts, '
+                    'not supported'.format(extractor))
+            else:
+                # this is extractor was known, or is now known to talk LD
+                contexts[extractor] = context
+        else:
+            # no context reported, either we already have a context on record
+            # or this report is not usable as JSON-LD
+            context = contexts.get(extractor, None)
+        if context is None:
+            # unusable
+            continue
+
+        # harvest documents in the report
+        # TODO add some kind of "describedBy" to the graph nodes
+        nodes = nodes_by_context.get(context, [])
+        if '@graph' not in report:
+            # not a multi-document graph, remove context and treat as
+            # a single-node graph
+            report.pop('@context', None)
+            if not report:
+                # there is no other information, and we have the context
+                # covered already
+                continue
+            if defaults is not None:
+                # this will typically happen for content/file reports
+                report = dict(
+                    defaults,
+                    **report)
+            nodes.extend([report])
+        else:
+            # we are not applying `defaults` assuming this is a full-blown
+            # report and nothing trimmed by datalad internally for
+            # space-saving reasons
+            nodes.extend(report['@graph'])
+        nodes_by_context[context] = nodes
+
+
+def format_jsonld_metadata(nbc):
+    ro_default_context = ReadOnlyDict(default_context)
+    # build the full graph
+    graph = []
+    # for all contexts and their documents
+    for k, v in iteritems(nbc):
+        if k == ro_default_context:
+            # if the context matches the default, extend the top-level graph
+            graph.extend(v)
+        elif v:
+            # document with a different context: add as a sub graph
+            graph.append({
+                '@context': dict(k),
+                '@graph': v,
+            })
+    jsonld = {
+        '@context': default_context,
+        '@graph': graph,
+    }
+    return jsonld
