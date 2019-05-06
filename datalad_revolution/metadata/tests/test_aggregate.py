@@ -45,6 +45,7 @@ from datalad.tests.utils import (
 )
 from . import (
     make_ds_hierarchy_with_metadata,
+    _get_dsid_from_core_metadata,
 )
 
 
@@ -141,9 +142,8 @@ def _compare_metadata_helper(origres, compds):
         cres = cres[0]
         assert_dict_equal(ores['metadata'], cres['metadata'])
         if ores['type'] == 'dataset':
-            for i in ('@id', ):
-                eq_(ores['metadata']['datalad_core'][i],
-                    cres['metadata']['datalad_core'][i])
+            eq_(_get_dsid_from_core_metadata(ores['metadata']['datalad_core']),
+                _get_dsid_from_core_metadata(cres['metadata']['datalad_core']))
 
 
 @slow  # ~16s
@@ -194,8 +194,9 @@ def test_aggregation(path):
     # three different IDs
     eq_(
         3,
-        len(set([s['metadata']['datalad_core']['@id']
-                for s in origres if s['type'] == 'dataset'])))
+        len(set([_get_dsid_from_core_metadata(s['metadata']['datalad_core'])
+                 for s in origres
+                 if s['type'] == 'dataset'])))
     # and we know about all three datasets
     for name in ('MOTHER_äöü東', 'child_äöü東', 'grandchild_äöü東'):
         assert_true(
@@ -526,8 +527,16 @@ def _kill_time(iter):
     for r in iter:
         # TODO why is it two of them?
         r.pop('refcommit', None)
-        for k in ('refcommit', 'dateModified', 'version'):
-            r['metadata']['datalad_core'].pop(k, None)
+        for k in ('@id', 'dateModified', 'version'):
+            if '@graph' in r['metadata']['datalad_core']:
+                for doc in r['metadata']['datalad_core']['@graph']:
+                    doc.pop(k, None)
+                    if 'hasPart' in doc:
+                        # for shasum-based IDs
+                        for i in doc['hasPart']:
+                            i.pop(k, None)
+            else:
+                r.pop(k, None)
         m.append(r)
     return m
 
@@ -729,36 +738,34 @@ def test_unique_values(path):
     assert_result_count(res, 1)
     ucm = res[0]['metadata']['datalad_unique_content_properties']
     eq_(
-        ucm,
+        ucm['custom'],
         {
-            "custom": {
-                # complex types do not get shmooshed together
-                "complextype": [
-                    {
-                        "age": "young",
-                        "entity": {
-                            "properties": "here",
-                            "some": "many"
-                        },
-                        "numbers": [
-                            3,
-                            2,
-                            1,
-                            0
-                        ]
+            # complex types do not get shmooshed together
+            "complextype": [
+                {
+                    "age": "young",
+                    "entity": {
+                        "properties": "here",
+                        "some": "many"
                     },
-                    {
-                        "entity": {
-                            "properties": "here",
-                            "some": "few"
-                        }
+                    "numbers": [
+                        3,
+                        2,
+                        1,
+                        0
+                    ]
+                },
+                {
+                    "entity": {
+                        "properties": "here",
+                        "some": "few"
                     }
-                ],
-                # simple type get unique'd as expected
-                "something": [
-                    "stupid"
-                ]
-            }
+                }
+            ],
+            # simple type get unique'd as expected
+            "something": [
+                "stupid"
+            ]
         })
 
 

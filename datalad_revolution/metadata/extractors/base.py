@@ -13,7 +13,7 @@ class MetadataExtractor(object):
     # ATM this doesn't do anything, but inheritance from this class enables
     # detection of new-style extractor API
 
-    def __call__(self, dataset, process_type, status):
+    def __call__(self, dataset, refcommit, process_type, status):
         """Run metadata extraction
 
         Any implementation gets a comprehensive description of a dataset
@@ -25,6 +25,10 @@ class MetadataExtractor(object):
         ----------
         dataset : Dataset
           Dataset instance to extract metadata from.
+        refcommit : str
+          SHA of the commit that was determined to be the last metadata-relevant
+          change in the dataset. Can be used for identification purposed, such
+          '@id' properties for JSON-LD documents on the dataset.
         process_type : {'all', 'dataset', 'content'}
           Type of metadata to extract.
         status : list

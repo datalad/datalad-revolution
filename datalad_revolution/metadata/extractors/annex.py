@@ -32,7 +32,7 @@ from datalad.support.annexrepo import AnnexRepo
 
 
 class AnnexMetadataExtractor(MetadataExtractor):
-    def __call__(self, dataset, process_type, status):
+    def __call__(self, dataset, refcommit, process_type, status):
         # shortcut
         ds = dataset
 

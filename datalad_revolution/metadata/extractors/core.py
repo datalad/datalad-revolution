@@ -14,7 +14,9 @@
 #   (repo mode, etc.) limit to description of dataset(-network)
 
 from .base import MetadataExtractor
-from .. import get_refcommit
+from .. import (
+    default_context,
+)
 from datalad.utils import (
     Path,
 )
@@ -37,9 +39,9 @@ import os.path as op
 class DataladCoreExtractor(MetadataExtractor):
     # reporting unique file sizes has no relevant use case that I can think of
     # identifiers are included explicitly
-    _unique_exclude = {'contentbytesize', }
+    _unique_exclude = {'@id', 'contentbytesize', }
 
-    def __call__(self, dataset, process_type, status):
+    def __call__(self, dataset, refcommit, process_type, status):
         # shortcut
         ds = dataset
 
@@ -68,17 +70,22 @@ class DataladCoreExtractor(MetadataExtractor):
                     status='ok',
                 )
         if process_type in ('all', 'dataset'):
-            dsmeta = self._get_dsmeta(ds, status, process_type)
             log_progress(
                 lgr.info,
                 'extractordataladcore',
                 'Extracted core metadata from %s', ds.path,
                 update=1,
                 increment=True)
-            if total_content_bytesize:
-                dsmeta['contentbytesize'] = total_content_bytesize
+            dsmeta = [
+                r for r in self._yield_dsmeta(
+                    ds, status, refcommit, process_type,
+                    total_content_bytesize)
+            ]
             yield dict(
-                metadata=dsmeta,
+                metadata={
+                    '@context': default_context,
+                    '@graph': dsmeta,
+                },
                 type='dataset',
                 status='ok',
             )
@@ -88,39 +95,61 @@ class DataladCoreExtractor(MetadataExtractor):
             'Finished core metadata extraction from %s', ds
         )
 
-    def _get_dsmeta(self, ds, status, process_type):
+    def _yield_dsmeta(self, ds, status, refcommit, process_type,
+                      total_content_bytesize):
+        commitinfo = _get_commit_info(ds, refcommit, status)
+        contributor_ids = []
+        for contributor in commitinfo.pop('contributors', []):
+            # use RFC822 inspired style as ID
+            contributor_id = '{}<{}>'.format(
+                contributor[0].replace(' ', '_'),
+                contributor[1])
+            yield {
+                '@id': contributor_id,
+                # we cannot distinguish real people from machine-committers
+                '@type': 'agent',
+                'name': contributor[0],
+                'email': contributor[1],
+            }
+            contributor_ids.append(contributor_id)
         meta = {
-            # the desired ID
-            '@id': ds.id,
-            '@context': {
-                # schema.org definitions by default
-                "@vocab": "http://schema.org/",
-                # resolve non-compact/absolute identifiers to the DataLad
-                # resolver
-                "@base": "http://dx.datalad.org/",
-            },
+            # the uniquest ID for this metadata record is the refcommit SHA
+            '@id': refcommit,
+            # the dataset UUID is the main identifier
+            'identifier': ds.id,
             '@type': 'Dataset',
         }
-        meta.update(_get_commit_info(ds, status))
+        meta.update(commitinfo)
+        if contributor_ids:
+            c = [{'@id': i} for i in contributor_ids]
+            meta['hasContributor'] = c[0] if len(c) == 1 else c
         parts = [{
-            '@type': 'Dataset' if part['type'] == 'dataset'
             # schema.org doesn't have anything good for a symlink, as it could
             # be anything
-            else 'Thing' if part['type'] == 'symlink' else 'DigitalDocument',
+            '@type': 'Thing'
+            if part['type'] == 'symlink'
+            else 'DigitalDocument',
             # relative path within dataset, always POSIX
+            # TODO find a more specific term for "local path relative to root"
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
-            '@id': _get_file_key(part) if part['type'] == 'file'
-            else ds.subdatasets(
-                contains=part['path'],
-                return_type='item-or-list').get('gitmodule_datalad-id', None)
+            '@id': _get_file_key(part),
         }
             for part in status
-            # if we are processing everything we do not need to know about
-            # files, they will have their own reports
-            # but if we are only looking at the dataset, we report the files
-            # here, to have at least their names and IDs
-            if process_type == 'dataset' or part['type'] == 'dataset'
+            if part['type'] != 'dataset'
         ]
+        for subds in [s for s in status if s['type'] == 'dataset']:
+            subdsinfo = {
+                # reference by subdataset commit
+                '@id': subds['gitshasum'],
+                '@type': 'Dataset',
+                'name': Path(subds['path']).relative_to(ds.pathobj).as_posix(),
+            }
+            subdsid = ds.subdatasets(
+                contains=subds['path'],
+                return_type='item-or-list').get('gitmodule_datalad-id', None)
+            if subdsid:
+                subdsinfo['identifier'] = subdsid
+            parts.append(subdsinfo)
         if parts:
             meta['hasPart'] = parts
         if ds.config.obtain(
@@ -174,7 +203,9 @@ class DataladCoreExtractor(MetadataExtractor):
                     distributions,
                     key=lambda x: x.get('@id', x.get('url', None))
                 )
-        return meta
+        if total_content_bytesize:
+            meta['contentbytesize'] = total_content_bytesize
+        yield meta
 
     def _get_contentmeta(self, ds, status):
         """Get ALL metadata for all dataset content.
@@ -255,8 +286,9 @@ class DataladCoreExtractor(MetadataExtractor):
             # and fileSize which seem to be geared towards human consumption
             # not numerical accuracy
             # TODO define the term
-            'contentbytesize': rec['bytesize']
-            if 'bytesize' in rec else op.getsize(rec['path']),
+            'contentbytesize': rec.get('bytesize', 0)
+            if 'bytesize' in rec or rec['type'] == 'symlink'
+            else op.getsize(rec['path']),
             # TODO the following list are optional enhancement that should come
             # with individual ON/OFF switches
             # TODO run `git log` to find earliest and latest commit to determine
@@ -314,7 +346,7 @@ def _get_file_key(rec):
         rec['gitshasum'])
 
 
-def _get_commit_info(ds, status):
+def _get_commit_info(ds, refcommit, status):
     """Get info about all commits, up to (and incl. the refcommit)"""
     #- get all the commit info with git log --pretty='%aN%x00%aI%x00%H'
     #  - use all first-level paths other than .datalad and .git for the query
@@ -323,17 +355,6 @@ def _get_commit_info(ds, status):
     #  a version by counting all commits since inception up to the refcommit
     #  - we cannot use the first query, because it will be constrained by the
     #    present paths that may not have existed previously at all
-
-    # determine the commit that we are describing
-    refcommit = get_refcommit(ds)
-    if refcommit is None or not len(status):
-        # this seems extreme, but without a single commit there is nothing
-        # we can have, or describe -> blow
-        # will turn into an error result upstairs
-        raise ValueError(
-            'No metadata-relevant repository content found. '
-            'Cannot determine reference commit for metadata ID'
-        )
 
     # grab the history until the refcommit
     stdout, stderr = ds.repo._git_custom_command(
@@ -352,15 +373,12 @@ def _get_commit_info(ds, status):
     )
     meta = {
         'version': version,
-        # the true ID of this version of this dataset
-        'refcommit': refcommit,
     }
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-contributors',
             True, valtype=EnsureBool()):
         meta.update(
-            contributors=sorted(set('{} <{}>'.format(
-                c[0], c[1]) for c in commits)))
+            contributors=sorted(set(tuple(c[:2]) for c in commits)))
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-modification-dates',
             True, valtype=EnsureBool()):

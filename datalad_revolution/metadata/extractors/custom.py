@@ -52,7 +52,7 @@ class CustomMetadataExtractor(MetadataExtractor):
                 if op.lexists(f):
                     yield dict(path=f)
 
-    def __call__(self, dataset, process_type, status):
+    def __call__(self, dataset, refcommit, process_type, status):
         # shortcut
         ds = dataset
 

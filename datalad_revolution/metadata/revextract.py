@@ -41,8 +41,11 @@ from datalad.support.constraints import (
     EnsureBool,
 )
 from . import (
+    get_refcommit,
     exclude_from_metadata,
     get_metadata_type,
+    collect_jsonld_metadata,
+    format_jsonld_metadata,
 )
 from datalad.utils import (
     assure_list,
@@ -136,12 +139,23 @@ class RevExtractMetadata(Interface):
             constraining path is given, metadata is extracted from all files
             of the dataset.""",
             constraints=EnsureDataset() | EnsureNone()),
+        format=Parameter(
+            args=('--format',),
+            doc="""format to use for the 'metadata' result property. 'native'
+            will report the output of extractors as separate metadata
+            properties that are stored under the name of the associated
+            extractor; 'jsonld' composes a JSON-LD graph document, while
+            stripping any information that does not appear to be properly
+            typed linked data (extractor reports no '@context' field).""",
+            constraints=EnsureChoice(
+                'native', 'jsonld')),
     )
 
     @staticmethod
     @datasetmethod(name='rev_extract_metadata')
     @eval_results
-    def __call__(dataset=None, path=None, sources=None, process_type=None):
+    def __call__(dataset=None, path=None, sources=None, process_type=None,
+                 format='native'):
         ds = require_dataset(
             dataset or curdir,
             purpose="extract metadata",
@@ -292,12 +306,32 @@ class RevExtractMetadata(Interface):
                     {k: v for k, v in iteritems(r)
                      if (k not in ('refds', 'parentds', 'action', 'status')
                          and not k.startswith('prev_'))})
+
+            # determine the commit that we are describing
+            refcommit = get_refcommit(ds)
+            if refcommit is None or not len(status):
+                # this seems extreme, but without a single commit there is
+                # nothing we can have, or describe -> blow
+                yield dict(
+                    res_props,
+                    status='error',
+                    message=\
+                    'No metadata-relevant repository content found. ' \
+                    'Cannot determine reference commit for metadata ID',
+                    type='dataset',
+                    path=ds.path,
+                )
+                return
+            # stamp every result
+            res_props['refcommit'] = refcommit
         else:
             # no dataset at hand, take path arg at face value and hope
             # for the best
             # TODO we have to resolve the given path to make it match what
             # status is giving (abspath with ds (not repo) anchor)
             status = [dict(path=p, type='file') for p in assure_list(path)]
+            # just for compatibility, mandatory argument list below
+            refcommit = None
 
         if ds.is_installed():
             # check availability requirements and obtain data as needed
@@ -323,15 +357,23 @@ class RevExtractMetadata(Interface):
                         # online complain when something goes wrong
                         yield r
 
+        contexts = {}
+        nodes_by_context = {}
         try:
             for res in _proc(
                     ds,
+                    refcommit,
                     sources,
                     status,
                     extractors,
                     process_type):
-                res.update(**res_props)
-                yield res
+                if format == 'native':
+                    # that is what we pass around internally
+                    res.update(**res_props)
+                    yield res
+                elif format == 'jsonld':
+                    collect_jsonld_metadata(
+                        ds.pathobj, res, nodes_by_context, contexts)
         finally:
             # extractors can come from any source with no guarantee for
             # proper implementation. Let's make sure that we bring the
@@ -341,6 +383,13 @@ class RevExtractMetadata(Interface):
             # dataset(which would have a similar sanitization effect)
             if ds.repo:
                 ds.repo.precommit()
+        if format == 'jsonld':
+            yield dict(
+                status='ok',
+                type='dataset',
+                path=ds.path,
+                metadata=format_jsonld_metadata(nodes_by_context),
+                **res_props)
 
     @staticmethod
     def custom_result_renderer(res, **kwargs):
@@ -386,7 +435,7 @@ class RevExtractMetadata(Interface):
                  ','.join(assure_list(meta['tag'])))))
 
 
-def _proc(ds, sources, status, extractors, process_type):
+def _proc(ds, refcommit, sources, status, extractors, process_type):
     dsmeta = dict()
     contentmeta = {}
 
@@ -413,6 +462,7 @@ def _proc(ds, sources, status, extractors, process_type):
                 extractor['class'],
                 msrc,
                 ds,
+                refcommit,
                 status,
                 extractor['process_type']):
             # always have a path, use any absolute path coming in,
@@ -475,6 +525,8 @@ def _proc(ds, sources, status, extractors, process_type):
         'metadataextractors',
         'Finished metadata extraction from %s', ds,
     )
+    # top-level code relies on the fact that any dataset metadata
+    # is yielded before content metadata
     if process_type in (None, 'all', 'dataset') and \
             dsmeta and ds is not None and ds.is_installed():
         yield get_status_dict(
@@ -500,7 +552,7 @@ def _proc(ds, sources, status, extractors, process_type):
         yield res
 
 
-def _run_extractor(extractor_cls, name, ds, status, process_type):
+def _run_extractor(extractor_cls, name, ds, refcommit, status, process_type):
     """Helper to control extractor using the right API
 
     Central switch to deal with alternative/future APIs is inside
@@ -512,6 +564,7 @@ def _run_extractor(extractor_cls, name, ds, status, process_type):
             extractor = extractor_cls()
             for r in extractor(
                     dataset=ds,
+                    refcommit=refcommit,
                     status=status,
                     process_type=process_type):
                 yield r
