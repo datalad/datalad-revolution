@@ -256,7 +256,7 @@ class QueryMetadata(Interface):
             reporton='all',
             recursive=False):
         # prep results
-        res_kwargs = dict(action='metadata', logger=lgr)
+        res_kwargs = dict(action='query_metadata', logger=lgr)
         ds = require_dataset(
             dataset=dataset,
             check_installed=True,
@@ -402,7 +402,7 @@ class QueryMetadata(Interface):
 
     @staticmethod
     def custom_result_renderer(res, **kwargs):
-        if res['status'] != 'ok' or not res.get('action', None) == 'metadata':
+        if res['status'] != 'ok' or not res.get('action', None) == 'query_metadata':
             # logging complained about this already
             return
         # list the path, available metadata keys, and tags
