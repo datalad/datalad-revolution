@@ -15,7 +15,6 @@
 
 from .base import MetadataExtractor
 from .. import (
-    get_refcommit,
     default_context,
 )
 from datalad.utils import (
@@ -42,7 +41,7 @@ class DataladCoreExtractor(MetadataExtractor):
     # identifiers are included explicitly
     _unique_exclude = {'contentbytesize', }
 
-    def __call__(self, dataset, process_type, status):
+    def __call__(self, dataset, refcommit, process_type, status):
         # shortcut
         ds = dataset
 
@@ -79,7 +78,8 @@ class DataladCoreExtractor(MetadataExtractor):
                 increment=True)
             dsmeta = [
                 r for r in self._yield_dsmeta(
-                    ds, status, process_type, total_content_bytesize)
+                    ds, status, refcommit, process_type,
+                    total_content_bytesize)
             ]
             yield dict(
                 metadata={
@@ -95,8 +95,9 @@ class DataladCoreExtractor(MetadataExtractor):
             'Finished core metadata extraction from %s', ds
         )
 
-    def _yield_dsmeta(self, ds, status, process_type, total_content_bytesize):
-        commitinfo = _get_commit_info(ds, status)
+    def _yield_dsmeta(self, ds, status, refcommit, process_type,
+                      total_content_bytesize):
+        commitinfo = _get_commit_info(ds, refcommit, status)
         contributor_ids = []
         for contributor in commitinfo.pop('contributors', []):
             # use RFC822 inspired style as ID
@@ -113,13 +114,11 @@ class DataladCoreExtractor(MetadataExtractor):
             contributor_ids.append(contributor_id)
         meta = {
             # the uniquest ID for this metadata record is the refcommit SHA
-            '@id': commitinfo['refcommit'],
+            '@id': refcommit,
             # the dataset UUID is the main identifier
             'identifier': ds.id,
             '@type': 'Dataset',
         }
-        # refcommit is already in
-        commitinfo.pop('refcommit', None)
         meta.update(commitinfo)
         if contributor_ids:
             c = [{'@id': i} for i in contributor_ids]
@@ -338,7 +337,7 @@ def _get_file_key(rec):
         rec['gitshasum'])
 
 
-def _get_commit_info(ds, status):
+def _get_commit_info(ds, refcommit, status):
     """Get info about all commits, up to (and incl. the refcommit)"""
     #- get all the commit info with git log --pretty='%aN%x00%aI%x00%H'
     #  - use all first-level paths other than .datalad and .git for the query
@@ -347,17 +346,6 @@ def _get_commit_info(ds, status):
     #  a version by counting all commits since inception up to the refcommit
     #  - we cannot use the first query, because it will be constrained by the
     #    present paths that may not have existed previously at all
-
-    # determine the commit that we are describing
-    refcommit = get_refcommit(ds)
-    if refcommit is None or not len(status):
-        # this seems extreme, but without a single commit there is nothing
-        # we can have, or describe -> blow
-        # will turn into an error result upstairs
-        raise ValueError(
-            'No metadata-relevant repository content found. '
-            'Cannot determine reference commit for metadata ID'
-        )
 
     # grab the history until the refcommit
     stdout, stderr = ds.repo._git_custom_command(
@@ -376,8 +364,6 @@ def _get_commit_info(ds, status):
     )
     meta = {
         'version': version,
-        # the true ID of this version of this dataset
-        'refcommit': refcommit,
     }
     if ds.config.obtain(
             'datalad.metadata.datalad-core.report-contributors',

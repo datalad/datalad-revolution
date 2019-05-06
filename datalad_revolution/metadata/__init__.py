@@ -107,19 +107,6 @@ def get_refcommit(ds):
         count += 1
 
 
-def get_refcommit_from_metadata(md):
-    """Given a metadata record will report 'refcommit' of the dataset.
-
-    Expected is a full metadata records (all extractors). Returns None if
-    there is none.
-    """
-    dcmd = md.get('datalad_core', {})
-    docs = dcmd['@graph'] if '@graph' in dcmd else [dcmd]
-    for doc in docs:
-        if doc.get('@type', None) == 'Dataset' and '@id' in doc:
-            return doc['@id']
-
-
 class ReadOnlyDict(Mapping):
     # Taken from https://github.com/slezica/python-frozendict
     # License: MIT

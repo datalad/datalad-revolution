@@ -52,7 +52,6 @@ from . import (
     location_keys,
     ReadOnlyDict,
     _val2hashable,
-    get_refcommit_from_metadata,
 )
 
 from .query import (
@@ -950,6 +949,17 @@ def _extract_metadata(fromds, tods, exinfo):
                 )
                 yield res
                 continue
+            refcommit = res.get('refcommit', None)
+            if refcommit:
+                lgr.debug('Update %s refcommit to %s', fromds, refcommit)
+                # place recorded refcommit in info dict to facilitate
+                # subsequent change detection
+                info['refcommit'] = refcommit
+            else:
+                lgr.debug(
+                    'Could not determine a reference commit for the metadata '
+                    'extracted from %s', fromds)
+
             meta['dataset'] = res['metadata']
         elif restype == 'file':
             fmeta = res['metadata']
@@ -1001,17 +1011,6 @@ def _extract_metadata(fromds, tods, exinfo):
             logger=lgr,
         )
         return
-
-    # place recorded refcommit in info dict to facilitate subsequent
-    # change detection
-    refcommit = get_refcommit_from_metadata(meta['dataset'])
-    if refcommit:
-        lgr.debug('Update %s refcommit to %s', fromds, refcommit)
-        info['refcommit'] = refcommit
-    else:
-        lgr.debug(
-            'Could not determine a reference commit for the metadata '
-            'extracted from %s', fromds)
 
     # create a tempdir for this dataset under .git/tmp
     tmp_basedir = _get_aggtmp_basedir(tods, mkdir=True)
