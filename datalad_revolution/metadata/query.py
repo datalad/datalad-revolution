@@ -365,71 +365,18 @@ class QueryMetadata(Interface):
                 )
                 parentds.append(aggdspath)
                 continue
-            dsmeta = None
-            if reporton in ('datasets', 'all'):
-                # we do not need path matching here, we already know
-                # that something in this dataset is relevant
-                objfile = text_type(agg_record['dataset_info'])
-                # TODO if it doesn't exist but is requested say impossible?
-                dsmeta = json_load(objfile)
-                info = dict(
-                    path=text_type(aggdspath),
-                    status='ok',
-                    type='dataset',
-                    metadata=dsmeta,
-                    # some things that should be there, but maybe not
-                    # -- make optional to be more robust
-                    dsid=agg_record.get('id', None),
-                    refcommit=agg_record.get('refcommit', None),
-                    datalad_version=agg_record.get('datalad_version', None),
+
+            # pull out actual metadata records
+            for res in _yield_metadata_records(
+                    aggdspath,
+                    agg_record,
+                    paths_by_ds[aggdspath],
+                    reporton,
+                    parentds=parentds[-1] if parentds else None):
+                yield dict(
+                    res,
                     **res_kwargs
                 )
-                if parentds:
-                    info['parentds'] = text_type(parentds[-1])
-                yield info
-            if reporton in ('files', 'all'):
-                query_paths = paths_by_ds[aggdspath]
-                objfile = text_type(agg_record['content_info'])
-                # TODO if it doesn't exist but is requested say impossible?
-                for file_record in json_streamload(objfile):
-                    if 'path' not in file_record:  # pragma: no cover
-                        yield dict(
-                            status='error',
-                            message=(
-                                "content metadata contains record "
-                                "without a 'path' specification: %s",
-                                agg_record),
-                            type='dataset',
-                            path=aggdspath,
-                            **res_kwargs
-                        )
-                        continue
-                    # absolute path for this file record
-                    # metadata record always uses POSIX conventions
-                    fpath = aggdspath / ut.PurePosixPath(file_record['path'])
-                    if not any(p == fpath or p in fpath.parents
-                               for p in query_paths):
-                        # ignore any file record that doesn't match any query
-                        # path (direct hit or git-annex-like recursion within a
-                        # dataset)
-                        continue
-                    if dsmeta is not None and \
-                            '@context' in dsmeta and \
-                            '@context' not in file_record:
-                        file_record['@context'] = dsmeta['@context']
-                    info = dict(
-                        path=text_type(fpath),
-                        parentds=text_type(aggdspath),
-                        status='ok',
-                        type='file',
-                        metadata={k: v for k, v in iteritems(file_record)
-                                  if k not in ('path',)},
-                        dsid=agg_record['id'],
-                        refcommit=agg_record['refcommit'],
-                        datalad_version=agg_record['datalad_version'],
-                        **res_kwargs
-                    )
-                    yield info
 
             parentds.append(aggdspath)
 
@@ -456,3 +403,68 @@ class QueryMetadata(Interface):
                  ) if 'extractors' in res else '',
             tags='' if 'tag' not in meta else ' [{}]'.format(
                  ','.join(assure_list(meta['tag'])))))
+
+
+def _yield_metadata_records(
+        aggdspath, agg_record, query_paths, reporton, parentds):
+    dsmeta = None
+    if reporton in ('datasets', 'all'):
+        # we do not need path matching here, we already know
+        # that something in this dataset is relevant
+        objfile = text_type(agg_record['dataset_info'])
+        # TODO if it doesn't exist but is requested say impossible?
+        dsmeta = json_load(objfile)
+        info = dict(
+            path=text_type(aggdspath),
+            status='ok',
+            type='dataset',
+            metadata=dsmeta,
+            # some things that should be there, but maybe not
+            # -- make optional to be more robust
+            dsid=agg_record.get('id', None),
+            refcommit=agg_record.get('refcommit', None),
+            datalad_version=agg_record.get('datalad_version', None),
+        )
+        if parentds:
+            info['parentds'] = parentds
+        yield info
+    if reporton in ('files', 'all'):
+        objfile = text_type(agg_record['content_info'])
+        # TODO if it doesn't exist but is requested say impossible?
+        for file_record in json_streamload(objfile):
+            if 'path' not in file_record:  # pragma: no cover
+                yield dict(
+                    status='error',
+                    message=(
+                        "content metadata contains record "
+                        "without a 'path' specification: %s",
+                        agg_record),
+                    type='dataset',
+                    path=aggdspath,
+                )
+                continue
+            # absolute path for this file record
+            # metadata record always uses POSIX conventions
+            fpath = aggdspath / ut.PurePosixPath(file_record['path'])
+            if not any(p == fpath or p in fpath.parents
+                       for p in query_paths):
+                # ignore any file record that doesn't match any query
+                # path (direct hit or git-annex-like recursion within a
+                # dataset)
+                continue
+            if dsmeta is not None and \
+                    '@context' in dsmeta and \
+                    '@context' not in file_record:
+                file_record['@context'] = dsmeta['@context']
+            info = dict(
+                path=text_type(fpath),
+                parentds=text_type(aggdspath),
+                status='ok',
+                type='file',
+                metadata={k: v for k, v in iteritems(file_record)
+                          if k not in ('path',)},
+                dsid=agg_record['id'],
+                refcommit=agg_record['refcommit'],
+                datalad_version=agg_record['datalad_version'],
+            )
+            yield info
