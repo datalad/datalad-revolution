@@ -52,6 +52,8 @@ from datalad.ui import ui
 from . import (
     aggregate_layout_version,
     location_keys,
+    collect_jsonld_metadata,
+    format_jsonld_metadata,
 )
 
 lgr = logging.getLogger('datalad.metadata.query')
@@ -225,12 +227,16 @@ class QueryMetadata(Interface):
             constraints=EnsureStr() | EnsureNone()),
         reporton=Parameter(
             args=('--reporton',),
-            constraints=EnsureChoice('all', 'datasets', 'files', 'aggregates'),
+            constraints=EnsureChoice('all', 'jsonld', 'datasets', 'files',
+                                     'aggregates'),
             doc="""what type of metadata to report on: dataset-global
             metadata only ('datasets'), metadata on dataset content/files only
-            ('files'), or both ('all', default). There is an auxiliary
-            category 'aggregates' that reports on which metadata aggregates
-            are present in the queried dataset."""),
+            ('files'), both ('all', default). 'jsonld' is an alternative mode
+            to report all available metadata with JSON-LD markup. A single
+            metadata result with the entire metadata graph matching the query
+            will be reported, all non-JSON-LD-type metadata will be ignored.
+            There is an auxiliary category 'aggregates' that reports on which
+            metadata aggregates are present in the queried dataset."""),
         recursive=Parameter(
             args=("-r", "--recursive",),
             action="store_true",
@@ -310,7 +316,8 @@ class QueryMetadata(Interface):
 
         # which files do we need to have locally to perform the query
         info_keys = \
-            ('dataset_info', 'content_info') if reporton == 'all' else \
+            ('dataset_info', 'content_info') \
+            if reporton in ('all', 'jsonld') else \
             ('dataset_info',) if reporton == 'datasets' else \
             ('content_info',) if reporton == 'files' else \
             []
@@ -332,6 +339,8 @@ class QueryMetadata(Interface):
                 if success_status_map.get(r['status'], False) != 'success':  # pragma: no cover
                     yield r
 
+        contexts = {}
+        nodes_by_context = {}
         parentds = []
         # loop over all records to get complete parentds relationships
         for aggdspath in sorted(agginfos):
@@ -373,12 +382,23 @@ class QueryMetadata(Interface):
                     paths_by_ds[aggdspath],
                     reporton,
                     parentds=parentds[-1] if parentds else None):
-                yield dict(
-                    res,
-                    **res_kwargs
-                )
+                if reporton != 'jsonld':
+                    yield dict(
+                        res,
+                        **res_kwargs
+                    )
+                    continue
+                collect_jsonld_metadata(
+                    aggdspath, res, nodes_by_context, contexts)
 
             parentds.append(aggdspath)
+        if reporton == 'jsonld':
+            yield dict(
+                status='ok',
+                type='dataset',
+                path=ds.path,
+                metadata=format_jsonld_metadata(nodes_by_context),
+                **res_kwargs)
 
     @staticmethod
     def custom_result_renderer(res, **kwargs):
@@ -408,7 +428,7 @@ class QueryMetadata(Interface):
 def _yield_metadata_records(
         aggdspath, agg_record, query_paths, reporton, parentds):
     dsmeta = None
-    if reporton in ('datasets', 'all'):
+    if reporton in ('datasets', 'all', 'jsonld'):
         # we do not need path matching here, we already know
         # that something in this dataset is relevant
         objfile = text_type(agg_record['dataset_info'])
@@ -428,7 +448,7 @@ def _yield_metadata_records(
         if parentds:
             info['parentds'] = parentds
         yield info
-    if reporton in ('files', 'all'):
+    if reporton in ('files', 'all', 'jsonld'):
         objfile = text_type(agg_record['content_info'])
         # TODO if it doesn't exist but is requested say impossible?
         for file_record in json_streamload(objfile):

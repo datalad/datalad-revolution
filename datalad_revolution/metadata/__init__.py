@@ -174,7 +174,9 @@ def collect_jsonld_metadata(dspath, res, nodes_by_context, contexts):
     Parameters
     ----------
     dspath : str or Path
-      Native absolute path of the dataset on which the results are.
+      Native absolute path of the dataset that shall be used to determine
+      the relative path (name) of a file-result. This would typically be
+      the path to the dataset that contains the file.
     res : dict
       Result dictionary as produced by `extract_metadata()` or
       `query_metadata()`.
