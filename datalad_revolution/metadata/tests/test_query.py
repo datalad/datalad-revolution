@@ -1,6 +1,7 @@
 import os.path as op
 from six import (
     text_type,
+    iteritems,
 )
 
 from datalad.support.gitrepo import GitRepo
@@ -145,3 +146,13 @@ def test_query(path, orig):
     assert_result_count(res, 2)
     assert_result_count(res, 1, id=origds.id)
     assert_result_count(res, 1, id=subds.id)
+
+    extract_res = origds.rev_extract_metadata(format='jsonld')
+    assert_result_count(extract_res, 1)
+    query_res = ds.query_metadata(reporton='jsonld')
+    assert_result_count(query_res, 1)
+    strip = ('path', 'action', 'refds')
+    eq_(
+        {k: v for k, v in iteritems(extract_res[0]) if k not in strip},
+        {k: v for k, v in iteritems(query_res[0]) if k not in strip},
+    )
