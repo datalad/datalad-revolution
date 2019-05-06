@@ -398,6 +398,7 @@ class QueryMetadata(Interface):
                 type='dataset',
                 path=ds.path,
                 metadata=format_jsonld_metadata(nodes_by_context),
+                refcommit=agginfos[ds.pathobj]['refcommit'],
                 **res_kwargs)
 
     @staticmethod
