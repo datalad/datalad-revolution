@@ -39,7 +39,7 @@ import os.path as op
 class DataladCoreExtractor(MetadataExtractor):
     # reporting unique file sizes has no relevant use case that I can think of
     # identifiers are included explicitly
-    _unique_exclude = {'contentbytesize', }
+    _unique_exclude = {'@id', 'contentbytesize', }
 
     def __call__(self, dataset, refcommit, process_type, status):
         # shortcut
@@ -129,18 +129,14 @@ class DataladCoreExtractor(MetadataExtractor):
             # be anything
             else 'Thing' if part['type'] == 'symlink' else 'DigitalDocument',
             # relative path within dataset, always POSIX
+            # TODO find a more specific term for "local path relative to root"
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
-            '@id': _get_file_key(part) if part['type'] == 'file'
+            '@id': _get_file_key(part) if part['type'] in ('file', 'symlink')
             else ds.subdatasets(
                 contains=part['path'],
                 return_type='item-or-list').get('gitmodule_datalad-id', None)
         }
             for part in status
-            # if we are processing everything we do not need to know about
-            # files, they will have their own reports
-            # but if we are only looking at the dataset, we report the files
-            # here, to have at least their names and IDs
-            if process_type == 'dataset' or part['type'] == 'dataset'
         ]
         if parts:
             meta['hasPart'] = parts
@@ -278,8 +274,9 @@ class DataladCoreExtractor(MetadataExtractor):
             # and fileSize which seem to be geared towards human consumption
             # not numerical accuracy
             # TODO define the term
-            'contentbytesize': rec['bytesize']
-            if 'bytesize' in rec else op.getsize(rec['path']),
+            'contentbytesize': rec.get('bytesize', 0)
+            if 'bytesize' in rec or rec['type'] == 'symlink'
+            else op.getsize(rec['path']),
             # TODO the following list are optional enhancement that should come
             # with individual ON/OFF switches
             # TODO run `git log` to find earliest and latest commit to determine

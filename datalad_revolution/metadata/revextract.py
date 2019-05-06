@@ -398,8 +398,6 @@ class RevExtractMetadata(Interface):
                                     ds.pathobj).as_posix(),
                             },
                         )
-                        # TODO extend 'hasPart' of the mother dataset with each
-                        # file content node ID
         finally:
             # extractors can come from any source with no guarantee for
             # proper implementation. Let's make sure that we bring the
