@@ -387,6 +387,7 @@ class RevExtractMetadata(Interface):
             yield dict(
                 status='ok',
                 type='dataset',
+                path=ds.path,
                 metadata=format_jsonld_metadata(nodes_by_context),
                 **res_props)
 
