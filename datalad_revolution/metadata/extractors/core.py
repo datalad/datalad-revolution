@@ -124,20 +124,32 @@ class DataladCoreExtractor(MetadataExtractor):
             c = [{'@id': i} for i in contributor_ids]
             meta['hasContributor'] = c[0] if len(c) == 1 else c
         parts = [{
-            '@type': 'Dataset' if part['type'] == 'dataset'
             # schema.org doesn't have anything good for a symlink, as it could
             # be anything
-            else 'Thing' if part['type'] == 'symlink' else 'DigitalDocument',
+            '@type': 'Thing'
+            if part['type'] == 'symlink'
+            else 'DigitalDocument',
             # relative path within dataset, always POSIX
             # TODO find a more specific term for "local path relative to root"
             'name': Path(part['path']).relative_to(ds.pathobj).as_posix(),
-            '@id': _get_file_key(part) if part['type'] in ('file', 'symlink')
-            else ds.subdatasets(
-                contains=part['path'],
-                return_type='item-or-list').get('gitmodule_datalad-id', None)
+            '@id': _get_file_key(part),
         }
             for part in status
+            if part['type'] != 'dataset'
         ]
+        for subds in [s for s in status if s['type'] == 'dataset']:
+            subdsinfo = {
+                # reference by subdataset commit
+                '@id': subds['gitshasum'],
+                '@type': 'Dataset',
+                'name': Path(subds['path']).relative_to(ds.pathobj).as_posix(),
+            }
+            subdsid = ds.subdatasets(
+                contains=subds['path'],
+                return_type='item-or-list').get('gitmodule_datalad-id', None)
+            if subdsid:
+                subdsinfo['identifier'] = subdsid
+            parts.append(subdsinfo)
         if parts:
             meta['hasPart'] = parts
         if ds.config.obtain(

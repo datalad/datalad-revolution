@@ -531,6 +531,10 @@ def _kill_time(iter):
             if '@graph' in r['metadata']['datalad_core']:
                 for doc in r['metadata']['datalad_core']['@graph']:
                     doc.pop(k, None)
+                    if 'hasPart' in doc:
+                        # for shasum-based IDs
+                        for i in doc['hasPart']:
+                            i.pop(k, None)
             else:
                 r.pop(k, None)
         m.append(r)

@@ -147,7 +147,8 @@ def test_report(path, orig):
         res[0]['metadata']['datalad_core']
     )
     assert_in(
-        {'@type': 'Dataset', '@id': subds.id, 'name': 'sub'},
+        {'@type': 'Dataset', '@id': subds.repo.get_hexsha(),
+         'identifier': subds.id, 'name': 'sub'},
         core_dsmeta['hasPart']
     )
     # has not seen the content
