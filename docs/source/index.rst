@@ -19,7 +19,7 @@ tracked. Let's change directories and enter this dataset after it was created.
 
 .. code-block:: console
 
-   % datalad rev-create myproject
+   % datalad create myproject
    [INFO   ] Creating a new annex repo at /tmp/myproject
    create(ok): /tmp/myproject (dataset)
    % cd myproject
@@ -114,9 +114,9 @@ High-level API commands
 .. autosummary::
    :toctree: generated
 
-   rev_create
+   create
    rev_save
-   rev_status
+   status
 
 Low-level API
 -------------
