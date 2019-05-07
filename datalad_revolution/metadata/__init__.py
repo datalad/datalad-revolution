@@ -235,7 +235,9 @@ def _native_metadata_to_graph_nodes(
     for extractor, report in iteritems(md):
         if '@context' in report:
             # this is linked data!
-            context = ReadOnlyDict(report['@context'])
+            context = ReadOnlyDict(report['@context']) \
+                if isinstance(report['@context'], dict) \
+                else report['@context']
             if extractor in contexts \
                     and context != contexts[extractor]:
                 raise RuntimeError(
