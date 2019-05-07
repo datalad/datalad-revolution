@@ -295,3 +295,15 @@ def format_jsonld_metadata(nbc):
         '@graph': graph,
     }
     return jsonld
+
+
+def get_file_id(rec):
+    """Returns a suitable '@id' of a file metadata from a status result
+
+    Prefer a present annex key, but fall back on the Git shasum that is
+    always around. Identify the GITSHA as such, and in a similar manner
+    to git-annex's style
+    """
+    return rec['key'] if 'key' in rec else 'SHA1-s{}--{}'.format(
+        rec['bytesize'] if rec['type'] != 'symlink' else 0,
+        rec['gitshasum'])
