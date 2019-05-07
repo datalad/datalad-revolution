@@ -22,76 +22,45 @@ Concept
   to look up which file was created by which activity and report
   that in the content metadata
 
-- each run-record is expressed as a PROV bundle, which is stored in the
-  'bundles' dict of the PROV record, its key is the recorded commit SHA
-  (think: 'run' observed a command do its thing
+Here is a sketch of the reported metadata structure
 
-- for each file there should be a relation declaration (e.g. wasGeneratedBy)
-  that links it with an activity in a bundle
-  it is still unclear to me how to best compose the per-file record
-
-
-Make any extractor be able to return a list of any number of documents
-(for dataset metadata) to be able to describe more than files and datasets
-as entities. Examples are people, run records, measurements...
-Give each of them a '@type' by which we can filter.
-
-Enhance extract_metadata/query_metadata to return an @graph list of nodes/documents
-with some kind of 'describedBy' properties that encode what extractor was responsible
-
-Here is a draft of a meaningful structure
 {
-  # prov terms
   "@context": "http://openprovenance.org/prov.jsonld",
-  # every record needs an ID, for us this is the dataset ID (or refcommit SHA?)
-  # or a file key/sha
-  "@id": "ex:uuid",
-  # we know datasets and files, and have to say which one this is about
-  "@type": "ex:dataset",
-  # the rest a PROV concepts via @reverse properties
-  # this needs to be read from inside to outside, hence here we declare that
-  # some person is attributed to the thing described in this document (a dataset)
-  # by means of being an author.
-  "entity_attributed": [
-    {"@id": "email", "@type": "ex:person", "hadRole": "ex:author"}
-  ],
-  # each run command is an activity that is known to have "influenced"
-  # this dataset (or a file). This is the most generic association, as it is
-  # harder to be more specific (generation/derivation) at the level of an
-  # entire dataset
-  "influencee": [
-    { "@id": "ex:sha1", "@type": "prov:Activity",
- "startedAtTime": "2012-03-31T09:21:00.000+01:00",
- "endedAtTime": "2012-04-01T15:21:00.000+01:00"
- },
-    { "@id": "ex:sha2", "@type": "prov:Activity",
- "startedAtTime": "2012-03-31T09:21:00.000+01:00",
- "endedAtTime": "2012-04-01T15:21:00.000+01:00"
- }
-]
-}
-
-
-{
-  "@context": {
-    "@base": "http://dx.datalad.org/",
-    "@vocab": "http://schema.org/",
-      "hasContributors": {"@reverse": "contributor"}
-  },
-  "@id": "7bec74da-6bf1-11e9-bb11-f0d5bf7b5561",
-  "@type": "Dataset",
-  "hasContributors": {
-    "@id": "michael.hanke@gmail.com",
-    "@type": "Person",
-    "name": "Michael Hanke",
-    "email": "michael.hanke@gmail.com",
-    "contributor": {"@id": "7bec74da-6bf1-11e9-bb11-f0d5bf7b5561"}
-  }
+  "@graph": [
+    # agents
+    {
+      "@id": "Name_Surname<email@example.com>",
+      "@type": "agent"
+    },
+    ...
+    # activities
+    {
+      "@id": "<GITSHA_of_run_record>",
+      "@type": "activity",
+      "atTime": "2019-05-01T12:10:55+02:00",
+      "rdfs:comment": "[DATALAD RUNCMD] rm test.png",
+      "prov:wasAssociatedWith": {
+        "@id": "Name_Surname<email@example.com>",
+      }
+    },
+    ...
+    # entities
+    {
+      "@id": "SOMEKEY",
+      "@type": "entity",
+      "prov:wasGeneratedBy": {"@id": "<GITSHA_of_run_record>"}
+    }
+    ...
+  ]
 }
 """
 
 
 from .base import MetadataExtractor
+from .. import (
+    get_file_id,
+    get_agent_id,
+)
 from six import (
     text_type,
 )
@@ -108,7 +77,7 @@ lgr = logging.getLogger('datalad.metadata.extractors.runprov')
 
 
 class RunProvenanceExtractor(MetadataExtractor):
-    def __call__(self, dataset, process_type, status):
+    def __call__(self, dataset, refcommit, process_type, status):
         # shortcut
         ds = dataset
 
@@ -151,7 +120,13 @@ class RunProvenanceExtractor(MetadataExtractor):
                     # activity
                     yield dict(
                         rec,
-                        metadata=dbrec,
+                        metadata={
+                            '@id': get_file_id(rec),
+                            "@type": "entity",
+                            "prov:wasGeneratedBy": {
+                                "@id": dbrec['activity'],
+                            },
+                        },
                         type=rec['type'],
                         status='ok',
                     )
@@ -163,10 +138,48 @@ class RunProvenanceExtractor(MetadataExtractor):
                     pass
 
         if process_type in ('all', 'dataset'):
+            agents = {}
+            graph = []
+            for actsha in sorted(activities):
+                rec = activities[actsha]
+                agent_id = get_agent_id(rec['author_name'], rec['author_email'])
+                # do not report docs on agents immediately, but collect them
+                # and give unique list at the end
+                agents[agent_id] = dict(
+                    name=rec['author_name'],
+                    email=rec['author_email']
+                )
+                graph.append({
+                    '@id': actsha,
+                    '@type': 'activity',
+                    'atTime': rec['commit_date'],
+                    'prov:wasAssociatedWith': {
+                        '@id': agent_id,
+                    },
+                    # TODO extend message with formatted run record
+                    # targeted for human consumption (but consider
+                    # possible leakage of information from sidecar
+                    # runrecords)
+                    'rdfs:comment': rec['message'],
+                })
+            # and now documents on the committers
+            # this is likely a duplicate of a report to be expected by
+            # the datalad_core extractor, but over there it is configurable
+            # and we want self-contained reports per extractor
+            # the redundancy will be eaten by XZ compression
+            for agent in sorted(agents):
+                rec = agents[agent]
+                graph.append({
+                    '@id': agent,
+                    '@type': 'agent',
+                    'name': rec['name'],
+                    'email': rec['email'],
+                })
+
             yield dict(
                 metadata={
-                    '@context': 'https://openprovenance.org/prov.jsonld',
-                    'influencee': activities,
+                    '@context': 'http://openprovenance.org/prov.jsonld',
+                    '@graph': graph,
                 },
                 type='dataset',
                 status='ok',
@@ -253,22 +266,6 @@ def _split_record_message(lines):
     return '\n'.join(msg).strip(), ''.join(run)
 
 
-# TODO report runrecord directory as content-needed
-
-"""
-General PROV document structure
-
-{
-    "entity": { // Map of entities by entities' IDs
-    },
-    "activity": { // Map of activities by IDs
-    },
-    "agent": { // Map of agents by IDs
-    },
-    <relationName>: { // A map of relations of type relationName by their IDs
-    },
-    ...
-    "bundle": { // Map of named bundles by IDs
-    }
-}
-"""
+# TODO report runrecord directory as content-needed, if configuration wants this
+# information to be reported. However, such files might be used to prevent leakage
+# of sensitive information....
