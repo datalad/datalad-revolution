@@ -17,6 +17,7 @@ from .base import MetadataExtractor
 from .. import (
     default_context,
     get_file_id,
+    get_agent_id,
 )
 from datalad.utils import (
     Path,
@@ -102,9 +103,7 @@ class DataladCoreExtractor(MetadataExtractor):
         contributor_ids = []
         for contributor in commitinfo.pop('contributors', []):
             # use RFC822 inspired style as ID
-            contributor_id = '{}<{}>'.format(
-                contributor[0].replace(' ', '_'),
-                contributor[1])
+            contributor_id = get_agent_id(*contributor[:2])
             yield {
                 '@id': contributor_id,
                 # we cannot distinguish real people from machine-committers

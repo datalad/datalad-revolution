@@ -304,3 +304,15 @@ def get_file_id(rec):
     return rec['key'] if 'key' in rec else 'SHA1-s{}--{}'.format(
         rec['bytesize'] if rec['type'] != 'symlink' else 0,
         rec['gitshasum'])
+
+
+def get_agent_id(name, email):
+    """Return a suitable '@id' for committers/authors
+
+    In most cases we will not have a URL for people/software agents.
+    Let's create a string ID that is based on the combination of both
+    name and email.
+    """
+    return '{}<{}>'.format(
+        name.replace(' ', '_'),
+        email)
