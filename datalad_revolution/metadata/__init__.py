@@ -3,7 +3,9 @@ from collections import (
     Mapping,
 )
 
-from six import iteritems
+from six import (
+    iteritems,
+)
 from datalad.utils import (
     Path,
     PurePosixPath,
@@ -276,25 +278,18 @@ def _native_metadata_to_graph_nodes(
 
 
 def format_jsonld_metadata(nbc):
-    ro_default_context = ReadOnlyDict(default_context)
     # build the full graph
-    graph = []
+    jsonld = []
     # for all contexts and their documents
-    for k, v in iteritems(nbc):
-        if k == ro_default_context:
-            # if the context matches the default, extend the top-level graph
-            graph.extend(v)
-        elif v:
-            # document with a different context: add as a sub graph
-            graph.append({
-                '@context': dict(k),
-                '@graph': v,
-            })
-    jsonld = {
-        '@context': default_context,
-        '@graph': graph,
-    }
-    return jsonld
+    for context, graph in iteritems(nbc):
+        # document with a different context: add as a sub graph
+        jsonld.append({
+            '@context': dict(context)
+            if isinstance(context, ReadOnlyDict)
+            else context,
+            '@graph': graph,
+        })
+    return jsonld[0] if len(jsonld) == 1 else jsonld
 
 
 def get_file_id(rec):
