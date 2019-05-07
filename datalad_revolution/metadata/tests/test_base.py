@@ -16,6 +16,7 @@ import os.path as op
 from datalad.distribution.dataset import Dataset
 from datalad.support.gitrepo import GitRepo
 from datalad.api import (
+    create,
     rev_save,
     remove,
 )

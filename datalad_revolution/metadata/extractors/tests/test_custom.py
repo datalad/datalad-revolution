@@ -13,6 +13,7 @@ from six import text_type
 from datalad.distribution.dataset import Dataset
 # API commands needed
 from datalad.api import (
+    create,
     rev_save,
     query_metadata,
     rev_aggregate_metadata,

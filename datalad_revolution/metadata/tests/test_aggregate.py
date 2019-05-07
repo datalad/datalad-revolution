@@ -17,6 +17,7 @@ from simplejson import dumps as jsondumps
 from datalad.api import (
     query_metadata,
     install,
+    create,
     rev_aggregate_metadata,
 )
 from datalad.distribution.dataset import Dataset
