@@ -13,7 +13,6 @@ from six import text_type
 from datalad.distribution.dataset import Dataset
 # API commands needed
 from datalad.api import (
-    rev_create,
     rev_save,
     query_metadata,
     rev_aggregate_metadata,
@@ -96,7 +95,7 @@ testmeta = {
         'down': {
             'customloc': jsondumps(testmeta)}})
 def test_custom_dsmeta(path):
-    ds = Dataset(path).rev_create(force=True)
+    ds = Dataset(path).create(force=True)
     # enable custom extractor
     # use default location
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
@@ -174,7 +173,7 @@ def test_custom_dsmeta(path):
         }
     })
 def test_custom_contentmeta(path):
-    ds = Dataset(path).rev_create(force=True)
+    ds = Dataset(path).create(force=True)
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
     # use custom location
     ds.config.add('datalad.metadata.custom-content-source',
@@ -206,7 +205,7 @@ def test_custom_contentmeta(path):
         }
     })
 def test_custom_content_broken(path):
-    ds = Dataset(path).rev_create(force=True)
+    ds = Dataset(path).create(force=True)
     ds.config.add('datalad.metadata.nativetype', 'custom', where='dataset')
     ds.rev_save()
     res = ds.rev_extract_metadata(sources=['custom'], process_type='content',

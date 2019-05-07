@@ -13,7 +13,6 @@ from six import text_type
 from datalad.distribution.dataset import Dataset
 # API commands needed
 from datalad.api import (
-    rev_create,
     rev_save,
     rev_extract_metadata,
 )
@@ -25,7 +24,7 @@ from datalad.tests.utils import (
 
 @with_tempfile
 def test_annex_contentmeta(path):
-    ds = Dataset(path).rev_create()
+    ds = Dataset(path).create()
     mfile_path = ds.pathobj / 'sudir' / 'dummy.txt'
     mfile_path.parent.mkdir()
     mfile_path.write_text(u'nothing')

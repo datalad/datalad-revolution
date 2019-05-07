@@ -16,7 +16,6 @@ import os.path as op
 from datalad.distribution.dataset import Dataset
 from datalad.support.gitrepo import GitRepo
 from datalad.api import (
-    rev_create,
     rev_save,
     remove,
 )
@@ -34,7 +33,7 @@ from datalad.tests.utils import (
 
 @with_tempfile(mkdir=True)
 def test_get_metadata_type(path):
-    Dataset(path).rev_create()
+    Dataset(path).create()
     # nothing set, nothing found
     eq_(get_metadata_type(Dataset(path)), [])
     # got section, but no setting
@@ -48,7 +47,7 @@ def test_get_metadata_type(path):
 # FIXME remove when support for the old config var is removed
 @with_tempfile(mkdir=True)
 def test_get_metadata_type_oldcfg(path):
-    Dataset(path).rev_create()
+    Dataset(path).create()
     # minimal setting
     open(op.join(path, '.datalad', 'config'), 'w+').write('[metadata]\nnativetype = mamboschwambo\n')
     eq_(get_metadata_type(Dataset(path)), 'mamboschwambo')
@@ -60,7 +59,7 @@ def test_get_refcommit(path):
     ds = Dataset(GitRepo(path, create=True).path)
     eq_(get_refcommit(ds), None)
     # we get a commit via create
-    ds.rev_create(force=True)
+    ds.create(force=True)
     # still not metadata-relevant changes
     eq_(get_refcommit(ds), None)
     # place irrelevant file and commit
@@ -82,7 +81,7 @@ def test_get_refcommit(path):
     ds.rev_save()
     eq_(get_refcommit(ds), ds.repo.get_hexsha('HEAD'))
     # subdataset addition
-    subds = ds.rev_create('sub')
+    subds = ds.create('sub')
     subds_addition = get_refcommit(ds)
     eq_(subds_addition, ds.repo.get_hexsha('HEAD'))
     # another irrelevant change, no change in refcommit, despite subds presence

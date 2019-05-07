@@ -17,7 +17,6 @@ from simplejson import dumps as jsondumps
 from datalad.api import (
     query_metadata,
     install,
-    rev_create,
     rev_aggregate_metadata,
 )
 from datalad.distribution.dataset import Dataset
@@ -96,10 +95,10 @@ _dataset_hierarchy_template_bids = {
 @with_tree(tree=_dataset_hierarchy_template_bids)
 def test_basic_aggregate(path):
     # TODO give datasets some more metadata to actually aggregate stuff
-    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
-    sub = base.rev_create('sub', force=True)
+    base = Dataset(op.join(path, 'origin')).create(force=True)
+    sub = base.create('sub', force=True)
     #base.query_metadata(sub.path, init=dict(homepage='this'), apply2global=True)
-    subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
+    subsub = base.create(op.join('sub', 'subsub'), force=True)
     base.rev_save(recursive=True)
     assert_repo_status(base.path)
     # we will first aggregate the middle dataset on its own, this will
@@ -150,7 +149,7 @@ def _compare_metadata_helper(origres, compds):
 @with_tree(tree=_dataset_hierarchy_template_friction)
 def test_aggregation(path):
     # a hierarchy of three (super/sub)datasets, each with some native metadata
-    ds = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    ds = Dataset(op.join(path, 'origin')).create(force=True)
     ds.config.add('datalad.metadata.nativetype', 'frictionless_datapackage',
                   where='dataset')
     subds = ds.create('sub', force=True)
@@ -277,7 +276,7 @@ def test_aggregation(path):
 })
 @with_tempfile(mkdir=True)
 def test_aggregate_query(path, randompath):
-    ds = Dataset(path).rev_create(force=True)
+    ds = Dataset(path).create(force=True)
     # no magic change to actual dataset metadata due to presence of
     # aggregated metadata
     res = ds.query_metadata(reporton='datasets', on_failure='ignore')
@@ -286,7 +285,7 @@ def test_aggregate_query(path, randompath):
     res = ds.query_metadata(op.join('sub', 'deep', 'some'), reporton='datasets')
     assert_result_count(res, 1)
     eq_({'homepage': 'http://top.example.com'}, res[0]['metadata'])
-    sub = ds.rev_create('sub', force=True)
+    sub = ds.create('sub', force=True)
     # when no reference dataset there is NO magic discovery of the relevant
     # dataset
     with chpwd(randompath):
@@ -311,13 +310,13 @@ def test_aggregate_query(path, randompath):
 # this is for gh-1971
 @with_tree(tree=_dataset_hierarchy_template_bids)
 def test_reaggregate_with_unavailable_objects(path):
-    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).create(force=True)
     # force all metadata objects into the annex
     with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
-    sub = base.rev_create('sub', force=True)
-    subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
+    sub = base.create('sub', force=True)
+    subsub = base.create(op.join('sub', 'subsub'), force=True)
     base.rev_save(recursive=True)
     assert_repo_status(base.path)
     # first a quick check that an unsupported 'into' mode causes an exception
@@ -350,13 +349,13 @@ def test_reaggregate_with_unavailable_objects(path):
 @with_tree(tree=_dataset_hierarchy_template_bids)
 @with_tempfile(mkdir=True)
 def test_aggregate_with_unavailable_objects_from_subds(path, target):
-    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).create(force=True)
     # force all metadata objects into the annex
     with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
-    sub = base.rev_create('sub', force=True)
-    subsub = base.rev_create(op.join('sub', 'subsub'), force=True)
+    sub = base.create('sub', force=True)
+    subsub = base.create(op.join('sub', 'subsub'), force=True)
     base.rev_save(recursive=True)
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
@@ -364,7 +363,7 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
 
     # now make that a subdataset of a new one, so aggregation needs to get the
     # metadata objects first:
-    super = Dataset(target).rev_create()
+    super = Dataset(target).create()
     super.install("base", source=base.path)
     assert_repo_status(super.path)
     clone = Dataset(op.join(super.path, "base"))
@@ -385,12 +384,12 @@ def test_aggregate_with_unavailable_objects_from_subds(path, target):
 @skip_ssh
 @with_tree(tree=_dataset_hierarchy_template_bids)
 def test_publish_aggregated(path):
-    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).create(force=True)
     # force all metadata objects into the annex
     with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
-    base.rev_create('sub', force=True)
+    base.create('sub', force=True)
     base.rev_save(recursive=True)
     assert_repo_status(base.path)
     base.rev_aggregate_metadata(recursive=True, into='all')
@@ -432,13 +431,13 @@ def _get_referenced_objs(ds):
 
 @with_tree(tree=_dataset_hierarchy_template_bids)
 def test_aggregate_removal(path):
-    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).create(force=True)
     # force all metadata objects into the annex
     with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
-    sub = base.rev_create('sub', force=True)
-    subsub = sub.rev_create(op.join('subsub'), force=True)
+    sub = base.create('sub', force=True)
+    subsub = sub.create(op.join('subsub'), force=True)
     base.rev_save(recursive=True)
     base.rev_aggregate_metadata(recursive=True, into='all')
     assert_repo_status(base.path)
@@ -467,13 +466,13 @@ def test_aggregate_removal(path):
 
 @with_tree(tree=_dataset_hierarchy_template_bids)
 def test_update_strategy(path):
-    base = Dataset(op.join(path, 'origin')).rev_create(force=True)
+    base = Dataset(op.join(path, 'origin')).create(force=True)
     # force all metadata objects into the annex
     with open(op.join(base.path, '.datalad', '.gitattributes'), 'w') as f:
         f.write(
             '** annex.largefiles=nothing\nmetadata/objects/** annex.largefiles=anything\n')
-    sub = base.rev_create('sub', force=True)
-    subsub = sub.rev_create(op.join('subsub'), force=True)
+    sub = base.create('sub', force=True)
+    subsub = sub.create(op.join('subsub'), force=True)
     base.rev_save(recursive=True)
     assert_repo_status(base.path)
     # we start clean
@@ -546,9 +545,9 @@ def _kill_time(iter):
     'sub1': {'here': 'there'},
     'sub2': {'down': 'under'}})
 def test_partial_aggregation(path):
-    ds = Dataset(path).rev_create(force=True)
-    sub1 = ds.rev_create('sub1', force=True)
-    sub2 = ds.rev_create('sub2', force=True)
+    ds = Dataset(path).create(force=True)
+    sub1 = ds.create('sub1', force=True)
+    sub2 = ds.create('sub2', force=True)
     ds.rev_save(recursive=True)
 
     # if we aggregate a path(s) and say to recurse, we must not recurse into
@@ -607,7 +606,7 @@ def test_partial_aggregation(path):
 
 @with_tempfile(mkdir=True)
 def test_aggregate_fail(path):
-    ds = Dataset(path).rev_create()
+    ds = Dataset(path).create()
     # we need one real piece of content
     (ds.pathobj / 'real').write_text(text_type('real'))
     ds.rev_save()
@@ -630,7 +629,7 @@ def test_aggregate_fail(path):
 def _prep_partial_update_ds(path):
     ds, subds = make_ds_hierarchy_with_metadata(path)
     # add one more subds
-    subds2 = ds.rev_create(op.join('down', 'sub'))
+    subds2 = ds.create(op.join('down', 'sub'))
     # we need one real piece of content
     # important to use a different name than the file in subds1
     # so we have two metadata objects with different hashes
@@ -723,7 +722,7 @@ custom_metadata_tree = {
 
 @with_tree(custom_metadata_tree)
 def test_unique_values(path):
-    ds = Dataset(path).rev_create(force=True)
+    ds = Dataset(path).create(force=True)
     ds.config.add('datalad.metadata.exclude-path', '.metadata',
                   where='dataset', reload=False)
     ds.config.add('datalad.metadata.nativetype', 'custom',
@@ -772,8 +771,8 @@ def test_unique_values(path):
 # smoke test for https://github.com/datalad/datalad-revolution/issues/113
 @with_tree({'subds': custom_metadata_tree})
 def test_heterogenous_extractors(path):
-    ds = Dataset(path).rev_create(force=True)
-    subds = ds.rev_create('subds', force=True)
+    ds = Dataset(path).create(force=True)
+    subds = ds.create('subds', force=True)
     # only the subds has 'custom' extractor enabled
     subds.config.add('datalad.metadata.exclude-path', '.metadata',
                      where='dataset', reload=False)
