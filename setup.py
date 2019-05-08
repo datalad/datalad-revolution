@@ -44,7 +44,6 @@ setup(
     packages=[pkg for pkg in find_packages('.') if pkg.startswith('datalad')],
     install_requires=[
         'datalad>=0.12.0rc3',
-        'pathlib2; python_version < "3.0"',
     ],
     entry_points = {
         'datalad.extensions': [
@@ -52,13 +51,6 @@ setup(
         ],
         'datalad.tests': [
             'revolution=datalad_revolution',
-        ],
-        'datalad.metadata.extractors': [
-            # keep the name from -core for the first two will install ours as
-            # replacements
-            'datalad_core=datalad_revolution.metadata.extractors.core:DataladCoreExtractor',
-            'annex=datalad_revolution.metadata.extractors.annex:AnnexMetadataExtractor',
-            'custom=datalad_revolution.metadata.extractors.custom:CustomMetadataExtractor',
         ],
     },
 )
