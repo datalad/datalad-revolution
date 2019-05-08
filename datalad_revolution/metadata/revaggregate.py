@@ -440,7 +440,9 @@ def _do_top_aggregation(ds, extract_from_ds, force, vanished_datasets, cache):
     if force == 'fromscratch':
         # all we have to do is to remove the directory from the working
         # tree
-        rmtree(text_type(ds.pathobj / '.datalad' / 'metadata'))
+        metadir = ds.pathobj / '.datalad' / 'metadata'
+        if metadir.exists():
+            rmtree(text_type(metadir))
 
     # load the info that we have on the top-level dataset's aggregated
     # metadata
